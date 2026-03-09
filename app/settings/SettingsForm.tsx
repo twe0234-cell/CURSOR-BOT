@@ -2,18 +2,27 @@
 
 import { useState } from "react";
 import { saveUserSettings } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { XIcon, PlusIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
   defaultGreenApiToken: string;
+  defaultAllowedTags: string[];
 };
 
 export default function SettingsForm({
   defaultGreenApiId,
   defaultGreenApiToken,
+  defaultAllowedTags,
 }: Props) {
   const [greenApiId, setGreenApiId] = useState(defaultGreenApiId);
   const [greenApiToken, setGreenApiToken] = useState(defaultGreenApiToken);
+  const [allowedTags, setAllowedTags] = useState<string[]>(
+    Array.isArray(defaultAllowedTags) ? defaultAllowedTags : []
+  );
+  const [newTag, setNewTag] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,19 +30,34 @@ export default function SettingsForm({
     e.preventDefault();
     setMessage(null);
     setLoading(true);
-
-    const result = await saveUserSettings(greenApiId, greenApiToken);
-
-    if (result.success) {
-      setMessage({ type: "success", text: "ההגדרות נשמרו בהצלחה" });
-    } else {
-      setMessage({ type: "error", text: result.error });
+    try {
+      const result = await saveUserSettings(greenApiId, greenApiToken, allowedTags);
+      if (result.success) {
+        setMessage({ type: "success", text: "ההגדרות נשמרו בהצלחה" });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאה לא צפויה" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
+  const addTag = () => {
+    const t = newTag.trim();
+    if (t && !allowedTags.includes(t)) {
+      setAllowedTags((prev) => [...prev, t].sort());
+      setNewTag("");
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setAllowedTags((prev) => prev.filter((x) => x !== tag));
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <label
           htmlFor="green_api_id"
@@ -66,6 +90,46 @@ export default function SettingsForm({
           className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
           placeholder="הזן את ה-API Token"
         />
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-sm font-medium text-slate-700">
+          תגיות מערכת
+        </h3>
+        <p className="mb-3 text-xs text-slate-500">
+          תגיות אלה יהיו זמינות לבחירה בדף הנמענים
+        </p>
+        <div className="flex gap-2 mb-3">
+          <Input
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            placeholder="הוסף תגית חדשה"
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+          />
+          <Button type="button" variant="outline" onClick={addTag} size="icon">
+            <PlusIcon className="size-4" />
+          </Button>
+        </div>
+        {allowedTags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {allowedTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-3 py-1 text-sm text-teal-800"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  className="rounded-full p-0.5 hover:bg-teal-200"
+                  aria-label={`הסר ${tag}`}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {message && (

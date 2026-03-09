@@ -19,10 +19,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { syncAudience, bulkApplyTags } from "./actions";
-import { CopyIcon, RefreshCwIcon, TagIcon } from "lucide-react";
+import {
+  syncAudience,
+  bulkApplyTags,
+  fetchGroupsFromGreenApi,
+  saveImportedGroups,
+  type GreenApiGroup,
+} from "./actions";
+import { CopyIcon, RefreshCwIcon, TagIcon, DownloadIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Recipient = {
@@ -36,18 +41,30 @@ type Recipient = {
 type Props = {
   initialAudience: Recipient[];
   allTags: string[];
+  allowedTags: string[];
 };
 
-export default function AudienceClient({ initialAudience, allTags }: Props) {
-  const [audience, setAudience] = useState(initialAudience);
+export default function AudienceClient({
+  initialAudience,
+  allTags,
+  allowedTags,
+}: Props) {
+  const [audience, setAudience] = useState(initialAudience ?? []);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copiedTags, setCopiedTags] = useState<string[]>([]);
   const [tagsToAdd, setTagsToAdd] = useState("");
+  const [selectedTagsToApply, setSelectedTagsToApply] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importGroups, setImportGroups] = useState<GreenApiGroup[]>([]);
+  const [importSelected, setImportSelected] = useState<Set<string>>(new Set());
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = audience;
@@ -86,8 +103,9 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
   };
 
   const handleCopyTags = (tags: string[]) => {
-    setCopiedTags(tags);
-    toast.success("התגיות הועתקו", { description: `${tags.length} תגיות` });
+    const safeTags = Array.isArray(tags) ? tags : [];
+    setCopiedTags(safeTags);
+    toast.success("התגיות הועתקו", { description: `${safeTags.length} תגיות` });
   };
 
   const handlePaste = async () => {
@@ -115,12 +133,15 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
   };
 
   const handleApplyTags = async () => {
-    const tags = tagsToAdd
+    const fromCheckboxes = [...selectedTagsToApply];
+    const fromInput = tagsToAdd
       .split(/[,|\s]+/)
       .map((t) => t.trim())
       .filter(Boolean);
+    const tags = [...new Set([...fromCheckboxes, ...fromInput])];
+
     if (selected.size === 0 || tags.length === 0) {
-      toast.error("בחר נמענים והזן תגיות");
+      toast.error("בחר נמענים ובחר/הזן תגיות");
       return;
     }
     setBulkLoading(true);
@@ -136,6 +157,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
       );
       setSelected(new Set());
       setTagsToAdd("");
+      setSelectedTagsToApply(new Set());
       toast.success("התגיות הוחלו", { description: `ל־${selected.size} נמענים` });
       setApplyOpen(false);
     } else {
@@ -152,6 +174,78 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
       window.location.reload();
     } else {
       toast.error(res.error);
+    }
+  };
+
+  const handleOpenImport = async () => {
+    setImportOpen(true);
+    setImportLoading(true);
+    setImportError(null);
+    setImportGroups([]);
+    setImportSelected(new Set());
+    try {
+      const res = await fetchGroupsFromGreenApi();
+      if (res.success) {
+        setImportGroups(res.groups ?? []);
+        setImportError(null);
+        if ((res.groups ?? []).length === 0) {
+          toast.info("אין קבוצות חדשות לייבא", {
+            description: "כל הקבוצות כבר קיימות במערכת",
+          });
+        }
+      } else {
+        setImportError(res.error);
+        toast.error(res.error);
+      }
+    } catch {
+      setImportError("שגיאה לא צפויה");
+      toast.error("שגיאה לא צפויה");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const toggleImportSelect = (chatId: string) => {
+    setImportSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(chatId)) next.delete(chatId);
+      else next.add(chatId);
+      return next;
+    });
+  };
+
+  const toggleImportSelectAll = () => {
+    if (importSelected.size === importGroups.length) {
+      setImportSelected(new Set());
+    } else {
+      setImportSelected(new Set(importGroups.filter((g) => g?.chatId).map((g) => g.chatId)));
+    }
+  };
+
+  const handleSaveImported = async () => {
+    if (importSelected.size === 0) {
+      toast.error("בחר קבוצות לשמירה");
+      return;
+    }
+    setImportSaving(true);
+    try {
+      const toSave = importGroups
+        .filter((g) => g?.chatId && importSelected.has(g.chatId))
+        .map((g) => ({ wa_chat_id: g.chatId, name: g.name ?? g.chatId }));
+      const res = await saveImportedGroups(toSave);
+      if (res.success) {
+        setImportSelected(new Set());
+        setImportError(null);
+        toast.success("הקבוצות נשמרו", { description: `${toSave.length} קבוצות` });
+        setImportOpen(false);
+        window.location.reload();
+      } else {
+        toast.error(res.error);
+      }
+    } catch {
+      toast.error("שגיאה לא צפויה");
+    } finally {
+      setImportSaving(false);
     }
   };
 
@@ -190,19 +284,49 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
 
   const ApplyTagsModal = () => (
     <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>החלת תגיות</DialogTitle>
+          <DialogTitle>החלת תגיות מרובות</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            הזן תגיות (מופרדות בפסיק או רווח)
-          </p>
-          <Input
-            value={tagsToAdd}
-            onChange={(e) => setTagsToAdd(e.target.value)}
-            placeholder="תגית1, תגית2, תגית3"
-          />
+          {(allowedTags ?? []).length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">
+                תגיות מערכת
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(allowedTags ?? []).map((tag) => (
+                  <label
+                    key={tag}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <Checkbox
+                      checked={selectedTagsToApply.has(tag)}
+                      onCheckedChange={(checked) => {
+                        setSelectedTagsToApply((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.add(tag);
+                          else next.delete(tag);
+                          return next;
+                        });
+                      }}
+                    />
+                    <span className="text-sm">{tag}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="mb-2 text-sm text-muted-foreground">
+              או הזן תגיות (מופרדות בפסיק או רווח)
+            </p>
+            <Input
+              value={tagsToAdd}
+              onChange={(e) => setTagsToAdd(e.target.value)}
+              placeholder="תגית1, תגית2, תגית3"
+            />
+          </div>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setApplyOpen(false)}>
               ביטול
@@ -216,18 +340,111 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
     </Dialog>
   );
 
+  const handleImportOpenChange = (open: boolean) => {
+    setImportOpen(open);
+    if (!open) setImportError(null);
+  };
+
+  const ImportGroupsModal = () => (
+    <Dialog open={importOpen} onOpenChange={handleImportOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>ייבוא קבוצות מ-Green API</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {importLoading ? (
+            <p className="py-8 text-center text-muted-foreground">
+              טוען קבוצות...
+            </p>
+          ) : importError ? (
+            <div className="rounded-lg bg-red-50 p-4 text-center text-sm text-red-600">
+              {importError}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => handleImportOpenChange(false)}
+              >
+                סגור
+              </Button>
+            </div>
+          ) : importGroups.length === 0 ? (
+            <p className="py-8 text-center text-muted-foreground">
+              אין קבוצות חדשות לייבא
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <Checkbox
+                    checked={
+                      importSelected.size === importGroups.length &&
+                      importGroups.length > 0
+                    }
+                    onCheckedChange={toggleImportSelectAll}
+                  />
+                  <span className="text-sm font-medium">בחר הכל</span>
+                </label>
+                <span className="text-sm text-muted-foreground">
+                  {importSelected.size} / {importGroups.length} נבחרו
+                </span>
+              </div>
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+                {importGroups.map((g) => (
+                  <label
+                    key={g.chatId}
+                    className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0 hover:bg-slate-50"
+                  >
+                    <Checkbox
+                      checked={importSelected.has(g.chatId)}
+                      onCheckedChange={() => toggleImportSelect(g.chatId)}
+                    />
+                    <span className="flex-1 truncate font-mono text-xs">
+                      {g.chatId}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => handleImportOpenChange(false)}>
+                  ביטול
+                </Button>
+                <Button
+                  onClick={handleSaveImported}
+                  disabled={importSaving || importSelected.size === 0}
+                >
+                  {importSaving ? "שומר..." : `שמור נבחרים (${importSelected.size})`}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6 pb-24 md:pb-6">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-teal-800">נמענים</h1>
-        <Button
-          onClick={handleSync}
-          disabled={syncing}
-          className="bg-teal-600 hover:bg-teal-700"
-        >
-          <RefreshCwIcon className={cn("size-4 ml-2", syncing && "animate-spin")} />
-          {syncing ? "מסנכרן..." : "סנכרן מ-Green API"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleOpenImport}
+            variant="outline"
+            disabled={importLoading}
+          >
+            <DownloadIcon className={cn("size-4 ml-2", importLoading && "animate-spin")} />
+            ייבוא קבוצות
+          </Button>
+          <Button
+            onClick={handleSync}
+            disabled={syncing}
+            className="bg-teal-600 hover:bg-teal-700"
+          >
+            <RefreshCwIcon className={cn("size-4 ml-2", syncing && "animate-spin")} />
+            {syncing ? "מסנכרן..." : "סנכרן מ-Green API"}
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
@@ -238,7 +455,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
           className="max-w-sm"
         />
         <div className="flex flex-wrap gap-2">
-          {allTags.map((tag) => (
+          {(allTags ?? []).map((tag) => (
             <button
               key={tag}
               onClick={() =>
@@ -277,7 +494,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
                   />
                 </TableHead>
                 <TableHead>שם</TableHead>
-                <TableHead>מזהה צ'אט</TableHead>
+                <TableHead>מזהה צ&apos;אט</TableHead>
                 <TableHead>תגיות</TableHead>
                 <TableHead className="w-24">פעולות</TableHead>
               </TableRow>
@@ -340,6 +557,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
                 size="icon-xs"
                 variant="ghost"
                 onClick={() => handleCopyTags(r.tags ?? [])}
+                title="העתק תגיות"
               >
                 <CopyIcon className="size-4" />
               </Button>
@@ -362,7 +580,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
 
       {filtered.length === 0 && (
         <p className="text-center py-12 text-muted-foreground">
-          אין נמענים. לחץ על &quot;סנכרן מ-Green API&quot; כדי לטעון צ'אטים.
+          אין נמענים. לחץ על &quot;ייבוא קבוצות&quot; או &quot;סנכרן מ-Green API&quot; כדי לטעון.
         </p>
       )}
 
@@ -373,6 +591,7 @@ export default function AudienceClient({ initialAudience, allTags }: Props) {
       )}
 
       {applyOpen && <ApplyTagsModal />}
+      {importOpen && <ImportGroupsModal />}
     </div>
   );
 }

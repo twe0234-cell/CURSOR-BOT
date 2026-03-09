@@ -16,12 +16,23 @@ export default async function AudiencePage() {
     .eq("user_id", user.id)
     .order("name");
 
-  const allTags = [...new Set((audience ?? []).flatMap((a) => (a.tags ?? []) as string[]))].sort();
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("allowed_tags")
+    .eq("user_id", user.id)
+    .single();
+
+  const allowedTags = Array.isArray(settings?.allowed_tags)
+    ? (settings.allowed_tags as string[])
+    : [];
+  const audienceTags = [...new Set((audience ?? []).flatMap((a) => (a?.tags ?? []) as string[]))];
+  const allTags = [...new Set([...allowedTags, ...audienceTags])].sort();
 
   return (
     <AudienceClient
       initialAudience={audience ?? []}
       allTags={allTags}
+      allowedTags={allowedTags}
     />
   );
 }

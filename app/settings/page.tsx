@@ -12,9 +12,11 @@ export default async function SettingsPage() {
 
   const { data: settings } = await supabase
     .from("user_settings")
-    .select("green_api_id, green_api_token")
+    .select("green_api_id, green_api_token, allowed_tags")
     .eq("user_id", user.id)
     .single();
+
+  const allowedTags = (settings?.allowed_tags ?? []) as string[];
 
   return (
     <div className="container mx-auto max-w-lg px-4 py-8">
@@ -25,6 +27,7 @@ export default async function SettingsPage() {
       <SettingsForm
         defaultGreenApiId={settings?.green_api_id ?? ""}
         defaultGreenApiToken={settings?.green_api_token ?? ""}
+        defaultAllowedTags={allowedTags}
       />
     </div>
   );

@@ -9,31 +9,70 @@ export type SettingsActionResult =
 
 export async function saveUserSettings(
   greenApiId: string,
-  greenApiToken: string
+  greenApiToken: string,
+  allowedTags?: string[]
 ): Promise<SettingsActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { success: false, error: "יש להתחבר כדי לשמור הגדרות" };
+    if (!user) {
+      return { success: false, error: "יש להתחבר כדי לשמור הגדרות" };
+    }
+
+    const payload: Record<string, unknown> = {
+      user_id: user.id,
+      green_api_id: String(greenApiId ?? "").trim(),
+      green_api_token: String(greenApiToken ?? "").trim(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (Array.isArray(allowedTags)) {
+      payload.allowed_tags = allowedTags.filter(Boolean).map((t) => String(t).trim());
+    }
+
+    const { error } = await supabase
+      .from("user_settings")
+      .upsert(payload, { onConflict: "user_id" });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
   }
+}
 
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert(
-      {
-        user_id: user.id,
-        green_api_id: greenApiId.trim(),
-        green_api_token: greenApiToken.trim(),
+export async function updateAllowedTags(allowedTags: string[]): Promise<SettingsActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "יש להתחבר" };
+    }
+
+    const { error } = await supabase
+      .from("user_settings")
+      .update({
+        allowed_tags: (allowedTags ?? []).filter(Boolean).map((t) => String(t).trim()),
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+      })
+      .eq("user_id", user.id);
 
-  if (error) {
-    return { success: false, error: error.message };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/audience");
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
   }
-
-  revalidatePath("/settings");
-  return { success: true };
 }

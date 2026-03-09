@@ -13,7 +13,7 @@ export async function GET() {
     // קריאת ניסיון - select מ-user_settings (טבלה קיימת)
     // אם RLS חוסם - נקבל מערך ריק [] (לא שגיאה)
     // אם יש בעיית חיבור - נקבל error
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("user_settings")
       .select("user_id")
       .limit(1);
