@@ -57,43 +57,44 @@ export default function SettingsForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label
-          htmlFor="green_api_id"
-          className="mb-2 block text-sm font-medium text-slate-700"
-        >
-          Green API ID
-        </label>
-        <input
+    <form onSubmit={handleSubmit} className="space-y-8">
+      <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-teal-800">חיבור Green API</h3>
+        <p className="mb-4 text-sm text-muted-foreground">
+          הזן את פרטי הגישה מ־<a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">green-api.com</a>
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="green_api_id" className="mb-2 block text-sm font-medium text-slate-700">
+              Instance ID
+            </label>
+            <input
           id="green_api_id"
           type="text"
           value={greenApiId}
           onChange={(e) => setGreenApiId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           placeholder="הזן את ה-Instance ID"
         />
+          </div>
+          <div>
+            <label htmlFor="green_api_token" className="mb-2 block text-sm font-medium text-slate-700">
+              API Token
+            </label>
+            <input
+              id="green_api_token"
+              type="password"
+              value={greenApiToken}
+              onChange={(e) => setGreenApiToken(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              placeholder="הזן את ה-API Token"
+            />
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label
-          htmlFor="green_api_token"
-          className="mb-2 block text-sm font-medium text-slate-700"
-        >
-          Green API Token
-        </label>
-        <input
-          id="green_api_token"
-          type="password"
-          value={greenApiToken}
-          onChange={(e) => setGreenApiToken(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-          placeholder="הזן את ה-API Token"
-        />
-      </div>
-
-      <div>
-        <h3 className="mb-2 text-sm font-medium text-slate-700">
+      <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
+        <h3 className="mb-2 text-lg font-semibold text-teal-800">
           תגיות מערכת
         </h3>
         <p className="mb-3 text-xs text-slate-500">
@@ -105,8 +106,9 @@ export default function SettingsForm({
             onChange={(e) => setNewTag(e.target.value)}
             placeholder="הוסף תגית חדשה"
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+            className="rounded-xl"
           />
-          <Button type="button" variant="outline" onClick={addTag} size="icon">
+          <Button type="button" variant="outline" onClick={addTag} size="icon" className="rounded-xl">
             <PlusIcon className="size-4" />
           </Button>
         </div>
@@ -115,7 +117,7 @@ export default function SettingsForm({
             {allowedTags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-3 py-1 text-sm text-teal-800"
+                className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-3 py-1.5 text-sm font-medium text-teal-800"
               >
                 {tag}
                 <button
@@ -147,7 +149,7 @@ export default function SettingsForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-teal-600 px-4 py-2 font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
+        className="w-full rounded-xl bg-teal-600 px-4 py-3 font-semibold text-white transition-all hover:bg-teal-700 disabled:opacity-50 hover:shadow-lg"
       >
         {loading ? "שומר..." : "שמור הגדרות"}
       </button>

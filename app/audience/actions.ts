@@ -42,7 +42,8 @@ export async function fetchGroupsFromGreenApi(): Promise<FetchGroupsResult> {
       return { success: false, error: "הגדר Green API בהגדרות לפני הייבוא" };
     }
 
-    const url = `${GREEN_API_URL}/waInstance${creds.id}/getDialogs/${creds.token}`;
+    // Green API: getContacts?group=true returns only groups (official docs)
+    const url = `${GREEN_API_URL}/waInstance${creds.id}/getContacts/${creds.token}?group=true`;
     const res = await fetch(url);
 
     if (!res.ok) {
@@ -59,14 +60,15 @@ export async function fetchGroupsFromGreenApi(): Promise<FetchGroupsResult> {
     }
 
     const data = await res.json();
-    const chats = Array.isArray(data) ? data : (data?.dialogs ?? data?.chats ?? []);
-    if (!Array.isArray(chats)) {
+    const contacts = Array.isArray(data) ? data : (data?.contacts ?? []);
+    if (!Array.isArray(contacts)) {
       return { success: false, error: "תגובת API לא תקינה" };
     }
 
-    const groups = chats.filter((c: { chatId?: string; id?: string; phoneNumber?: number }) => {
-      const id = String(c?.chatId ?? c?.id ?? "").trim();
-      return id.length > 0 && (id.endsWith("@g.us") || (id.startsWith("-") && id.length > 1));
+    // Response: { id, name, contactName, type: "group"|"user" }
+    const groups = contacts.filter((c: { id?: string; type?: string }) => {
+      const id = String(c?.id ?? "").trim();
+      return id.length > 0 && (c?.type === "group" || id.endsWith("@g.us"));
     });
 
     const { data: existing } = await supabase
@@ -77,11 +79,12 @@ export async function fetchGroupsFromGreenApi(): Promise<FetchGroupsResult> {
     const existingSet = new Set((existing ?? []).map((r) => r?.wa_chat_id ?? "").filter(Boolean));
 
     const newGroups = groups
-      .map((c: { chatId?: string; id?: string; name?: string }) => {
-        const chatId = String(c?.chatId ?? c?.id ?? "").trim();
+      .map((c: { id?: string; name?: string; contactName?: string }) => {
+        const chatId = String(c?.id ?? "").trim();
         if (!chatId || existingSet.has(chatId)) return null;
         existingSet.add(chatId);
-        return { chatId, name: (c?.name as string) || chatId } as GreenApiGroup;
+        const name = (c?.name || c?.contactName || chatId) as string;
+        return { chatId, name } as GreenApiGroup;
       })
       .filter((g): g is GreenApiGroup => g !== null);
 
@@ -149,7 +152,8 @@ export async function syncAudience(): Promise<ActionResult> {
       return { success: false, error: "הגדר Green API בהגדרות לפני הסנכרון" };
     }
 
-    const url = `${GREEN_API_URL}/waInstance${creds.id}/getDialogs/${creds.token}`;
+    // Green API: getContacts returns all contacts (users + groups)
+    const url = `${GREEN_API_URL}/waInstance${creds.id}/getContacts/${creds.token}`;
     const res = await fetch(url);
 
     if (!res.ok) {
@@ -166,9 +170,9 @@ export async function syncAudience(): Promise<ActionResult> {
     }
 
     const data = await res.json();
-    const dialogs = Array.isArray(data) ? data : (data?.dialogs ?? data?.chats ?? []);
+    const contacts = Array.isArray(data) ? data : (data?.contacts ?? []);
 
-    if (!Array.isArray(dialogs)) {
+    if (!Array.isArray(contacts)) {
       return { success: false, error: "תגובת API לא תקינה" };
     }
 
@@ -181,10 +185,11 @@ export async function syncAudience(): Promise<ActionResult> {
       (existing ?? []).map((r) => [r?.wa_chat_id ?? "", (r?.tags ?? []) as string[]])
     );
 
-    const toUpsert = dialogs
-      .filter((c: { chatId?: string; id?: string }) => (c?.chatId ?? c?.id))
-      .map((c: { chatId?: string; id?: string; name?: string; contactName?: string }) => {
-        const waChatId = String(c.chatId ?? c.id ?? "");
+    // Response: { id, name, contactName, type }
+    const toUpsert = contacts
+      .filter((c: { id?: string }) => c?.id)
+      .map((c: { id?: string; name?: string; contactName?: string }) => {
+        const waChatId = String(c.id ?? "");
         const existingTags = existingMap.get(waChatId) ?? [];
         const displayName = c.name || c.contactName || waChatId;
 

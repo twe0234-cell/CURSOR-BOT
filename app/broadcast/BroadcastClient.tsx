@@ -161,10 +161,13 @@ export default function BroadcastClient({
   };
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold text-teal-800">שידור הודעות</h1>
+    <div className="container mx-auto max-w-3xl px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-teal-800 mb-2">שידור הודעות</h1>
+        <p className="text-muted-foreground">שלח הודעות WhatsApp לנמענים לפי תגיות</p>
+      </div>
 
-      <Card className="mb-6 border-teal-100">
+      <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
         <CardHeader>
           <h2 className="text-lg font-semibold text-teal-800">בחירת קהל יעד</h2>
           <p className="text-sm text-muted-foreground">
@@ -203,7 +206,7 @@ export default function BroadcastClient({
         </CardContent>
       </Card>
 
-      <Card className="mb-6 border-teal-100">
+      <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
         <CardHeader>
           <h2 className="text-lg font-semibold text-teal-800">הודעה</h2>
           <div className="flex flex-wrap gap-2">
@@ -250,7 +253,7 @@ export default function BroadcastClient({
               onChange={(e) => setMessageText(e.target.value)}
               placeholder="שלום {Name}, ..."
               rows={5}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
           <div>
@@ -279,7 +282,7 @@ export default function BroadcastClient({
       <Button
         onClick={handleSend}
         disabled={loading || selectedTags.size === 0 || uploading}
-        className="w-full bg-teal-600 hover:bg-teal-700"
+        className="w-full rounded-xl bg-teal-600 py-6 text-base font-semibold hover:bg-teal-700 hover:shadow-lg"
       >
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
         {loading ? "שולח..." : "שלח שידור"}
