@@ -225,6 +225,52 @@ export async function syncAudience(): Promise<ActionResult> {
   }
 }
 
+export async function deleteRecipient(id: string): Promise<ActionResult> {
+  if (!id) return { success: false, error: "מזהה חסר" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("audience")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/audience");
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
+export async function bulkDeleteRecipients(ids: string[]): Promise<ActionResult> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { success: false, error: "בחר נמענים למחיקה" };
+  }
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("audience")
+      .delete()
+      .eq("user_id", user.id)
+      .in("id", ids);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/audience");
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
 export async function bulkApplyTags(
   recipientIds: string[],
   tagsToAdd: string[]

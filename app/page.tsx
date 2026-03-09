@@ -21,7 +21,7 @@ export default async function HomePage() {
   return (
     <div className="container mx-auto max-w-4xl px-4 py-12">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold text-teal-800 mb-2">ברוכים הבאים!</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">ברוכים הבאים!</h1>
         <p className="text-muted-foreground">
           מחובר כ־<span className="font-semibold text-teal-600">{user.email}</span>
         </p>

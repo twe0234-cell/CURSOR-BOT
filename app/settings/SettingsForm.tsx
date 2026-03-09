@@ -4,7 +4,7 @@ import { useState } from "react";
 import { saveUserSettings } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { XIcon, PlusIcon } from "lucide-react";
+import { XIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
@@ -25,6 +25,7 @@ export default function SettingsForm({
   const [newTag, setNewTag] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [apiKeysOpen, setApiKeysOpen] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,39 +59,47 @@ export default function SettingsForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-teal-800">חיבור Green API</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
-          הזן את פרטי הגישה מ־<a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">green-api.com</a>
-        </p>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="green_api_id" className="mb-2 block text-sm font-medium text-slate-700">
-              Instance ID
-            </label>
-            <input
-          id="green_api_id"
-          type="text"
-          value={greenApiId}
-          onChange={(e) => setGreenApiId(e.target.value)}
-          className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-          placeholder="הזן את ה-Instance ID"
-        />
+      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setApiKeysOpen((o) => !o)}
+          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
+            <KeyIcon className="size-5 text-teal-600" />
+            מפתחות Green API
+          </span>
+          {apiKeysOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
+        </button>
+        {apiKeysOpen && (
+          <div className="border-t border-teal-100 p-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              הזן את פרטי הגישה מ־<a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">green-api.com</a>
+            </p>
+            <div>
+              <label htmlFor="green_api_id" className="mb-2 block text-sm font-medium text-slate-700">Instance ID</label>
+              <input
+                id="green_api_id"
+                type="text"
+                value={greenApiId}
+                onChange={(e) => setGreenApiId(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                placeholder="הזן את ה-Instance ID"
+              />
+            </div>
+            <div>
+              <label htmlFor="green_api_token" className="mb-2 block text-sm font-medium text-slate-700">API Token</label>
+              <input
+                id="green_api_token"
+                type="password"
+                value={greenApiToken}
+                onChange={(e) => setGreenApiToken(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                placeholder="הזן את ה-API Token"
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="green_api_token" className="mb-2 block text-sm font-medium text-slate-700">
-              API Token
-            </label>
-            <input
-              id="green_api_token"
-              type="password"
-              value={greenApiToken}
-              onChange={(e) => setGreenApiToken(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-              placeholder="הזן את ה-API Token"
-            />
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">

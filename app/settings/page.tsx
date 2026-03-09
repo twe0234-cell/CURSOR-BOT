@@ -19,8 +19,8 @@ export default async function SettingsPage() {
   const allowedTags = (settings?.allowed_tags ?? []) as string[];
 
   return (
-    <div className="container mx-auto max-w-lg px-4 py-8">
-      <h1 className="mb-6 text-2xl font-bold text-slate-800">הגדרות</h1>
+    <div className="w-full max-w-lg mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
+      <h1 className="mb-6 text-3xl sm:text-4xl font-bold text-teal-800">הגדרות</h1>
       <p className="mb-6 text-slate-600">
         הזן את פרטי Green API לשידור הודעות וואטסאפ
       </p>

@@ -26,8 +26,8 @@ export default function NavBar() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-teal-100/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="sticky top-0 z-50 border-b border-teal-100/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 overflow-x-hidden">
+      <div className="w-full max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4 min-w-0">
         <Link
           href="/"
           className="flex items-center gap-2 font-bold text-teal-700 transition-colors hover:text-teal-800"
@@ -37,13 +37,13 @@ export default function NavBar() {
           </span>
           Broadcast Buddy
         </Link>
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200",
+                "flex items-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all duration-200 shrink-0",
                 pathname === href
                   ? "bg-teal-50 text-teal-700"
                   : "text-slate-600 hover:bg-slate-50 hover:text-teal-600"

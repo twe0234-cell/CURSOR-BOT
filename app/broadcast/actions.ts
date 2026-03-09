@@ -49,7 +49,8 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
   }
 }
 
-const DELAY_MS = 2500;
+const DELAY_EVERY_N = 3;
+const DELAY_MS = 3000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +75,46 @@ async function getGreenApiCredentials(userId: string) {
 }
 
 export type BroadcastTarget = { wa_chat_id: string; name: string | null };
+
+export type BroadcastLog = {
+  id: string;
+  sent: number;
+  failed: number;
+  errors: string[];
+  tags: string[];
+  created_at: string;
+};
+
+export async function fetchBroadcastLogs(): Promise<
+  { success: true; logs: BroadcastLog[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("broadcast_logs")
+      .select("id, sent, failed, errors, tags, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) return { success: false, error: error.message };
+    const logs = (data ?? []).map((r) => ({
+      id: r.id,
+      sent: r.sent ?? 0,
+      failed: r.failed ?? 0,
+      errors: (r.errors ?? []) as string[],
+      tags: (r.tags ?? []) as string[],
+      created_at: r.created_at ?? "",
+    }));
+    return { success: true, logs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
 
 export async function fetchTargetsByTags(
   tags: string[]
@@ -207,9 +248,20 @@ export async function dispatchBroadcast(
       }
 
       if (i < targets.length - 1) {
-        await sleep(DELAY_MS);
+        const msgIndex = i + 1;
+        if (msgIndex % DELAY_EVERY_N === 0) {
+          await sleep(DELAY_MS);
+        }
       }
     }
+
+    await supabase.from("broadcast_logs").insert({
+      user_id: user.id,
+      sent,
+      failed,
+      errors: errors.slice(0, 50),
+      tags,
+    });
 
     revalidatePath("/broadcast");
     return { success: true, sent, failed, errors };

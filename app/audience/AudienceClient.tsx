@@ -21,20 +21,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  syncAudience,
   bulkApplyTags,
+  bulkDeleteRecipients,
+  deleteRecipient,
   fetchGroupsFromGreenApi,
   saveImportedGroups,
   type GreenApiGroup,
 } from "./actions";
 import {
   CopyIcon,
-  RefreshCwIcon,
   TagIcon,
   DownloadIcon,
   SearchIcon,
   UsersIcon,
   CheckCircle2Icon,
+  Trash2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,8 +65,8 @@ export default function AudienceClient({
   const [copiedTags, setCopiedTags] = useState<string[]>([]);
   const [tagsToAdd, setTagsToAdd] = useState("");
   const [selectedTagsToApply, setSelectedTagsToApply] = useState<Set<string>>(new Set());
-  const [syncing, setSyncing] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importGroups, setImportGroups] = useState<GreenApiGroup[]>([]);
@@ -173,15 +174,33 @@ export default function AudienceClient({
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    const res = await syncAudience();
-    setSyncing(false);
+  const handleDeleteOne = async (id: string) => {
+    const res = await deleteRecipient(id);
     if (res.success) {
-      toast.success("הסנכרון הושלם בהצלחה");
-      window.location.reload();
+      setAudience((prev) => prev.filter((r) => r.id !== id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.success("הנמען נמחק");
     } else {
-      toast.error(res.error, { duration: 6000 });
+      toast.error(res.error);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkLoading(true);
+    const res = await bulkDeleteRecipients([...selected]);
+    setBulkLoading(false);
+    setDeleteOpen(false);
+    if (res.success) {
+      setAudience((prev) => prev.filter((r) => !selected.has(r.id)));
+      setSelected(new Set());
+      toast.success(`${selected.size} נמענים נמחקו`);
+    } else {
+      toast.error(res.error);
     }
   };
 
@@ -198,7 +217,7 @@ export default function AudienceClient({
         setImportError(null);
         if ((res.groups ?? []).length === 0) {
           toast.info("אין קבוצות חדשות לייבא", {
-            description: "כל הקבוצות מ-WhatsApp כבר קיימות במערכת. נסה סנכרון לעדכון שמות.",
+            description: "כל הקבוצות מ-WhatsApp כבר קיימות במערכת.",
           });
         }
       } else {
@@ -258,12 +277,12 @@ export default function AudienceClient({
   };
 
   const BulkActionsBar = () => (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-teal-200 bg-gradient-to-l from-teal-50 to-white p-4 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3 rounded-xl border border-teal-200 bg-gradient-to-l from-teal-50 to-white p-3 sm:p-4 shadow-sm">
       <span className="flex items-center gap-2 text-sm font-semibold text-teal-800">
         <CheckCircle2Icon className="size-4" />
         נבחרו {selected.size} נמענים
       </span>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           variant="outline"
@@ -283,6 +302,16 @@ export default function AudienceClient({
         >
           <CopyIcon className="size-4 ml-1" />
           הדבק תגיות
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setDeleteOpen(true)}
+          disabled={bulkLoading}
+          className="border-red-200 text-red-600 hover:bg-red-50"
+        >
+          <Trash2Icon className="size-4 ml-1" />
+          מחק
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
           בטל בחירה
@@ -382,7 +411,7 @@ export default function AudienceClient({
               </div>
               <p className="text-center font-medium text-slate-700">אין קבוצות חדשות לייבא</p>
               <p className="text-center text-sm text-muted-foreground max-w-xs">
-                כל הקבוצות מ-WhatsApp כבר קיימות במערכת. לחץ על &quot;סנכרן&quot; לעדכון שמות.
+                כל הקבוצות מ-WhatsApp כבר קיימות במערכת.
               </p>
               <Button variant="outline" onClick={() => handleImportOpenChange(false)}>
                 סגור
@@ -437,14 +466,14 @@ export default function AudienceClient({
   );
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 pb-28 md:pb-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-teal-800 mb-2">נמענים</h1>
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 sm:py-8 pb-28 md:pb-8 min-w-0 overflow-x-hidden">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">נמענים</h1>
         <p className="text-muted-foreground">נהל את רשימת הנמענים והייבוא מ-WhatsApp</p>
       </div>
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 min-w-0 max-w-full sm:max-w-sm">
           <SearchIcon className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="חיפוש לפי שם, טלפון או תגית..."
@@ -453,25 +482,15 @@ export default function AudienceClient({
             className="pr-10 rounded-xl border-slate-200"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={handleOpenImport}
-            variant="outline"
-            disabled={importLoading}
-            className="rounded-xl border-teal-200 hover:bg-teal-50"
-          >
-            <DownloadIcon className={cn("size-4 ml-2", importLoading && "animate-spin")} />
-            ייבוא קבוצות
-          </Button>
-          <Button
-            onClick={handleSync}
-            disabled={syncing}
-            className="rounded-xl bg-teal-600 hover:bg-teal-700"
-          >
-            <RefreshCwIcon className={cn("size-4 ml-2", syncing && "animate-spin")} />
-            {syncing ? "מסנכרן..." : "סנכרן מ-WhatsApp"}
-          </Button>
-        </div>
+        <Button
+          onClick={handleOpenImport}
+          variant="outline"
+          disabled={importLoading}
+          className="rounded-xl border-teal-200 hover:bg-teal-50 shrink-0"
+        >
+          <DownloadIcon className={cn("size-4 ml-2", importLoading && "animate-spin")} />
+          ייבוא קבוצות
+        </Button>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -501,8 +520,8 @@ export default function AudienceClient({
         </div>
       )}
 
-      <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <Table>
+      <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+        <Table className="min-w-0">
           <TableHeader>
             <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
               <TableHead className="w-10">
@@ -514,7 +533,7 @@ export default function AudienceClient({
               <TableHead className="font-semibold">שם</TableHead>
               <TableHead className="font-semibold">מזהה צ&apos;אט</TableHead>
               <TableHead className="font-semibold">תגיות</TableHead>
-              <TableHead className="w-24 font-semibold">פעולות</TableHead>
+              <TableHead className="w-28 font-semibold">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -540,16 +559,27 @@ export default function AudienceClient({
                     ))}
                   </div>
                 </TableCell>
-                <TableCell>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleCopyTags(r.tags ?? [])}
-                    title="העתק תגיות"
-                    className="size-8"
-                  >
-                    <CopyIcon className="size-4" />
-                  </Button>
+                <TableCell className="whitespace-nowrap">
+                  <div className="flex flex-row gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleCopyTags(r.tags ?? [])}
+                      title="העתק תגיות"
+                      className="size-8"
+                    >
+                      <CopyIcon className="size-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDeleteOne(r.id)}
+                      title="מחק"
+                      className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2Icon className="size-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -569,15 +599,26 @@ export default function AudienceClient({
                 <p className="font-semibold truncate">{r.name || "—"}</p>
                 <p className="text-xs text-muted-foreground font-mono truncate">{r.wa_chat_id}</p>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => handleCopyTags(r.tags ?? [])}
-                title="העתק תגיות"
-                className="size-8 shrink-0"
-              >
-                <CopyIcon className="size-4" />
-              </Button>
+              <div className="flex gap-1 shrink-0">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleCopyTags(r.tags ?? [])}
+                  title="העתק תגיות"
+                  className="size-8"
+                >
+                  <CopyIcon className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleDeleteOne(r.id)}
+                  title="מחק"
+                  className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="flex flex-wrap gap-1">
@@ -602,16 +643,11 @@ export default function AudienceClient({
           </div>
           <h3 className="text-lg font-semibold text-slate-700 mb-2">אין נמענים</h3>
           <p className="text-center text-muted-foreground max-w-sm mb-6">
-            לחץ על &quot;ייבוא קבוצות&quot; לייבא קבוצות WhatsApp, או &quot;סנכרן&quot; לסנכרון אנשי קשר
+            לחץ על &quot;ייבוא קבוצות&quot; לייבא קבוצות WhatsApp
           </p>
-          <div className="flex gap-3">
-            <Button onClick={handleOpenImport} variant="outline" disabled={importLoading}>
-              ייבוא קבוצות
-            </Button>
-            <Button onClick={handleSync} disabled={syncing}>
-              סנכרן מ-WhatsApp
-            </Button>
-          </div>
+          <Button onClick={handleOpenImport} variant="outline" disabled={importLoading}>
+            ייבוא קבוצות
+          </Button>
         </div>
       )}
 
@@ -620,6 +656,23 @@ export default function AudienceClient({
           <BulkActionsBar />
         </div>
       )}
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>מחיקת נמענים</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            האם למחוק {selected.size} נמענים? זה לא ניתן לביטול.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>ביטול</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkLoading}>
+              {bulkLoading ? "מוחק..." : "מחק"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {applyOpen && <ApplyTagsModal />}
       {importOpen && <ImportGroupsModal />}
