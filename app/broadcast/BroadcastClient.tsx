@@ -144,7 +144,7 @@ export default function BroadcastClient({
       return;
     }
 
-    let finalImageUrl = imageUrl.trim();
+    const finalImageUrl = imageUrl.trim();
     if (imageFile && !finalImageUrl && uploading === false) {
       toast.error("ממתין להעלאת התמונה");
       return;

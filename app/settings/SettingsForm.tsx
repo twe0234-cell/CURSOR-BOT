@@ -4,13 +4,24 @@ import { useState } from "react";
 import { saveUserSettings } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { XIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { XIcon, PlusIcon, KeyIcon, MailIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
   defaultGreenApiToken: string;
   defaultAllowedTags: string[];
 };
+
+function maskToken(token: string): string {
+  if (!token || token.length < 4) return "••••••••";
+  return "••••••••" + token.slice(-4);
+}
 
 export default function SettingsForm({
   defaultGreenApiId,
@@ -25,8 +36,10 @@ export default function SettingsForm({
   const [newTag, setNewTag] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [apiKeysOpen, setApiKeysOpen] = useState(false);
+  const [credentialsEditOpen, setCredentialsEditOpen] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
+
+  const isConfigured = !!(greenApiId?.trim() && greenApiToken?.trim());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +49,7 @@ export default function SettingsForm({
       const result = await saveUserSettings(greenApiId, greenApiToken, allowedTags);
       if (result.success) {
         setMessage({ type: "success", text: "ההגדרות נשמרו בהצלחה" });
+        setCredentialsEditOpen(false);
       } else {
         setMessage({ type: "error", text: result.error });
       }
@@ -60,77 +74,9 @@ export default function SettingsForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setApiKeysOpen((o) => !o)}
-          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
-        >
-          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
-            <KeyIcon className="size-5 text-teal-600" />
-            מפתחות Green API
-          </span>
-          {apiKeysOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
-        </button>
-        {apiKeysOpen && (
-          <div className="border-t border-teal-100 p-6 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              הזן את פרטי הגישה מ־<a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">green-api.com</a>
-            </p>
-            <div>
-              <label htmlFor="green_api_id" className="mb-2 block text-sm font-medium text-slate-700">Instance ID</label>
-              <input
-                id="green_api_id"
-                type="text"
-                value={greenApiId}
-                onChange={(e) => setGreenApiId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                placeholder="הזן את ה-Instance ID"
-              />
-            </div>
-            <div>
-              <label htmlFor="green_api_token" className="mb-2 block text-sm font-medium text-slate-700">API Token</label>
-              <input
-                id="green_api_token"
-                type="password"
-                value={greenApiToken}
-                onChange={(e) => setGreenApiToken(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                placeholder="הזן את ה-API Token"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setGmailOpen((o) => !o)}
-          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
-        >
-          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
-            <MailIcon className="size-5 text-teal-600" />
-            חיבור Gmail (דיוור אימייל)
-          </span>
-          {gmailOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
-        </button>
-        {gmailOpen && (
-          <div className="border-t border-teal-100 p-6 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              לשליחת אימיילים דרך Gmail שלך – התגובות יגיעו לתיבת הדואר, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
-            </p>
-            <p className="text-xs text-slate-500">
-              נדרש הגדרת OAuth 2.0 ב־Google Cloud Console. בשלב זה התשתית מוכנה – חיבור Gmail יופעל בגרסה הבאה.
-            </p>
-          </div>
-        )}
-      </div>
-
+      {/* תגיות מערכת – בראש ההיררכיה */}
       <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
-        <h3 className="mb-2 text-lg font-semibold text-teal-800">
-          תגיות מערכת
-        </h3>
+        <h3 className="mb-2 text-lg font-semibold text-teal-800">תגיות מערכת</h3>
         <p className="mb-3 text-xs text-slate-500">
           תגיות אלה יהיו זמינות לבחירה בדף הנמענים
         </p>
@@ -168,14 +114,100 @@ export default function SettingsForm({
         )}
       </div>
 
-      {message && (
-        <div
-          className={`rounded-lg p-3 text-sm ${
-            message.type === "success"
-              ? "bg-green-50 text-green-700"
-              : "bg-red-50 text-red-600"
-          }`}
+      {/* Green API – מוסתר, מציג מצב */}
+      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <KeyIcon className="size-5 text-teal-600" />
+            <div>
+              <p className="font-semibold text-teal-800">Green API</p>
+              <p className="text-sm text-muted-foreground">
+                Instance: {greenApiId ? maskToken(greenApiId) : "—"} · Token: {greenApiToken ? maskToken(greenApiToken) : "—"}
+              </p>
+            </div>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${isConfigured ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
+              {isConfigured ? "🟢 מוגדר" : "⚪ לא מוגדר"}
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCredentialsEditOpen(true)}
+            className="rounded-xl"
+          >
+            <PencilIcon className="size-4 ml-1" />
+            ערוך
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={credentialsEditOpen} onOpenChange={setCredentialsEditOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>עריכת מפתחות Green API</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            <a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">green-api.com</a>
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="green_api_id" className="mb-2 block text-sm font-medium text-slate-700">Instance ID</label>
+              <input
+                id="green_api_id"
+                type="text"
+                value={greenApiId}
+                onChange={(e) => setGreenApiId(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                placeholder="הזן את ה-Instance ID"
+              />
+            </div>
+            <div>
+              <label htmlFor="green_api_token" className="mb-2 block text-sm font-medium text-slate-700">API Token</label>
+              <input
+                id="green_api_token"
+                type="password"
+                value={greenApiToken}
+                onChange={(e) => setGreenApiToken(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                placeholder="הזן את ה-API Token"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={() => setCredentialsEditOpen(false)}>ביטול</Button>
+            <Button type="submit" disabled={loading}>{loading ? "שומר..." : "שמור"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gmail */}
+      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setGmailOpen((o) => !o)}
+          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
         >
+          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
+            <MailIcon className="size-5 text-teal-600" />
+            חיבור Gmail (דיוור אימייל)
+          </span>
+          {gmailOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
+        </button>
+        {gmailOpen && (
+          <div className="border-t border-teal-100 p-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              לשליחת אימיילים דרך Gmail – התגובות יגיעו לתיבת הדואר, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
+            </p>
+            <p className="text-xs text-slate-500">
+              נדרש הגדרת OAuth 2.0 ב־Google Cloud Console.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {message && (
+        <div className={`rounded-lg p-3 text-sm ${message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
           {message.text}
         </div>
       )}

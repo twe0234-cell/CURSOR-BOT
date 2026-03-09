@@ -26,6 +26,7 @@ import {
   deleteRecipient,
   fetchGroupsFromGreenApi,
   saveImportedGroups,
+  syncAudience,
   type GreenApiGroup,
 } from "./actions";
 import {
@@ -36,6 +37,8 @@ import {
   UsersIcon,
   CheckCircle2Icon,
   Trash2Icon,
+  MoreHorizontalIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +77,8 @@ export default function AudienceClient({
   const [importLoading, setImportLoading] = useState(false);
   const [importSaving, setImportSaving] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const filtered = useMemo(() => {
     let list = audience;
@@ -204,6 +209,19 @@ export default function AudienceClient({
     }
   };
 
+  const handleSync = async () => {
+    setActionsOpen(false);
+    setSyncing(true);
+    const res = await syncAudience();
+    setSyncing(false);
+    if (res.success) {
+      toast.success("הסנכרון הושלם בהצלחה");
+      window.location.reload();
+    } else {
+      toast.error(res.error, { duration: 6000 });
+    }
+  };
+
   const handleOpenImport = async () => {
     setImportOpen(true);
     setImportLoading(true);
@@ -230,6 +248,7 @@ export default function AudienceClient({
     } finally {
       setImportLoading(false);
     }
+    setActionsOpen(false);
   };
 
   const toggleImportSelect = (chatId: string) => {
@@ -482,15 +501,40 @@ export default function AudienceClient({
             className="pr-10 rounded-xl border-slate-200"
           />
         </div>
-        <Button
-          onClick={handleOpenImport}
-          variant="outline"
-          disabled={importLoading}
-          className="rounded-xl border-teal-200 hover:bg-teal-50 shrink-0"
-        >
-          <DownloadIcon className={cn("size-4 ml-2", importLoading && "animate-spin")} />
-          ייבוא קבוצות
-        </Button>
+        <div className="relative shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => setActionsOpen((o) => !o)}
+            disabled={importLoading || syncing}
+            className="rounded-xl border-teal-200 hover:bg-teal-50"
+          >
+            <MoreHorizontalIcon className="size-4 ml-2" />
+            פעולות
+          </Button>
+          {actionsOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(false)} />
+              <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  onClick={handleOpenImport}
+                  disabled={importLoading}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-teal-50 disabled:opacity-50"
+                >
+                  <DownloadIcon className={cn("size-4", importLoading && "animate-spin")} />
+                  ייבוא קבוצות
+                </button>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-teal-50 disabled:opacity-50"
+                >
+                  <RefreshCwIcon className={cn("size-4", syncing && "animate-spin")} />
+                  סנכרן מ-WhatsApp
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -551,7 +595,7 @@ export default function AudienceClient({
           </TableHeader>
           <TableBody>
             {filtered.map((r) => (
-              <TableRow key={r.id} className="hover:bg-teal-50/30">
+              <TableRow key={r.id} className="hover:bg-teal-50/50 transition-colors">
                 <TableCell>
                   <Checkbox
                     checked={selected.has(r.id)}
@@ -602,7 +646,7 @@ export default function AudienceClient({
 
       <div className="mb-4 md:hidden space-y-3">
         {filtered.map((r) => (
-          <Card key={r.id} className="border-teal-100 overflow-hidden transition-shadow hover:shadow-md">
+          <Card key={r.id} className="border-teal-100 overflow-hidden transition-all duration-200 hover:shadow-md hover:border-teal-200">
             <CardHeader className="flex flex-row items-center gap-3 p-4">
               <Checkbox
                 checked={selected.has(r.id)}
