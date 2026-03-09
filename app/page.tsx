@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
-import { Radio, Settings, Users, Package } from "lucide-react";
+import { Radio, Settings, Users, Package, Mail } from "lucide-react";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -12,10 +12,11 @@ export default async function HomePage() {
   }
 
   const quickLinks = [
-    { href: "/broadcast", label: "שידור", icon: Radio, desc: "שלח הודעות לנמענים" },
-    { href: "/audience", label: "נמענים", icon: Users, desc: "נהל רשימת נמענים" },
+    { href: "/broadcast", label: "שידור", icon: Radio, desc: "שלח הודעות WhatsApp לנמענים" },
+    { href: "/audience", label: "נמענים", icon: Users, desc: "נהל רשימת נמענים WhatsApp" },
+    { href: "/email", label: "דיוור אימייל", icon: Mail, desc: "ייבוא אנשי קשר, קמפיינים וסטטיסטיקות" },
     { href: "/inventory", label: "מלאי", icon: Package, desc: "נהל מלאי מוצרים" },
-    { href: "/settings", label: "הגדרות", icon: Settings, desc: "Green API והגדרות" },
+    { href: "/settings", label: "הגדרות", icon: Settings, desc: "Green API, Gmail והגדרות" },
   ];
 
   return (

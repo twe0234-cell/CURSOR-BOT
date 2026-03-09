@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Radio, Users, Package, Settings, LogOut } from "lucide-react";
+import { Radio, Users, Package, Mail, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function NavBar() {
@@ -21,6 +21,7 @@ export default function NavBar() {
   const navItems = [
     { href: "/broadcast", label: "שידור", icon: Radio },
     { href: "/audience", label: "נמענים", icon: Users },
+    { href: "/email", label: "דיוור", icon: Mail },
     { href: "/inventory", label: "מלאי", icon: Package },
     { href: "/settings", label: "הגדרות", icon: Settings },
   ];

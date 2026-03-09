@@ -493,7 +493,20 @@ export default function AudienceClient({
         </Button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleSelectAll}
+          className="rounded-xl border-teal-200 hover:bg-teal-50"
+        >
+          {selected.size === filtered.length && filtered.length > 0 ? "בטל בחירה" : "בחר הכל"}
+        </Button>
+        {selected.size > 0 && (
+          <span className="text-sm text-muted-foreground">
+            נבחרו {selected.size} מתוך {filtered.length}
+          </span>
+        )}
         {(allTags ?? []).map((tag) => (
           <button
             key={tag}

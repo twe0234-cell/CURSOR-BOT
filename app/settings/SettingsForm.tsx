@@ -4,7 +4,7 @@ import { useState } from "react";
 import { saveUserSettings } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { XIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon } from "lucide-react";
+import { XIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
@@ -26,6 +26,7 @@ export default function SettingsForm({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
+  const [gmailOpen, setGmailOpen] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,6 +99,30 @@ export default function SettingsForm({
                 placeholder="הזן את ה-API Token"
               />
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setGmailOpen((o) => !o)}
+          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
+            <MailIcon className="size-5 text-teal-600" />
+            חיבור Gmail (דיוור אימייל)
+          </span>
+          {gmailOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
+        </button>
+        {gmailOpen && (
+          <div className="border-t border-teal-100 p-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              לשליחת אימיילים דרך Gmail שלך – התגובות יגיעו לתיבת הדואר, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
+            </p>
+            <p className="text-xs text-slate-500">
+              נדרש הגדרת OAuth 2.0 ב־Google Cloud Console. בשלב זה התשתית מוכנה – חיבור Gmail יופעל בגרסה הבאה.
+            </p>
           </div>
         )}
       </div>
