@@ -34,7 +34,7 @@ export default function NavBar() {
     { href: "/broadcast", label: "מנוע שידור", icon: Radio },
     { href: "/audience", label: "ניהול נמענים", icon: Users },
     { href: "/email", label: "דיוור", icon: Mail },
-    { href: "/coming-soon", label: "עסקאות ותיווך", icon: HandshakeIcon },
+    { href: "/crm", label: "CRM", icon: HandshakeIcon },
     { href: "/coming-soon", label: "תזרים כספים", icon: Wallet },
     { href: "/coming-soon", label: "סופרים וספקים", icon: UserCog },
     { href: "/inventory", label: "ניהול מלאי סת״ם", icon: Package },

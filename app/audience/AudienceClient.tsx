@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, memo } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -42,6 +42,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const ImportGroupRow = memo(function ImportGroupRow({
+  name,
+  checked,
+  onToggle,
+}: {
+  name: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label
+      className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-teal-50/50 transition-colors"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Checkbox checked={checked} onCheckedChange={onToggle} />
+      <span className="flex-1 truncate font-mono text-xs">{name}</span>
+    </label>
+  );
+});
+
 type Recipient = {
   id: string;
   name: string | null;
@@ -79,6 +99,8 @@ export default function AudienceClient({
   const [importError, setImportError] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const importListScrollRef = useRef<HTMLDivElement>(null);
+  const importScrollTopRef = useRef(0);
 
   const filtered = useMemo(() => {
     let list = audience;
@@ -196,7 +218,11 @@ export default function AudienceClient({
 
   const handleBulkDelete = async () => {
     if (selected.size === 0) return;
+    const count = selected.size;
     setBulkLoading(true);
+    if (count > 100) {
+      toast.info(`ממחק ${count} נמענים... עשוי לקחת כמה שניות`, { duration: 3000 });
+    }
     const res = await bulkDeleteRecipients([...selected]);
     setBulkLoading(false);
     setDeleteOpen(false);
@@ -252,6 +278,9 @@ export default function AudienceClient({
   };
 
   const toggleImportSelect = (chatId: string) => {
+    if (importListScrollRef.current) {
+      importScrollTopRef.current = importListScrollRef.current.scrollTop;
+    }
     setImportSelected((prev) => {
       const next = new Set(prev);
       if (next.has(chatId)) next.delete(chatId);
@@ -259,6 +288,14 @@ export default function AudienceClient({
       return next;
     });
   };
+
+  useLayoutEffect(() => {
+    const el = importListScrollRef.current;
+    if (el && importScrollTopRef.current > 0) {
+      el.scrollTop = importScrollTopRef.current;
+      importScrollTopRef.current = 0;
+    }
+  }, [importSelected]);
 
   const toggleImportSelectAll = () => {
     if (importSelected.size === importGroups.length) {
@@ -452,18 +489,18 @@ export default function AudienceClient({
                   {importSelected.size} / {importGroups.length} נבחרו
                 </span>
               </div>
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200">
+              <div
+                ref={importListScrollRef}
+                className="max-h-64 overflow-y-auto overflow-anchor-none rounded-xl border border-slate-200"
+                style={{ overflowAnchor: "none" } as React.CSSProperties}
+              >
                 {importGroups.map((g) => (
-                  <label
+                  <ImportGroupRow
                     key={g.chatId}
-                    className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-teal-50/50 transition-colors"
-                  >
-                    <Checkbox
-                      checked={importSelected.has(g.chatId)}
-                      onCheckedChange={() => toggleImportSelect(g.chatId)}
-                    />
-                    <span className="flex-1 truncate font-mono text-xs">{g.name || g.chatId}</span>
-                  </label>
+                    name={g.name || g.chatId}
+                    checked={importSelected.has(g.chatId)}
+                    onToggle={() => toggleImportSelect(g.chatId)}
+                  />
                 ))}
               </div>
               <div className="flex gap-2 justify-end">

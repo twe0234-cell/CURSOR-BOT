@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/src/lib/supabase/server";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 
 export async function GET(
   _req: Request,
@@ -8,7 +8,13 @@ export async function GET(
   const { token } = await params;
   if (!token) return NextResponse.redirect(new URL("/", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"));
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return new NextResponse(
+      "<html dir='rtl'><body><h1>שגיאת שרת</h1><p>חסרה הגדרת SUPABASE_SERVICE_ROLE_KEY</p></body></html>",
+      { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  }
   const { data: log } = await supabase
     .from("email_logs")
     .select("id, contact_id")

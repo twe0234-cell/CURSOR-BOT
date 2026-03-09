@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { saveUserSettings } from "./actions";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { saveUserSettings, disconnectGmail } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +17,8 @@ type Props = {
   defaultGreenApiId: string;
   defaultGreenApiToken: string;
   defaultAllowedTags: string[];
+  gmailConnected?: boolean;
+  gmailEmail?: string | null;
 };
 
 function maskToken(token: string): string {
@@ -27,6 +30,8 @@ export default function SettingsForm({
   defaultGreenApiId,
   defaultGreenApiToken,
   defaultAllowedTags,
+  gmailConnected = false,
+  gmailEmail = null,
 }: Props) {
   const [greenApiId, setGreenApiId] = useState(defaultGreenApiId);
   const [greenApiToken, setGreenApiToken] = useState(defaultGreenApiToken);
@@ -38,6 +43,25 @@ export default function SettingsForm({
   const [loading, setLoading] = useState(false);
   const [credentialsEditOpen, setCredentialsEditOpen] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const gmail = searchParams.get("gmail");
+    const err = searchParams.get("gmail_error");
+    if (gmail === "connected") {
+      setMessage({ type: "success", text: "Gmail מחובר בהצלחה" });
+      setGmailOpen(true);
+    } else if (err) {
+      const errMsg: Record<string, string> = {
+        config: "חסרים GOOGLE_CLIENT_ID או GOOGLE_CLIENT_SECRET",
+        no_refresh: "לא התקבל refresh token – נסה שוב",
+        token_exchange: "שגיאה בהחלפת קוד",
+        invalid_state: "פג תוקף – נסה שוב",
+      };
+      setMessage({ type: "error", text: errMsg[err] ?? `שגיאה: ${err}` });
+      setGmailOpen(true);
+    }
+  }, [searchParams]);
 
   const isConfigured = !!(greenApiId?.trim() && greenApiToken?.trim());
 
@@ -200,8 +224,39 @@ export default function SettingsForm({
               לשליחת אימיילים דרך Gmail – התגובות יגיעו לתיבת הדואר, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
             </p>
             <p className="text-xs text-slate-500">
-              נדרש הגדרת OAuth 2.0 ב־Google Cloud Console.
+              נדרש הגדרת OAuth 2.0 ב־Google Cloud Console (Client ID + Client Secret).
             </p>
+            {gmailConnected ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                  <span>🟢 מחובר</span>
+                  {gmailEmail && <span className="text-green-600">({gmailEmail})</span>}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={async () => {
+                    const res = await disconnectGmail();
+                    if (res.success) {
+                      setMessage({ type: "success", text: "Gmail נותק" });
+                      window.location.reload();
+                    } else {
+                      setMessage({ type: "error", text: res.error });
+                    }
+                  }}
+                >
+                  נתק Gmail
+                </Button>
+              </div>
+            ) : (
+              <a href="/api/auth/gmail">
+                <Button type="button" variant="outline" className="rounded-xl">
+                  חבר Gmail
+                </Button>
+              </a>
+            )}
           </div>
         )}
       </div>

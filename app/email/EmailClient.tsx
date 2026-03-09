@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,12 @@ import {
   deleteEmailContact,
   bulkDeleteEmailContacts,
   getGmailStatus,
+  sendEmailCampaign,
   type EmailContact,
 } from "./actions";
 import {
   MailIcon,
   UsersIcon,
-  DownloadIcon,
   Trash2Icon,
   KeyIcon,
   BarChart3Icon,
@@ -48,6 +48,9 @@ export default function EmailClient({ initialContacts }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const [campaignSubject, setCampaignSubject] = useState("");
+  const [campaignBody, setCampaignBody] = useState("");
+  const [sending, setSending] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search) return contacts;
@@ -144,6 +147,25 @@ export default function EmailClient({ initialContacts }: Props) {
       if (r.success && r.connected) setGmailConnected(true);
     });
   }, []);
+
+  const handleSendCampaign = async () => {
+    const ids = selected.size > 0 ? [...selected] : filtered.map((c) => c.id);
+    if (ids.length === 0) {
+      toast.error("בחר נמענים או עבור ללשונית אנשי קשר");
+      return;
+    }
+    setSending(true);
+    const res = await sendEmailCampaign(ids, campaignSubject, campaignBody);
+    setSending(false);
+    if (res.success) {
+      toast.success(`נשלחו ${res.sent} אימיילים${res.failed > 0 ? `, ${res.failed} נכשלו` : ""}`);
+      setCampaignSubject("");
+      setCampaignBody("");
+      setSelected(new Set());
+    } else {
+      toast.error(res.error);
+    }
+  };
 
   const tabs: { id: Tab; label: string; icon: typeof UsersIcon }[] = [
     { id: "contacts", label: "אנשי קשר", icon: UsersIcon },
@@ -266,17 +288,51 @@ export default function EmailClient({ initialContacts }: Props) {
       )}
 
       {tab === "campaigns" && (
-        <Card className="border-teal-100 p-8">
-          <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <KeyIcon className="size-16 text-teal-600" />
-            <h3 className="text-lg font-semibold text-slate-700">חיבור Gmail</h3>
-            <p className="text-center text-muted-foreground max-w-md">
-              לחיבור Gmail שלך להפעלת שליחת אימיילים – הגדר OAuth בהגדרות. התגובות יגיעו לתיבת הדואר שלך, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
-            </p>
-            <Link href="/settings">
-              <Button variant="outline">הגדרות</Button>
-            </Link>
-          </div>
+        <Card className="border-teal-100 p-6 sm:p-8">
+          {gmailConnected ? (
+            <div className="space-y-6">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">נושא</label>
+                <Input
+                  value={campaignSubject}
+                  onChange={(e) => setCampaignSubject(e.target.value)}
+                  placeholder="נושא האימייל"
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">תוכן (HTML)</label>
+                <textarea
+                  value={campaignBody}
+                  onChange={(e) => setCampaignBody(e.target.value)}
+                  placeholder="<p>שלום,</p><p>התוכן כאן...</p>"
+                  rows={10}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm"
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                נמענים: {selected.size > 0 ? `${selected.size} נבחרו` : `כל ${filtered.length} אנשי הקשר`}
+              </p>
+              <Button
+                onClick={handleSendCampaign}
+                disabled={sending || !campaignSubject.trim()}
+                className="rounded-xl bg-teal-600 hover:bg-teal-700"
+              >
+                {sending ? "שולח..." : "שלח קמפיין"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <KeyIcon className="size-16 text-teal-600" />
+              <h3 className="text-lg font-semibold text-slate-700">חיבור Gmail</h3>
+              <p className="text-center text-muted-foreground max-w-md">
+                לחיבור Gmail שלך להפעלת שליחת אימיילים – הגדר OAuth בהגדרות. התגובות יגיעו לתיבת הדואר שלך, והמערכת תעקוב אחר פתיחות ובקשות הסרה.
+              </p>
+              <Link href="/settings">
+                <Button variant="outline">הגדרות</Button>
+              </Link>
+            </div>
+          )}
         </Card>
       )}
 

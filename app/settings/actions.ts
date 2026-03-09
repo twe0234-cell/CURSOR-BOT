@@ -47,6 +47,30 @@ export async function saveUserSettings(
   }
 }
 
+export async function disconnectGmail(): Promise<SettingsActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("user_settings")
+      .update({
+        gmail_refresh_token: null,
+        gmail_email: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/settings");
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
 export async function updateAllowedTags(allowedTags: string[]): Promise<SettingsActionResult> {
   try {
     const supabase = await createClient();

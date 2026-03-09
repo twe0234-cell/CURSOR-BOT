@@ -83,8 +83,7 @@ export async function importEmailContacts(
     revalidatePath("/email");
     return { success: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
-    return { success: false, error: msg };
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
   }
 }
 
@@ -109,6 +108,8 @@ export async function deleteEmailContact(id: string): Promise<ActionResult> {
   }
 }
 
+const BULK_CHUNK = 80;
+
 export async function bulkDeleteEmailContacts(ids: string[]): Promise<ActionResult> {
   if (!ids.length) return { success: false, error: "בחר אנשי קשר" };
   try {
@@ -116,18 +117,20 @@ export async function bulkDeleteEmailContacts(ids: string[]): Promise<ActionResu
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { error } = await supabase
-      .from("email_contacts")
-      .delete()
-      .eq("user_id", user.id)
-      .in("id", ids);
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      const { error } = await supabase
+        .from("email_contacts")
+        .delete()
+        .eq("user_id", user.id)
+        .in("id", chunk);
 
-    if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: error.message };
+    }
     revalidatePath("/email");
     return { success: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
-    return { success: false, error: msg };
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
   }
 }
 
@@ -150,7 +153,6 @@ export async function updateEmailContactTags(
     revalidatePath("/email");
     return { success: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
   }
 }
@@ -173,5 +175,121 @@ export async function getGmailStatus(): Promise<
     return { success: true, connected, email: data?.gmail_email ?? undefined };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export type SendCampaignResult =
+  | { success: true; sent: number; failed: number }
+  | { success: false; error: string };
+
+export async function sendEmailCampaign(
+  contactIds: string[],
+  subject: string,
+  bodyHtml: string
+): Promise<SendCampaignResult> {
+  if (!contactIds.length) return { success: false, error: "בחר נמענים" };
+  if (!subject.trim()) return { success: false, error: "הזן נושא" };
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("gmail_refresh_token, gmail_email")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!settings?.gmail_refresh_token) {
+      return { success: false, error: "חבר Gmail בהגדרות" };
+    }
+
+    const toSend: { id: string; email: string; name: string | null }[] = [];
+    for (let i = 0; i < contactIds.length; i += BULK_CHUNK) {
+      const chunk = contactIds.slice(i, i + BULK_CHUNK);
+      const { data } = await supabase
+        .from("email_contacts")
+        .select("id, email, name")
+        .eq("user_id", user.id)
+        .eq("subscribed", true)
+        .in("id", chunk);
+      for (const c of data ?? []) {
+        if (c?.email) toSend.push({ id: c.id, email: c.email, name: c.name ?? null });
+      }
+    }
+    if (toSend.length === 0) {
+      return { success: false, error: "לא נמצאו נמענים פעילים" };
+    }
+
+    const { getAccessToken, sendEmail } = await import("@/src/lib/gmail");
+    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    const fromEmail = settings.gmail_email ?? "noreply@example.com";
+
+    const { data: campaign } = await supabase
+      .from("email_campaigns")
+      .insert({ user_id: user.id, subject, body_html: bodyHtml })
+      .select("id")
+      .single();
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    let sent = 0;
+    let failed = 0;
+
+    for (const c of toSend) {
+      const logRes = await supabase
+        .from("email_logs")
+        .insert({
+          campaign_id: campaign?.id ?? null,
+          contact_id: c.id,
+          status: "sent",
+        })
+        .select("id")
+        .single();
+
+      const logId = logRes.data?.id;
+      const trackUrl = `${appUrl}/api/email/track/${logId ?? "x"}`;
+      const unsubUrl = `${appUrl}/api/email/unsubscribe/${logId ?? "x"}`;
+
+      const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="utf-8"></head>
+<body style="font-family:Heebo,sans-serif;padding:20px;direction:rtl">
+${bodyHtml || "<p>שלום,</p>"}
+<hr style="margin:24px 0;border:none;border-top:1px solid #eee">
+<p style="font-size:12px;color:#888">
+<a href="${unsubUrl}" style="color:#888">הסר מנוי</a>
+</p>
+<img src="${trackUrl}" width="1" height="1" alt="" style="display:block" />
+</body>
+</html>`;
+
+      try {
+        await sendEmail(
+          accessToken,
+          c.email!,
+          subject,
+          html,
+          fromEmail,
+          "Broadcast Buddy"
+        );
+        sent++;
+      } catch {
+        failed++;
+      }
+
+      if (sent % 5 === 0 && sent > 0) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    revalidatePath("/email");
+    return { success: true, sent, failed };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "שגיאה בשליחה",
+    };
   }
 }

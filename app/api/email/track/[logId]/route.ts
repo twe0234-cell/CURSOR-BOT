@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/src/lib/supabase/server";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 
 export async function GET(
   _req: Request,
@@ -8,12 +7,14 @@ export async function GET(
   const { logId } = await params;
   if (!logId) return new Response(null, { status: 400 });
 
-  const supabase = await createClient();
-  await supabase
-    .from("email_logs")
-    .update({ status: "open", opened_at: new Date().toISOString() })
-    .eq("id", logId)
-    .eq("status", "sent");
+  const supabase = createAdminClient();
+  if (supabase) {
+    await supabase
+      .from("email_logs")
+      .update({ status: "open", opened_at: new Date().toISOString() })
+      .eq("id", logId)
+      .eq("status", "sent");
+  }
 
   const pixel = Buffer.from(
     "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
