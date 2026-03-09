@@ -22,10 +22,22 @@ export default function NavBar() {
         </Link>
         <div className="flex items-center gap-4">
           <Link
+            href="/broadcast"
+            className="text-sm font-medium text-slate-600 hover:text-teal-600"
+          >
+            שידור
+          </Link>
+          <Link
             href="/audience"
             className="text-sm font-medium text-slate-600 hover:text-teal-600"
           >
             נמענים
+          </Link>
+          <Link
+            href="/inventory"
+            className="text-sm font-medium text-slate-600 hover:text-teal-600"
+          >
+            מלאי
           </Link>
           <Link
             href="/settings"
