@@ -42,21 +42,30 @@ export async function fetchGroupsFromGreenApi(): Promise<FetchGroupsResult> {
       return { success: false, error: "הגדר Green API בהגדרות לפני הייבוא" };
     }
 
-    const url = `${GREEN_API_URL}/waInstance${creds.id}/getChats/${creds.token}`;
+    const url = `${GREEN_API_URL}/waInstance${creds.id}/getDialogs/${creds.token}`;
     const res = await fetch(url);
 
     if (!res.ok) {
-      return { success: false, error: "שגיאה בחיבור ל-Green API" };
+      let errMsg = "שגיאת התחברות ל-Green API";
+      try {
+        const errBody = await res.json();
+        if (errBody?.message) errMsg = String(errBody.message);
+        else if (errBody?.error) errMsg = String(errBody.error);
+      } catch {
+        const text = await res.text();
+        if (text) errMsg = text.slice(0, 200);
+      }
+      return { success: false, error: errMsg };
     }
 
-    const chats: Array<{ chatId?: string; phoneNumber?: number }> = await res.json();
-
+    const data = await res.json();
+    const chats = Array.isArray(data) ? data : (data?.dialogs ?? data?.chats ?? []);
     if (!Array.isArray(chats)) {
       return { success: false, error: "תגובת API לא תקינה" };
     }
 
-    const groups = chats.filter((c) => {
-      const id = String(c?.chatId ?? "").trim();
+    const groups = chats.filter((c: { chatId?: string; id?: string; phoneNumber?: number }) => {
+      const id = String(c?.chatId ?? c?.id ?? "").trim();
       return id.length > 0 && (id.endsWith("@g.us") || (id.startsWith("-") && id.length > 1));
     });
 
@@ -68,11 +77,11 @@ export async function fetchGroupsFromGreenApi(): Promise<FetchGroupsResult> {
     const existingSet = new Set((existing ?? []).map((r) => r?.wa_chat_id ?? "").filter(Boolean));
 
     const newGroups = groups
-      .map((c) => {
-        const chatId = String(c?.chatId ?? "").trim();
+      .map((c: { chatId?: string; id?: string; name?: string }) => {
+        const chatId = String(c?.chatId ?? c?.id ?? "").trim();
         if (!chatId || existingSet.has(chatId)) return null;
         existingSet.add(chatId);
-        return { chatId, name: chatId } as GreenApiGroup;
+        return { chatId, name: (c?.name as string) || chatId } as GreenApiGroup;
       })
       .filter((g): g is GreenApiGroup => g !== null);
 
@@ -140,17 +149,26 @@ export async function syncAudience(): Promise<ActionResult> {
       return { success: false, error: "הגדר Green API בהגדרות לפני הסנכרון" };
     }
 
-    const url = `${GREEN_API_URL}/waInstance${creds.id}/getContacts/${creds.token}`;
+    const url = `${GREEN_API_URL}/waInstance${creds.id}/getDialogs/${creds.token}`;
     const res = await fetch(url);
 
     if (!res.ok) {
-      return { success: false, error: "שגיאה בחיבור ל-Green API" };
+      let errMsg = "שגיאת התחברות ל-Green API";
+      try {
+        const errBody = await res.json();
+        if (errBody?.message) errMsg = String(errBody.message);
+        else if (errBody?.error) errMsg = String(errBody.error);
+      } catch {
+        const text = await res.text();
+        if (text) errMsg = text.slice(0, 200);
+      }
+      return { success: false, error: errMsg };
     }
 
-    const contacts: Array<{ id?: string; name?: string; contactName?: string }> =
-      await res.json();
+    const data = await res.json();
+    const dialogs = Array.isArray(data) ? data : (data?.dialogs ?? data?.chats ?? []);
 
-    if (!Array.isArray(contacts)) {
+    if (!Array.isArray(dialogs)) {
       return { success: false, error: "תגובת API לא תקינה" };
     }
 
@@ -163,10 +181,10 @@ export async function syncAudience(): Promise<ActionResult> {
       (existing ?? []).map((r) => [r?.wa_chat_id ?? "", (r?.tags ?? []) as string[]])
     );
 
-    const toUpsert = contacts
-      .filter((c) => c?.id)
-      .map((c) => {
-        const waChatId = String(c.id);
+    const toUpsert = dialogs
+      .filter((c: { chatId?: string; id?: string }) => (c?.chatId ?? c?.id))
+      .map((c: { chatId?: string; id?: string; name?: string; contactName?: string }) => {
+        const waChatId = String(c.chatId ?? c.id ?? "");
         const existingTags = existingMap.get(waChatId) ?? [];
         const displayName = c.name || c.contactName || waChatId;
 

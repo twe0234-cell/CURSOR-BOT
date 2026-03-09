@@ -4,6 +4,50 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const GREEN_API_URL = "https://api.green-api.com";
+const MEDIA_BUCKET = "media";
+
+export type UploadResult =
+  | { success: true; url: string }
+  | { success: false; error: string };
+
+/** העלאת קובץ ל-Supabase Storage (bucket: media) */
+export async function uploadMedia(formData: FormData): Promise<UploadResult> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || !(file instanceof File)) {
+      return { success: false, error: "לא נבחר קובץ" };
+    }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: "יש להתחבר" };
+    }
+
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${user.id}/${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, file, {
+        contentType: file.type || "image/jpeg",
+        upsert: true,
+      });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(MEDIA_BUCKET)
+      .getPublicUrl(path);
+
+    return { success: true, url: publicUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה בהעלאה";
+    return { success: false, error: msg };
+  }
+}
 
 const DELAY_MS = 2500;
 

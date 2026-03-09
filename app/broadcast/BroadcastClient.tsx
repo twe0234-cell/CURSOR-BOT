@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   fetchTargetsByTags,
   dispatchBroadcast,
+  uploadMedia,
 } from "./actions";
-import { SendIcon, VariableIcon } from "lucide-react";
+import { SendIcon, VariableIcon, SmileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+
+const EmojiPicker = dynamic(
+  () => import("emoji-picker-react").then((mod) => mod.default),
+  { ssr: false }
+);
 
 const VARIABLES = [
   { key: "Name", label: "שם הנמען" },
@@ -30,8 +36,12 @@ export default function BroadcastClient({
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [messageText, setMessageText] = useState(prefilledMessage);
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [targetCount, setTargetCount] = useState<number | null>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => {
@@ -45,6 +55,53 @@ export default function BroadcastClient({
 
   const insertVariable = (key: string) => {
     setMessageText((prev) => prev + `{${key}}`);
+  };
+
+  const insertAtCursor = (text: string) => {
+    const ta = textareaRef.current;
+    if (ta) {
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? start;
+      const before = messageText.slice(0, start);
+      const after = messageText.slice(end);
+      setMessageText(before + text + after);
+      setTimeout(() => {
+        ta.focus();
+        ta.setSelectionRange(start + text.length, start + text.length);
+      }, 0);
+    } else {
+      setMessageText((prev) => prev + text);
+    }
+    setEmojiOpen(false);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("נא לבחור קובץ תמונה");
+      return;
+    }
+    setImageFile(file);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await uploadMedia(fd);
+      if (res.success) {
+        setImageUrl(res.url);
+        toast.success("התמונה הועלתה");
+      } else {
+        toast.error(res.error);
+        setImageFile(null);
+      }
+    } catch {
+      toast.error("שגיאה בהעלאת התמונה");
+      setImageFile(null);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handlePreviewCount = async () => {
@@ -71,12 +128,18 @@ export default function BroadcastClient({
       return;
     }
 
+    let finalImageUrl = imageUrl.trim();
+    if (imageFile && !finalImageUrl && uploading === false) {
+      toast.error("ממתין להעלאת התמונה");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await dispatchBroadcast(
         [...selectedTags],
         messageText.trim(),
-        imageUrl.trim() || undefined
+        finalImageUrl || undefined
       );
 
       if (res.success) {
@@ -143,7 +206,7 @@ export default function BroadcastClient({
       <Card className="mb-6 border-teal-100">
         <CardHeader>
           <h2 className="text-lg font-semibold text-teal-800">הודעה</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {VARIABLES.map((v) => (
               <Button
                 key={v.key}
@@ -156,6 +219,24 @@ export default function BroadcastClient({
                 {`{${v.key}}`}
               </Button>
             ))}
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEmojiOpen((o) => !o)}
+              >
+                <SmileIcon className="size-4 ml-1" />
+                אמוג&apos;י
+              </Button>
+              {emojiOpen && (
+                <div className="absolute left-0 top-full z-50 mt-1">
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) => insertAtCursor(emojiData.emoji)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -164,6 +245,7 @@ export default function BroadcastClient({
               טקסט
             </label>
             <textarea
+              ref={textareaRef}
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               placeholder="שלום {Name}, ..."
@@ -173,20 +255,30 @@ export default function BroadcastClient({
           </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              קישור לתמונה (אופציונלי)
+              תמונה (אופציונלי)
             </label>
-            <Input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://"
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              disabled={uploading}
+              className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-teal-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-teal-700 hover:file:bg-teal-100"
             />
+            {uploading && (
+              <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>
+            )}
+            {imageUrl && !uploading && (
+              <p className="mt-2 text-sm text-teal-600 truncate">
+                {imageFile?.name || "תמונה הועלתה"}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
 
       <Button
         onClick={handleSend}
-        disabled={loading || selectedTags.size === 0}
+        disabled={loading || selectedTags.size === 0 || uploading}
         className="w-full bg-teal-600 hover:bg-teal-700"
       >
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
