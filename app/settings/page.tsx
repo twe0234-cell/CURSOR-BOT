@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/server";
 import SettingsForm from "./SettingsForm";
+import BrandingSection from "./BrandingSection";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -19,12 +20,23 @@ export default async function SettingsPage() {
 
   const allowedTags = (settings?.allowed_tags ?? []) as string[];
 
+  const { data: sysSettings } = await supabase
+    .from("sys_settings")
+    .select("logo_url")
+    .eq("id", "default")
+    .single();
+
   return (
     <div className="w-full max-w-lg mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
       <h1 className="mb-6 text-3xl sm:text-4xl font-bold text-teal-800">הגדרות</h1>
       <p className="mb-6 text-slate-600">
         הזן את פרטי Green API לשידור הודעות וואטסאפ
       </p>
+
+      <div className="mb-8">
+        <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
+      </div>
+
       <Suspense fallback={<div className="animate-pulse h-64 rounded-2xl bg-slate-100" />}>
         <SettingsForm
           defaultGreenApiId={settings?.green_api_id ?? ""}

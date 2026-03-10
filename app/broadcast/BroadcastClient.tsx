@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   fetchTargetsByTags,
-  dispatchBroadcast,
+  queueBroadcast,
   uploadMedia,
   fetchBroadcastLogs,
   type BroadcastLog,
@@ -45,6 +46,9 @@ export default function BroadcastClient({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [logs, setLogs] = useState<BroadcastLog[]>([]);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [scribeCode, setScribeCode] = useState("");
+  const [internalNotes, setInternalNotes] = useState("");
+  const [nextScribeNum, setNextScribeNum] = useState(121);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -152,21 +156,22 @@ export default function BroadcastClient({
 
     setLoading(true);
     try {
-      const res = await dispatchBroadcast(
+      const res = await queueBroadcast(
         [...selectedTags],
         messageText.trim(),
-        finalImageUrl || undefined
+        finalImageUrl || undefined,
+        scribeCode.trim() || undefined,
+        internalNotes.trim() || undefined
       );
 
       if (res.success) {
-        toast.success(
-          `נשלח בהצלחה`,
-          { description: `${res.sent} נשלחו, ${res.failed} נכשלו` }
-        );
+        toast.success("השידור הוכנס לתור וישלח ברקע", {
+          description: "ניתן לסגור את הדף – השידור ימשיך",
+        });
+        setScribeCode("");
+        setInternalNotes("");
+        setNextScribeNum((n) => n + 1);
         refreshLogs();
-        if (res.errors.length > 0) {
-          console.error("Broadcast errors:", res.errors);
-        }
       } else {
         toast.error(res.error);
       }
@@ -320,6 +325,39 @@ export default function BroadcastClient({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              מק״ט סופר (Ref)
+            </label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                value={scribeCode}
+                onChange={(e) => setScribeCode(e.target.value)}
+                placeholder="#121"
+                className="rounded-xl max-w-[120px]"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setScribeCode(`#${nextScribeNum}`)}
+                className="rounded-xl"
+              >
+                צור אוטומטי
+              </Button>
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              הערות פנימיות
+            </label>
+            <Input
+              value={internalNotes}
+              onChange={(e) => setInternalNotes(e.target.value)}
+              placeholder="שם סופר, מחיר מוסכם, תאריך..."
+              className="rounded-xl"
+            />
+          </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               טקסט

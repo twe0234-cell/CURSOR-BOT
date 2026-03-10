@@ -1,0 +1,26 @@
+# Hidur-OS – Cursor Rules
+
+## Tech Stack
+- **Framework:** Next.js 15 (App Router)
+- **Database:** Supabase (Postgres, RLS, Storage)
+- **Styling:** Tailwind CSS, Shadcn UI
+- **TypeScript:** Strict mode enabled
+
+## Zero-Crash Policy
+- **ALL** Server Actions MUST be wrapped in `try/catch`
+- **ALL** external API calls (Green API, Gmail, etc.) MUST be wrapped in `try/catch`
+- Return standardized objects: `{ success: boolean, data?: T, error?: string }`
+- Never throw uncaught errors to the client
+
+## UI/UX
+- **Language:** Hebrew only for all user-facing text (labels, toasts, messages)
+- **Direction:** RTL (`dir="rtl"`, `lang="he"`)
+- **Toasts:** Use `sonner` for all notifications (success, error, info)
+
+## Database Security
+- **RLS:** All Supabase queries MUST include `.eq('user_id', user.id)` (or equivalent FK check) for row-level security
+- Never expose data across users
+
+## Code Style
+- Variables and code in English
+- UI strings, toasts, and frontend copy in Hebrew

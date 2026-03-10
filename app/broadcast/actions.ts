@@ -82,6 +82,8 @@ export type BroadcastLog = {
   failed: number;
   errors: string[];
   tags: string[];
+  scribe_code: string | null;
+  internal_notes: string | null;
   created_at: string;
 };
 
@@ -95,7 +97,7 @@ export async function fetchBroadcastLogs(): Promise<
 
     const { data, error } = await supabase
       .from("broadcast_logs")
-      .select("id, sent, failed, errors, tags, created_at")
+      .select("id, sent, failed, errors, tags, scribe_code, internal_notes, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -107,6 +109,8 @@ export async function fetchBroadcastLogs(): Promise<
       failed: r.failed ?? 0,
       errors: (r.errors ?? []) as string[],
       tags: (r.tags ?? []) as string[],
+      scribe_code: r.scribe_code ?? null,
+      internal_notes: r.internal_notes ?? null,
       created_at: r.created_at ?? "",
     }));
     return { success: true, logs };
@@ -164,10 +168,56 @@ function replaceVariables(text: string, vars: Record<string, string>): string {
   return result;
 }
 
+export type QueueBroadcastResult =
+  | { success: true; queueId: string }
+  | { success: false; error: string };
+
+export async function queueBroadcast(
+  tags: string[],
+  messageText: string,
+  imageUrl?: string,
+  scribeCode?: string,
+  internalNotes?: string
+): Promise<QueueBroadcastResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const targetsResult = await fetchTargetsByTags(tags);
+    if (!targetsResult.success) return { success: false, error: targetsResult.error };
+    const targets = targetsResult.targets;
+    if (targets.length === 0) return { success: false, error: "אין נמענים התואמים לתגיות" };
+
+    const payload = {
+      tags,
+      messageText: messageText.trim(),
+      imageUrl: imageUrl?.trim() || null,
+      scribeCode: scribeCode?.trim() || null,
+      internalNotes: internalNotes?.trim() || null,
+      targets,
+    };
+
+    const { data, error } = await supabase
+      .from("broadcast_queue")
+      .insert({ user_id: user.id, payload, status: "pending" })
+      .select("id")
+      .single();
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/broadcast");
+    return { success: true, queueId: data.id };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function dispatchBroadcast(
   tags: string[],
   messageText: string,
-  imageUrl?: string
+  imageUrl?: string,
+  scribeCode?: string,
+  internalNotes?: string
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
@@ -199,7 +249,10 @@ export async function dispatchBroadcast(
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
       const vars = { Name: target.name ?? "", name: target.name ?? "" };
-      const message = replaceVariables(messageText, vars);
+      let message = replaceVariables(messageText, vars);
+      if (scribeCode?.trim()) {
+        message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+      }
 
       try {
         if (imageUrl && imageUrl.trim()) {
@@ -261,6 +314,8 @@ export async function dispatchBroadcast(
       failed,
       errors: errors.slice(0, 50),
       tags,
+      scribe_code: scribeCode?.trim() || null,
+      internal_notes: internalNotes?.trim() || null,
     });
 
     revalidatePath("/broadcast");

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
 import { Radio, Settings, Users, Package, Mail } from "lucide-react";
+import DashboardClient from "./DashboardClient";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -28,7 +29,9 @@ export default async function HomePage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <DashboardClient />
+
+      <div className="grid gap-4 sm:grid-cols-2 mt-10">
         {quickLinks.map(({ href, label, icon: Icon, desc }) => (
           <Link
             key={href}

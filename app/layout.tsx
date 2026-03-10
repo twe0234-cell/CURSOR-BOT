@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Heebo, Geist_Mono } from "next/font/google";
+import { createClient } from "@/src/lib/supabase/server";
 import "./globals.css";
 import NavBar from "./components/NavBar";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,10 +16,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Broadcast Buddy",
-  description: "מערכת שידור הודעות וואטסאפ",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("sys_settings")
+      .select("logo_url")
+      .eq("id", "default")
+      .single();
+
+    const logoUrl = data?.logo_url;
+    return {
+      title: "Broadcast Buddy",
+      description: "מערכת שידור הודעות וואטסאפ",
+      icons: logoUrl ? { icon: logoUrl, apple: logoUrl } : undefined,
+    };
+  } catch {
+    return {
+      title: "Broadcast Buddy",
+      description: "מערכת שידור הודעות וואטסאפ",
+    };
+  }
+}
 
 export default function RootLayout({
   children,
