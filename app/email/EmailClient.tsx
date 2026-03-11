@@ -349,7 +349,7 @@ export default function EmailClient({ initialContacts }: Props) {
       )}
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>ייבוא אנשי קשר</DialogTitle>
           </DialogHeader>
@@ -378,7 +378,7 @@ export default function EmailClient({ initialContacts }: Props) {
       </Dialog>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
+        <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>מחיקת אנשי קשר</DialogTitle>
           </DialogHeader>

@@ -167,7 +167,7 @@ export default function SettingsForm({
       </div>
 
       <Dialog open={credentialsEditOpen} onOpenChange={setCredentialsEditOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>עריכת מפתחות Green API</DialogTitle>
           </DialogHeader>

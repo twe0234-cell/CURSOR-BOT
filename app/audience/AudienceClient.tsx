@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useLayoutEffect, memo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, memo, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -43,21 +43,23 @@ import {
 import { cn } from "@/lib/utils";
 
 const ImportGroupRow = memo(function ImportGroupRow({
+  chatId,
   name,
   checked,
   onToggle,
 }: {
+  chatId: string;
   name: string;
   checked: boolean;
-  onToggle: () => void;
+  onToggle: (chatId: string) => void;
 }) {
   return (
     <label
       className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-teal-50/50 transition-colors"
       onClick={(e) => e.stopPropagation()}
     >
-      <Checkbox checked={checked} onCheckedChange={onToggle} />
-      <span className="flex-1 truncate font-mono text-xs">{name}</span>
+      <Checkbox checked={checked} onCheckedChange={() => onToggle(chatId)} />
+      <span className="flex-1 truncate font-mono text-xs break-words">{name}</span>
     </label>
   );
 });
@@ -277,7 +279,7 @@ export default function AudienceClient({
     setActionsOpen(false);
   };
 
-  const toggleImportSelect = (chatId: string) => {
+  const toggleImportSelect = useCallback((chatId: string) => {
     if (importListScrollRef.current) {
       importScrollTopRef.current = importListScrollRef.current.scrollTop;
     }
@@ -287,7 +289,7 @@ export default function AudienceClient({
       else next.add(chatId);
       return next;
     });
-  };
+  }, []);
 
   useLayoutEffect(() => {
     const el = importListScrollRef.current;
@@ -378,7 +380,7 @@ export default function AudienceClient({
 
   const ApplyTagsModal = () => (
     <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
-      <DialogContent className="sm:max-w-md rounded-2xl">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg">החלת תגיות מרובות</DialogTitle>
         </DialogHeader>
@@ -440,7 +442,7 @@ export default function AudienceClient({
 
   const ImportGroupsModal = () => (
     <Dialog open={importOpen} onOpenChange={handleImportOpenChange}>
-      <DialogContent className="sm:max-w-lg rounded-2xl">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg">ייבוא קבוצות מ-WhatsApp</DialogTitle>
         </DialogHeader>
@@ -497,9 +499,10 @@ export default function AudienceClient({
                 {importGroups.map((g) => (
                   <ImportGroupRow
                     key={g.chatId}
+                    chatId={g.chatId}
                     name={g.name || g.chatId}
                     checked={importSelected.has(g.chatId)}
-                    onToggle={() => toggleImportSelect(g.chatId)}
+                    onToggle={toggleImportSelect}
                   />
                 ))}
               </div>
@@ -522,7 +525,7 @@ export default function AudienceClient({
   );
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-6 sm:py-8 pb-28 md:pb-8 min-w-0 overflow-x-hidden">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 pb-28 md:pb-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">נמענים</h1>
         <p className="text-muted-foreground">נהל את רשימת הנמענים והייבוא מ-WhatsApp</p>
@@ -752,7 +755,7 @@ export default function AudienceClient({
       )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
+        <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>מחיקת נמענים</DialogTitle>
           </DialogHeader>

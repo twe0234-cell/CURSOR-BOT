@@ -1,3 +1,8 @@
+/**
+ * Broadcast queue processor. Vercel Hobby plan runs crons only once/day.
+ * Use cron-job.org (free): point to https://[YOUR-VERCEL-URL]/api/cron/process-broadcasts
+ * with header: Authorization: Bearer [CRON_SECRET], run every 1 minute.
+ */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 

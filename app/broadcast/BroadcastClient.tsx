@@ -188,7 +188,7 @@ export default function BroadcastClient({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">שידור הודעות</h1>

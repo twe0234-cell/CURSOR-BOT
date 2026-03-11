@@ -118,8 +118,8 @@ export default function InventoryClient({ initialItems }: Props) {
   };
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-teal-800">מלאי</h1>
         <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700">
           <PlusIcon className="size-4 ml-2" />
@@ -127,8 +127,8 @@ export default function InventoryClient({ initialItems }: Props) {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <Table>
+      <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+        <Table className="min-w-0">
           <TableHeader>
             <TableRow>
               <TableHead>סוג</TableHead>
@@ -142,9 +142,9 @@ export default function InventoryClient({ initialItems }: Props) {
           <TableBody>
             {items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell>{item.item_type ?? item.product_type ?? "—"}</TableCell>
-                <TableCell>{item.script_type ?? "—"}</TableCell>
-                <TableCell>{item.hidur_level ?? "—"}</TableCell>
+                <TableCell className="truncate max-w-[120px]">{item.item_type ?? item.product_type ?? "—"}</TableCell>
+                <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
+                <TableCell className="truncate max-w-[60px]">{item.hidur_level ?? "—"}</TableCell>
                 <TableCell>{item.status ?? "—"}</TableCell>
                 <TableCell>
                   {item.price != null ? `${item.price} ₪` : "—"}
@@ -187,7 +187,7 @@ export default function InventoryClient({ initialItems }: Props) {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
           </DialogHeader>

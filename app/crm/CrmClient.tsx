@@ -88,7 +88,7 @@ export default function CrmClient({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">CRM – אנשי קשר</h1>
         <p className="text-muted-foreground">
@@ -188,8 +188,8 @@ export default function CrmClient({
       )}
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-md rounded-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl my-auto">
             <CardHeader className="flex flex-row items-center justify-between">
               <h3 className="text-lg font-semibold">איש קשר חדש</h3>
               <Button variant="ghost" size="icon" onClick={() => setCreateOpen(false)}>
