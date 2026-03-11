@@ -92,6 +92,7 @@ export default function AudienceClient({
   const [selectedTagsToApply, setSelectedTagsToApply] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteOneId, setDeleteOneId] = useState<string | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importGroups, setImportGroups] = useState<GreenApiGroup[]>([]);
@@ -204,6 +205,7 @@ export default function AudienceClient({
   };
 
   const handleDeleteOne = async (id: string) => {
+    setDeleteOneId(null);
     const res = await deleteRecipient(id);
     if (res.success) {
       setAudience((prev) => prev.filter((r) => r.id !== id));
@@ -442,11 +444,11 @@ export default function AudienceClient({
 
   const ImportGroupsModal = () => (
     <Dialog open={importOpen} onOpenChange={handleImportOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
+      <DialogContent className="w-[95vw] max-w-5xl h-[85vh] flex flex-col p-4 max-h-[90vh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg">ייבוא קבוצות מ-WhatsApp</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex flex-col flex-1 min-h-0 space-y-4">
           {importLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
               <div className="size-12 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
@@ -493,7 +495,7 @@ export default function AudienceClient({
               </div>
               <div
                 ref={importListScrollRef}
-                className="max-h-64 overflow-y-auto overflow-anchor-none rounded-xl border border-slate-200"
+                className="flex-1 overflow-y-auto pr-2 overflow-anchor-none rounded-xl border border-slate-200 min-h-[200px] max-h-[50vh]"
                 style={{ overflowAnchor: "none" } as React.CSSProperties}
               >
                 {importGroups.map((g) => (
@@ -670,7 +672,7 @@ export default function AudienceClient({
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => handleDeleteOne(r.id)}
+                      onClick={() => setDeleteOneId(r.id)}
                       title="מחק"
                       className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
@@ -709,7 +711,7 @@ export default function AudienceClient({
                 <Button
                   size="icon"
                   variant="ghost"
-                  onClick={() => handleDeleteOne(r.id)}
+                  onClick={() => setDeleteOneId(r.id)}
                   title="מחק"
                   className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
@@ -766,6 +768,27 @@ export default function AudienceClient({
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>ביטול</Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkLoading}>
               {bulkLoading ? "מוחק..." : "מחק"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteOneId} onOpenChange={(o) => !o && setDeleteOneId(null)}>
+        <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>מחיקת נמען</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            האם אתה בטוח? פעולה זו אינה ניתנת לביטול.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeleteOneId(null)}>ביטול</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteOneId && handleDeleteOne(deleteOneId)}
+              disabled={bulkLoading}
+            >
+              מחק
             </Button>
           </div>
         </DialogContent>

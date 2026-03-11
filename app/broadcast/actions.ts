@@ -85,6 +85,17 @@ export type BroadcastLog = {
   scribe_code: string | null;
   internal_notes: string | null;
   created_at: string;
+  status?: string;
+  log_details?: unknown;
+};
+
+export type QueueItem = {
+  id: string;
+  status: string;
+  result: { sent?: number; failed?: number; errors?: string[] } | null;
+  log_details: unknown;
+  created_at: string;
+  payload: { tags?: string[] };
 };
 
 export async function fetchBroadcastLogs(): Promise<
@@ -114,6 +125,38 @@ export async function fetchBroadcastLogs(): Promise<
       created_at: r.created_at ?? "",
     }));
     return { success: true, logs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
+export async function fetchBroadcastQueueItems(): Promise<
+  { success: true; items: QueueItem[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("broadcast_queue")
+      .select("id, status, result, log_details, created_at, payload")
+      .eq("user_id", user.id)
+      .in("status", ["completed", "failed"])
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (error) return { success: false, error: error.message };
+    const items = (data ?? []).map((r) => ({
+      id: r.id,
+      status: r.status ?? "unknown",
+      result: (r.result ?? null) as QueueItem["result"],
+      log_details: r.log_details ?? null,
+      created_at: r.created_at ?? "",
+      payload: (r.payload ?? {}) as { tags?: string[] },
+    }));
+    return { success: true, items };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     return { success: false, error: msg };

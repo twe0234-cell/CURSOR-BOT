@@ -73,6 +73,7 @@ export async function GET(req: Request) {
         .update({
           status: "failed",
           result: { error: "Green API not configured" },
+          log_details: [{ error: "Green API not configured" }],
           updated_at: new Date().toISOString(),
         })
         .eq("id", job.id);
@@ -81,6 +82,7 @@ export async function GET(req: Request) {
 
     const creds = { id: settings.green_api_id, token: settings.green_api_token };
     const errors: string[] = [];
+    const logDetails: Array<{ chatId: string; ok: boolean; response?: unknown; error?: string }> = [];
     let sent = 0;
     let failed = 0;
 
@@ -107,10 +109,21 @@ export async function GET(req: Request) {
               }),
             }
           );
+          const bodyText = await res.text();
+          let parsed: unknown = null;
+          try {
+            parsed = bodyText ? JSON.parse(bodyText) : null;
+          } catch {
+            parsed = bodyText;
+          }
           if (!res.ok) {
-            errors.push(`${target.wa_chat_id}: ${await res.text()}`);
+            errors.push(`${target.wa_chat_id}: ${bodyText}`);
             failed++;
-          } else sent++;
+            logDetails.push({ chatId: target.wa_chat_id, ok: false, error: bodyText, response: parsed });
+          } else {
+            sent++;
+            logDetails.push({ chatId: target.wa_chat_id, ok: true, response: parsed });
+          }
         } else {
           const res = await fetch(
             `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`,
@@ -120,14 +133,27 @@ export async function GET(req: Request) {
               body: JSON.stringify({ chatId: target.wa_chat_id, message }),
             }
           );
+          const bodyText = await res.text();
+          let parsed: unknown = null;
+          try {
+            parsed = bodyText ? JSON.parse(bodyText) : null;
+          } catch {
+            parsed = bodyText;
+          }
           if (!res.ok) {
-            errors.push(`${target.wa_chat_id}: ${await res.text()}`);
+            errors.push(`${target.wa_chat_id}: ${bodyText}`);
             failed++;
-          } else sent++;
+            logDetails.push({ chatId: target.wa_chat_id, ok: false, error: bodyText, response: parsed });
+          } else {
+            sent++;
+            logDetails.push({ chatId: target.wa_chat_id, ok: true, response: parsed });
+          }
         }
       } catch (err) {
-        errors.push(`${target.wa_chat_id}: ${err instanceof Error ? err.message : "Unknown"}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${target.wa_chat_id}: ${msg}`);
         failed++;
+        logDetails.push({ chatId: target.wa_chat_id, ok: false, error: msg });
       }
 
       await sleep(DELAY_MS);
@@ -148,15 +174,14 @@ export async function GET(req: Request) {
       .update({
         status: "completed",
         result: { sent, failed, errors: errors.slice(0, 10) },
+        log_details: logDetails,
         updated_at: new Date().toISOString(),
       })
       .eq("id", job.id);
 
     return NextResponse.json({ processed: 1, sent, failed });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Processing failed" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : "Processing failed";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

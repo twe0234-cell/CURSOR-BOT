@@ -11,10 +11,13 @@ import {
   queueBroadcast,
   uploadMedia,
   fetchBroadcastLogs,
+  fetchBroadcastQueueItems,
   type BroadcastLog,
+  type QueueItem,
 } from "./actions";
-import { SendIcon, VariableIcon, SmileIcon, BarChart3Icon, CheckCircleIcon, XCircleIcon } from "lucide-react";
+import { SendIcon, VariableIcon, SmileIcon, CheckCircleIcon, XCircleIcon, HistoryIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 
 const EmojiPicker = dynamic(
@@ -45,7 +48,8 @@ export default function BroadcastClient({
   const [targetCount, setTargetCount] = useState<number | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [logs, setLogs] = useState<BroadcastLog[]>([]);
-  const [logsOpen, setLogsOpen] = useState(false);
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [activeTab, setActiveTab] = useState("compose");
   const [scribeCode, setScribeCode] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [nextScribeNum, setNextScribeNum] = useState(121);
@@ -55,11 +59,17 @@ export default function BroadcastClient({
     fetchBroadcastLogs().then((res) => {
       if (res.success) setLogs(res.logs);
     });
+    fetchBroadcastQueueItems().then((res) => {
+      if (res.success) setQueueItems(res.items);
+    });
   }, []);
 
   const refreshLogs = () => {
     fetchBroadcastLogs().then((res) => {
       if (res.success) setLogs(res.logs);
+    });
+    fetchBroadcastQueueItems().then((res) => {
+      if (res.success) setQueueItems(res.items);
     });
   };
 
@@ -187,68 +197,40 @@ export default function BroadcastClient({
     return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
 
+  const renderLogDetails = (item: QueueItem) => {
+    const details = item.log_details as Array<{ chatId?: string; ok?: boolean; error?: string; response?: unknown }> | null;
+    if (!details || !Array.isArray(details)) return null;
+    const failed = details.filter((d) => !d.ok);
+    if (failed.length === 0) return null;
+    return (
+      <ul className="mt-2 space-y-1 text-xs text-red-600 max-h-32 overflow-y-auto">
+        {failed.map((d, i) => (
+          <li key={i} className="break-words">
+            {d.chatId && <span className="font-mono">{d.chatId}: </span>}
+            {d.error ?? (typeof d.response === "object" ? JSON.stringify(d.response) : String(d.response))}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
-      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">שידור הודעות</h1>
-          <p className="text-muted-foreground">שלח הודעות WhatsApp לנמענים לפי תגיות</p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setLogsOpen((o) => !o)}
-          className="rounded-xl border-teal-200 hover:bg-teal-50 shrink-0"
-        >
-          <BarChart3Icon className="size-4 ml-2" />
-          {logsOpen ? "הסתר לוג" : "לוג שידורים"}
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">שידור הודעות</h1>
+        <p className="text-muted-foreground">שלח הודעות WhatsApp לנמענים לפי תגיות</p>
       </div>
 
-      {logsOpen && (
-        <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-teal-800">לוג שידורים אחרונים</h2>
-            <p className="text-sm text-muted-foreground">הצלחות וכשלונות לפי שידור</p>
-          </CardHeader>
-          <CardContent>
-            {logs.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">אין עדיין שידורים</p>
-            ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex flex-wrap items-center gap-2 sm:gap-4 rounded-lg border border-slate-100 bg-slate-50/50 p-3"
-                  >
-                    <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
-                    <span className="flex items-center gap-1 text-green-600">
-                      <CheckCircleIcon className="size-4" />
-                      {log.sent}
-                    </span>
-                    <span className="flex items-center gap-1 text-red-600">
-                      <XCircleIcon className="size-4" />
-                      {log.failed}
-                    </span>
-                    {log.errors.length > 0 && (
-                      <details className="w-full text-xs">
-                        <summary className="cursor-pointer text-muted-foreground">שגיאות</summary>
-                        <ul className="mt-1 space-y-1 text-red-600 max-h-24 overflow-y-auto">
-                          {log.errors.slice(0, 5).map((e, i) => (
-                            <li key={i} className="truncate">{e}</li>
-                          ))}
-                          {log.errors.length > 5 && <li>+{log.errors.length - 5} נוספות</li>}
-                        </ul>
-                      </details>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="mb-6 w-full sm:w-auto">
+          <TabsTrigger value="compose">שידור חדש</TabsTrigger>
+          <TabsTrigger value="logs">
+            <HistoryIcon className="size-4 ml-1" />
+            היסטוריית שידורים
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="compose" className="mt-0">
       <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
         <CardHeader>
           <h2 className="text-lg font-semibold text-teal-800">בחירת קהל יעד</h2>
@@ -402,6 +384,102 @@ export default function BroadcastClient({
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
         {loading ? "שולח..." : "שלח שידור"}
       </Button>
+        </TabsContent>
+
+        <TabsContent value="logs" className="mt-0">
+          <Card className="border-teal-100 rounded-2xl shadow-sm overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-teal-800">היסטוריית שידורים</h2>
+                <p className="text-sm text-muted-foreground">סטטוס ותגובות API מפורטות</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refreshLogs} className="rounded-xl">
+                רענן
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {queueItems.length === 0 && logs.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8">אין עדיין שידורים</p>
+              ) : (
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                  {queueItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                        <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            item.status === "completed"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          )}
+                        >
+                          {item.status === "completed" ? "הושלם" : "נכשל"}
+                        </span>
+                        {item.result && (
+                          <>
+                            <span className="flex items-center gap-1 text-green-600">
+                              <CheckCircleIcon className="size-4" />
+                              {item.result.sent ?? 0}
+                            </span>
+                            <span className="flex items-center gap-1 text-red-600">
+                              <XCircleIcon className="size-4" />
+                              {item.result.failed ?? 0}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {item.result?.errors && item.result.errors.length > 0 && (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground">שגיאות (result)</summary>
+                          <ul className="mt-1 space-y-1 text-red-600">
+                            {item.result.errors.slice(0, 5).map((e, i) => (
+                              <li key={i} className="break-words">{e}</li>
+                            ))}
+                            {item.result.errors.length > 5 && <li>+{item.result.errors.length - 5} נוספות</li>}
+                          </ul>
+                        </details>
+                      )}
+                      {renderLogDetails(item)}
+                    </div>
+                  ))}
+                  {logs.map((log) => (
+                    <div
+                      key={`log-${log.id}`}
+                      className="rounded-lg border border-slate-100 bg-slate-50/30 p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                        <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
+                        <span className="flex items-center gap-1 text-green-600">
+                          <CheckCircleIcon className="size-4" />
+                          {log.sent}
+                        </span>
+                        <span className="flex items-center gap-1 text-red-600">
+                          <XCircleIcon className="size-4" />
+                          {log.failed}
+                        </span>
+                      </div>
+                      {log.errors.length > 0 && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-muted-foreground">שגיאות</summary>
+                          <ul className="mt-1 space-y-1 text-red-600">
+                            {log.errors.slice(0, 5).map((e, i) => (
+                              <li key={i} className="break-words">{e}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
