@@ -22,9 +22,10 @@ function replaceVariables(text: string, vars: Record<string, string>): string {
 }
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const authHeader = (req.headers.get("authorization") ?? "").trim();
+  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
+  const expected = `Bearer ${cronSecret}`;
+  if (cronSecret && authHeader !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
