@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -25,10 +25,16 @@ import {
   deleteInventoryItem,
   type InventoryItem,
 } from "./actions";
-import { fetchNextScribeNumber } from "@/app/broadcast/actions";
+import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
+import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon } from "lucide-react";
+import {
+  CATEGORIES,
+  SEFER_TORAH_SIZES,
+  NEVIIM_LIST,
+  MEGILLA_LINES,
+} from "@/src/lib/constants/stam";
 
-const CATEGORIES = ["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"];
 const ITEM_TYPES = ["תפילין", "מזוזה", "ספר תורה"];
 const SCRIPT_TYPES = ['אר"י', "בית יוסף"];
 const HIDUR_LEVELS = ["A", "B", "C"];
@@ -44,14 +50,6 @@ export default function InventoryClient({ initialItems }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<InventoryItem>>({});
   const [loading, setLoading] = useState(false);
-  const [nextScribeNum, setNextScribeNum] = useState(121);
-  const [scribeDialogOpen, setScribeDialogOpen] = useState(false);
-
-  useEffect(() => {
-    fetchNextScribeNumber().then((r) => {
-      if (r.success) setNextScribeNum(r.next);
-    });
-  }, [editOpen]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -60,16 +58,16 @@ export default function InventoryClient({ initialItems }: Props) {
       script_type: "",
       hidur_level: "",
       status: "available",
-      price: null,
       cost_price: null,
       target_price: null,
       category: "",
       category_meta: {},
-      scribe_code: "",
+      scribe_id: null,
+      scribe_code: null,
+      images: [],
       description: "",
     });
     setEditOpen(true);
-    setScribeDialogOpen(false);
   };
 
   const openEdit = (item: InventoryItem) => {
@@ -79,27 +77,31 @@ export default function InventoryClient({ initialItems }: Props) {
       script_type: item.script_type ?? "",
       hidur_level: item.hidur_level ?? "",
       status: item.status ?? "available",
-      price: item.price ?? null,
       cost_price: item.cost_price ?? null,
       target_price: item.target_price ?? null,
       category: item.category ?? "",
       category_meta: item.category_meta ?? {},
-      scribe_code: item.scribe_code ?? "",
+      scribe_id: item.scribe_id ?? null,
+      scribe_code: item.scribe_code ?? null,
+      images: item.images ?? [],
       description: item.description ?? "",
     });
     setEditOpen(true);
-    setScribeDialogOpen(false);
   };
 
-  const openScribeDialog = () => {
-    setScribeDialogOpen(true);
+  const setCategory = (category: string) => {
+    setForm((p) => ({
+      ...p,
+      category,
+      category_meta: {},
+    }));
   };
 
-  const applyNextScribe = () => {
-    const code = `#${nextScribeNum}`;
-    setForm((p) => ({ ...p, scribe_code: code }));
-    setNextScribeNum((n) => n + 1);
-    setScribeDialogOpen(false);
+  const setCategoryMeta = (key: string, value: string | number) => {
+    setForm((p) => ({
+      ...p,
+      category_meta: { ...(p.category_meta ?? {}), [key]: value },
+    }));
   };
 
   const handleSave = async () => {
@@ -146,9 +148,15 @@ export default function InventoryClient({ initialItems }: Props) {
     const type = item.item_type ?? item.product_type ?? "פריט";
     const script = item.script_type ?? "";
     const level = item.hidur_level ?? "";
-    const price = item.price != null ? `מחיר: ${item.price} ₪` : "";
+    const price = item.target_price != null ? `מחיר: ${item.target_price} ₪` : "";
     return `פריט חדש! ${type}${script ? `, כתב ${script}` : ""}${level ? `, הידור ${level}` : ""} זמין. ${price}`.trim();
   };
+
+  const category = form.category ?? "";
+  const categoryMeta = form.category_meta ?? {};
+  const showSize = category === "ספר תורה";
+  const showNavi = category === "נביא";
+  const showLines = category === "מגילה";
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden">
@@ -168,7 +176,7 @@ export default function InventoryClient({ initialItems }: Props) {
               <TableHead>כתב</TableHead>
               <TableHead>הידור</TableHead>
               <TableHead>סטטוס</TableHead>
-              <TableHead>מחיר</TableHead>
+              <TableHead>מחיר יעד</TableHead>
               <TableHead className="w-40">פעולות</TableHead>
             </TableRow>
           </TableHeader>
@@ -180,7 +188,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 <TableCell className="truncate max-w-[60px]">{item.hidur_level ?? "—"}</TableCell>
                 <TableCell>{item.status ?? "—"}</TableCell>
                 <TableCell>
-                  {item.price != null ? `${item.price} ₪` : "—"}
+                  {item.target_price != null ? `${item.target_price} ₪` : "—"}
                 </TableCell>
                 <TableCell>
                   <Link
@@ -228,8 +236,8 @@ export default function InventoryClient({ initialItems }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">קטגוריה</label>
               <select
-                value={form.category ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
                 <option value="">בחר</option>
@@ -238,6 +246,55 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+
+            {showSize && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">גודל</label>
+                <select
+                  value={String(categoryMeta.size ?? "")}
+                  onChange={(e) => setCategoryMeta("size", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">בחר</option>
+                  {SEFER_TORAH_SIZES.map((s) => (
+                    <option key={String(s)} value={String(s)}>{String(s)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {showNavi && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">נביא</label>
+                <select
+                  value={String(categoryMeta.navi ?? "")}
+                  onChange={(e) => setCategoryMeta("navi", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">בחר</option>
+                  {NEVIIM_LIST.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {showLines && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">שורות</label>
+                <select
+                  value={String(categoryMeta.lines ?? "")}
+                  onChange={(e) => setCategoryMeta("lines", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">בחר</option>
+                  {MEGILLA_LINES.map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="mb-1 block text-sm font-medium">סוג פריט</label>
               <select
@@ -251,26 +308,16 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+
             <div>
-              <label className="mb-1 block text-sm font-medium">מק״ט סופר (Ref)</label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.scribe_code ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, scribe_code: e.target.value }))}
-                  placeholder="#121"
-                  className="rounded-lg max-w-[120px]"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={openScribeDialog}
-                  className="rounded-lg"
-                >
-                  צור אוטומטי
-                </Button>
-              </div>
+              <label className="mb-1 block text-sm font-medium">שם סופר</label>
+              <ScribeCombobox
+                value={form.scribe_id ?? null}
+                onChange={(s) => setForm((p) => ({ ...p, scribe_id: s?.id ?? null }))}
+                placeholder="בחר סופר"
+              />
             </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium">כתב</label>
               <select
@@ -284,6 +331,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium">הידור</label>
               <select
@@ -297,6 +345,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium">סטטוס</label>
               <select
@@ -309,9 +358,18 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">תמונות</label>
+              <ImageGallery
+                images={form.images ?? []}
+                onChange={(images) => setForm((p) => ({ ...p, images }))}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium">עלות</label>
+                <label className="mb-1 block text-sm font-medium">עלות קנייה</label>
                 <Input
                   type="number"
                   value={form.cost_price ?? ""}
@@ -325,7 +383,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">מחיר יעד</label>
+                <label className="mb-1 block text-sm font-medium">מחיר יעד למכירה</label>
                 <Input
                   type="number"
                   value={form.target_price ?? ""}
@@ -339,20 +397,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">מחיר</label>
-              <Input
-                type="number"
-                value={form.price ?? ""}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    price: e.target.value ? Number(e.target.value) : null,
-                  }))
-                }
-                placeholder="0"
-              />
-            </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium">תיאור</label>
               <Input
@@ -361,6 +406,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 placeholder="תיאור"
               />
             </div>
+
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setEditOpen(false)}>
                 ביטול
@@ -369,25 +415,6 @@ export default function InventoryClient({ initialItems }: Props) {
                 {loading ? "שומר..." : "שמור"}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={scribeDialogOpen} onOpenChange={setScribeDialogOpen}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>יצירת מק״ט סופר</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-4">
-            המספר הבא: <strong>#{nextScribeNum}</strong>
-          </p>
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setScribeDialogOpen(false)}>
-              ביטול
-            </Button>
-            <Button onClick={applyNextScribe}>
-              השתמש ב-#{nextScribeNum}
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

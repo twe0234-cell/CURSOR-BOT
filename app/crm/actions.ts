@@ -141,6 +141,56 @@ export async function importGmailContacts(): Promise<
   }
 }
 
+export async function fetchScribes(): Promise<
+  { success: true; scribes: { id: string; name: string }[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .eq("type", "Scribe")
+      .order("name");
+
+    if (error) return { success: false, error: error.message };
+    const scribes = (data ?? []).map((r) => ({ id: r.id, name: r.name ?? "" }));
+    return { success: true, scribes };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function createScribeContact(name: string): Promise<
+  { success: true; scribe: { id: string; name: string } } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .insert({
+        user_id: user.id,
+        name: name.trim(),
+        type: "Scribe",
+        preferred_contact: "WhatsApp",
+      })
+      .select("id, name")
+      .single();
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/crm");
+    return { success: true, scribe: { id: data.id, name: data.name ?? "" } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function createCrmContact(data: {
   name: string;
   type?: string;
