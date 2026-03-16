@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Radio,
-  Users,
   Mail,
   HandshakeIcon,
   Wallet,
   UserCog,
   Package,
+  Calculator,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -31,9 +31,9 @@ export default function NavBar() {
 
   const navItems = [
     { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
-    { href: "/broadcast", label: "מנוע שידור", icon: Radio },
-    { href: "/audience", label: "ניהול נמענים", icon: Users },
+    { href: "/whatsapp", label: "WhatsApp", icon: Radio },
     { href: "/email", label: "דיוור", icon: Mail },
+    { href: "/calculator", label: "מחשבון", icon: Calculator },
     { href: "/crm", label: "CRM", icon: HandshakeIcon },
     { href: "/coming-soon", label: "תזרים כספים", icon: Wallet },
     { href: "/coming-soon", label: "סופרים וספקים", icon: UserCog },

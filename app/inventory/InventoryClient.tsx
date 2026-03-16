@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -25,8 +25,10 @@ import {
   deleteInventoryItem,
   type InventoryItem,
 } from "./actions";
+import { fetchNextScribeNumber } from "@/app/broadcast/actions";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon } from "lucide-react";
 
+const CATEGORIES = ["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"];
 const ITEM_TYPES = ["תפילין", "מזוזה", "ספר תורה"];
 const SCRIPT_TYPES = ['אר"י', "בית יוסף"];
 const HIDUR_LEVELS = ["A", "B", "C"];
@@ -42,6 +44,14 @@ export default function InventoryClient({ initialItems }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<InventoryItem>>({});
   const [loading, setLoading] = useState(false);
+  const [nextScribeNum, setNextScribeNum] = useState(121);
+  const [scribeDialogOpen, setScribeDialogOpen] = useState(false);
+
+  useEffect(() => {
+    fetchNextScribeNumber().then((r) => {
+      if (r.success) setNextScribeNum(r.next);
+    });
+  }, [editOpen]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -51,9 +61,15 @@ export default function InventoryClient({ initialItems }: Props) {
       hidur_level: "",
       status: "available",
       price: null,
+      cost_price: null,
+      target_price: null,
+      category: "",
+      category_meta: {},
+      scribe_code: "",
       description: "",
     });
     setEditOpen(true);
+    setScribeDialogOpen(false);
   };
 
   const openEdit = (item: InventoryItem) => {
@@ -64,9 +80,26 @@ export default function InventoryClient({ initialItems }: Props) {
       hidur_level: item.hidur_level ?? "",
       status: item.status ?? "available",
       price: item.price ?? null,
+      cost_price: item.cost_price ?? null,
+      target_price: item.target_price ?? null,
+      category: item.category ?? "",
+      category_meta: item.category_meta ?? {},
+      scribe_code: item.scribe_code ?? "",
       description: item.description ?? "",
     });
     setEditOpen(true);
+    setScribeDialogOpen(false);
+  };
+
+  const openScribeDialog = () => {
+    setScribeDialogOpen(true);
+  };
+
+  const applyNextScribe = () => {
+    const code = `#${nextScribeNum}`;
+    setForm((p) => ({ ...p, scribe_code: code }));
+    setNextScribeNum((n) => n + 1);
+    setScribeDialogOpen(false);
   };
 
   const handleSave = async () => {
@@ -151,7 +184,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 </TableCell>
                 <TableCell>
                   <Link
-                    href={`/broadcast?message=${encodeURIComponent(getBroadcastMessage(item))}`}
+                    href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}
                   >
                     <Button size="sm" variant="outline">
                       <SendIcon className="size-4 ml-1" />
@@ -193,6 +226,19 @@ export default function InventoryClient({ initialItems }: Props) {
           </DialogHeader>
           <div className="space-y-4">
             <div>
+              <label className="mb-1 block text-sm font-medium">קטגוריה</label>
+              <select
+                value={form.category ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">בחר</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium">סוג פריט</label>
               <select
                 value={form.item_type ?? ""}
@@ -204,6 +250,26 @@ export default function InventoryClient({ initialItems }: Props) {
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">מק״ט סופר (Ref)</label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.scribe_code ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, scribe_code: e.target.value }))}
+                  placeholder="#121"
+                  className="rounded-lg max-w-[120px]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openScribeDialog}
+                  className="rounded-lg"
+                >
+                  צור אוטומטי
+                </Button>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">כתב</label>
@@ -243,6 +309,36 @@ export default function InventoryClient({ initialItems }: Props) {
                 ))}
               </select>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">עלות</label>
+                <Input
+                  type="number"
+                  value={form.cost_price ?? ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      cost_price: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">מחיר יעד</label>
+                <Input
+                  type="number"
+                  value={form.target_price ?? ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      target_price: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  placeholder="0"
+                />
+              </div>
+            </div>
             <div>
               <label className="mb-1 block text-sm font-medium">מחיר</label>
               <Input
@@ -273,6 +369,25 @@ export default function InventoryClient({ initialItems }: Props) {
                 {loading ? "שומר..." : "שמור"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={scribeDialogOpen} onOpenChange={setScribeDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>יצירת מק״ט סופר</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            המספר הבא: <strong>#{nextScribeNum}</strong>
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setScribeDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button onClick={applyNextScribe}>
+              השתמש ב-#{nextScribeNum}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

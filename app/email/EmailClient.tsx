@@ -40,7 +40,7 @@ type Props = {
 
 export default function EmailClient({ initialContacts }: Props) {
   const [contacts, setContacts] = useState(initialContacts ?? []);
-  const [tab, setTab] = useState<Tab>("contacts");
+  const [tab, setTab] = useState<Tab>("campaigns");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
@@ -168,8 +168,8 @@ export default function EmailClient({ initialContacts }: Props) {
   };
 
   const tabs: { id: Tab; label: string; icon: typeof UsersIcon }[] = [
-    { id: "contacts", label: "אנשי קשר", icon: UsersIcon },
     { id: "campaigns", label: "קמפיינים", icon: MailIcon },
+    { id: "contacts", label: "אנשי קשר", icon: UsersIcon },
     { id: "stats", label: "סטטיסטיקות", icon: BarChart3Icon },
   ];
 

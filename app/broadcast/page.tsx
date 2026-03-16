@@ -16,7 +16,7 @@ export default async function BroadcastPage({ searchParams }: Props) {
 
   const { data: audience } = await supabase
     .from("audience")
-    .select("tags")
+    .select("tags, wa_chat_id, name")
     .eq("user_id", user.id);
 
   const { data: settings } = await supabase
@@ -31,11 +31,16 @@ export default async function BroadcastPage({ searchParams }: Props) {
   const audienceTags = [...new Set((audience ?? []).flatMap((a) => (a?.tags ?? []) as string[]))];
   const allTags = [...new Set([...allowedTags, ...audienceTags])].sort();
 
+  const groups = (audience ?? [])
+    .filter((a) => a?.wa_chat_id && String(a.wa_chat_id).endsWith("@g.us"))
+    .map((a) => ({ wa_chat_id: a.wa_chat_id!, name: a.name ?? null }));
+
   return (
     <BroadcastClient
       key={prefilledMessage}
       allTags={allTags}
       prefilledMessage={prefilledMessage}
+      groups={groups}
     />
   );
 }

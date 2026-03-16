@@ -8,10 +8,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   fetchTargetsByTags,
-  dispatchBroadcast,
+  fetchTargetsByGroupIds,
   uploadMedia,
   fetchBroadcastLogs,
   fetchBroadcastQueueItems,
+  fetchNextScribeNumber,
+  sendSingleMessage,
+  insertBroadcastLog,
   type BroadcastLog,
   type QueueItem,
 } from "./actions";
@@ -30,16 +33,21 @@ const VARIABLES = [
   { key: "name", label: "שם (alternate)" },
 ];
 
+type GroupOption = { wa_chat_id: string; name: string | null };
+
 type Props = {
   allTags: string[];
   prefilledMessage?: string;
+  groups?: GroupOption[];
 };
 
 export default function BroadcastClient({
   allTags,
   prefilledMessage = "",
+  groups = [],
 }: Props) {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [messageText, setMessageText] = useState(prefilledMessage);
   const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -53,9 +61,13 @@ export default function BroadcastClient({
   const [scribeCode, setScribeCode] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [nextScribeNum, setNextScribeNum] = useState(121);
+  const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    fetchNextScribeNumber().then((res) => {
+      if (res.success) setNextScribeNum(res.next);
+    });
     fetchBroadcastLogs().then((res) => {
       if (res.success) setLogs(res.logs);
     });
@@ -78,6 +90,16 @@ export default function BroadcastClient({
       const next = new Set(prev);
       if (next.has(tag)) next.delete(tag);
       else next.add(tag);
+      return next;
+    });
+    setTargetCount(null);
+  };
+
+  const toggleGroup = (waChatId: string) => {
+    setSelectedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(waChatId)) next.delete(waChatId);
+      else next.add(waChatId);
       return next;
     });
     setTargetCount(null);
@@ -140,22 +162,37 @@ export default function BroadcastClient({
   };
 
   const handlePreviewCount = async () => {
-    if (selectedTags.size === 0) {
-      toast.error("בחר לפחות תגית אחת");
+    if (selectedTags.size === 0 && selectedGroups.size === 0) {
+      toast.error("בחר לפחות תגית אחת או קבוצה");
       return;
     }
-    const res = await fetchTargetsByTags([...selectedTags]);
-    if (res.success) {
-      setTargetCount(res.targets.length);
-      toast.info(`נמענים: ${res.targets.length}`);
-    } else {
-      toast.error(res.error);
+    const tagTargets = selectedTags.size > 0
+      ? await fetchTargetsByTags([...selectedTags])
+      : { success: true as const, targets: [] };
+    const groupTargets = selectedGroups.size > 0
+      ? await fetchTargetsByGroupIds([...selectedGroups])
+      : { success: true as const, targets: [] };
+    if (!tagTargets.success) {
+      toast.error(tagTargets.error);
+      return;
     }
+    if (!groupTargets.success) {
+      toast.error(groupTargets.error);
+      return;
+    }
+    const seen = new Set<string>();
+    const combined = [...tagTargets.targets, ...groupTargets.targets].filter((t) => {
+      if (seen.has(t.wa_chat_id)) return false;
+      seen.add(t.wa_chat_id);
+      return true;
+    });
+    setTargetCount(combined.length);
+    toast.info(`נמענים: ${combined.length}`);
   };
 
   const handleSend = async () => {
-    if (selectedTags.size === 0) {
-      toast.error("בחר לפחות תגית אחת");
+    if (selectedTags.size === 0 && selectedGroups.size === 0) {
+      toast.error("בחר לפחות תגית אחת או קבוצה");
       return;
     }
     if (!messageText.trim()) {
@@ -171,35 +208,86 @@ export default function BroadcastClient({
 
     setLoading(true);
     try {
-      const res = await dispatchBroadcast(
+      const tagRes = selectedTags.size > 0
+        ? await fetchTargetsByTags([...selectedTags])
+        : { success: true as const, targets: [] };
+      const groupRes = selectedGroups.size > 0
+        ? await fetchTargetsByGroupIds([...selectedGroups])
+        : { success: true as const, targets: [] };
+      if (!tagRes.success) {
+        toast.error(tagRes.error);
+        setLoading(false);
+        return;
+      }
+      if (!groupRes.success) {
+        toast.error(groupRes.error);
+        setLoading(false);
+        return;
+      }
+      const seen = new Set<string>();
+      const targets = [...tagRes.targets, ...groupRes.targets].filter((t) => {
+        if (seen.has(t.wa_chat_id)) return false;
+        seen.add(t.wa_chat_id);
+        return true;
+      });
+      if (targets.length === 0) {
+        toast.error("אין נמענים התואמים לתגיות או לקבוצות שנבחרו");
+        setLoading(false);
+        return;
+      }
+
+      const total = targets.length;
+      let sent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+      const finalScribe = scribeCode.trim() || undefined;
+
+      for (let i = 0; i < targets.length; i++) {
+        setSendProgress({ current: i + 1, total });
+        const target = targets[i];
+        const vars = { Name: target.name ?? "", name: target.name ?? "" };
+        let msg = messageText.trim();
+        msg = msg.replace(/\{Name\}/gi, vars.Name).replace(/\{name\}/gi, vars.name);
+
+        const res = await sendSingleMessage(
+          target.wa_chat_id,
+          msg,
+          finalImageUrl || undefined,
+          finalScribe
+        );
+        if (res.success) {
+          sent++;
+        } else {
+          failed++;
+          errors.push(`${target.wa_chat_id}: ${res.error}`);
+        }
+        if (i < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      }
+
+      setSendProgress(null);
+      await insertBroadcastLog(
+        sent,
+        failed,
+        errors,
         [...selectedTags],
-        messageText.trim(),
-        finalImageUrl || undefined,
-        scribeCode.trim() || undefined,
+        finalScribe,
         internalNotes.trim() || undefined
       );
-
-      if (res.success) {
-        const total = res.sent + res.failed;
-        const failedList = res.results
-          .filter((r) => !r.success)
-          .map((r) => r.error || "שגיאה")
-          .slice(0, 3);
-        const failedSummary = failedList.length > 0
-          ? ` נכשלו: ${failedList.join("; ")}${res.failed > 3 ? ` +${res.failed - 3} נוספות` : ""}`
-          : "";
-        toast.success(
-          `נשלחו ${res.sent}/${total}${res.failed > 0 ? `.${failedSummary}` : ""}`,
-          { duration: res.failed > 0 ? 6000 : 4000 }
-        );
-        setScribeCode("");
-        setInternalNotes("");
-        setNextScribeNum((n) => n + 1);
-        refreshLogs();
-      } else {
-        toast.error(res.error);
-      }
+      toast.success(
+        `שידור הושלם! נשלח בהצלחה: ${sent}, נכשלו: ${failed}`,
+        { duration: failed > 0 ? 6000 : 4000 }
+      );
+      setScribeCode("");
+      setInternalNotes("");
+      setSelectedGroups(new Set());
+      fetchNextScribeNumber().then((r) => {
+        if (r.success) setNextScribeNum(r.next);
+      });
+      refreshLogs();
     } catch {
+      setSendProgress(null);
       toast.error("שגיאה לא צפויה");
     } finally {
       setLoading(false);
@@ -267,7 +355,26 @@ export default function BroadcastClient({
               </label>
             ))}
           </div>
-          {allTags.length === 0 && (
+          {groups.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-sm font-medium text-slate-700">קבוצות ספציפיות</p>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                {groups.map((g) => (
+                  <label
+                    key={g.wa_chat_id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <Checkbox
+                      checked={selectedGroups.has(g.wa_chat_id)}
+                      onCheckedChange={() => toggleGroup(g.wa_chat_id)}
+                    />
+                    <span className="text-sm truncate max-w-[180px]">{g.name || g.wa_chat_id}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {(allTags.length === 0 && groups.length === 0) && (
             <p className="text-sm text-muted-foreground">
               הוסף תגיות בהגדרות או בנמענים
             </p>
@@ -277,7 +384,7 @@ export default function BroadcastClient({
             size="sm"
             className="mt-3"
             onClick={handlePreviewCount}
-            disabled={selectedTags.size === 0}
+            disabled={selectedTags.size === 0 && selectedGroups.size === 0}
           >
             {targetCount !== null ? `נמענים: ${targetCount}` : "צפה במספר נמענים"}
           </Button>
@@ -392,11 +499,15 @@ export default function BroadcastClient({
 
       <Button
         onClick={handleSend}
-        disabled={loading || selectedTags.size === 0 || uploading}
+        disabled={loading || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
         className="w-full rounded-xl bg-teal-600 py-6 text-base font-semibold hover:bg-teal-700 hover:shadow-lg"
       >
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
-        {loading ? "שולח..." : "שלח שידור"}
+        {loading && sendProgress
+          ? `שולח ${sendProgress.current}/${sendProgress.total}...`
+          : loading
+            ? "שולח..."
+            : "שלח שידור"}
       </Button>
         </TabsContent>
 

@@ -95,6 +95,104 @@ async function getGreenApiCredentials(userId: string) {
 
 export type BroadcastTarget = { wa_chat_id: string; name: string | null };
 
+/** Extract numeric part from scribe_code (e.g. #125 -> 125, "125" -> 125) */
+function extractScribeNumber(code: string | null | undefined): number | null {
+  if (!code || typeof code !== "string") return null;
+  const trimmed = code.trim();
+  const match = trimmed.replace(/^#/, "").match(/^\d+/);
+  return match ? parseInt(match[0], 10) : null;
+}
+
+/** Query inventory.scribe_code and broadcast_logs.scribe_code, return max+1. Default 121 if none. */
+export async function fetchNextScribeNumber(): Promise<
+  { success: true; next: number } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const [invRes, logRes] = await Promise.all([
+      supabase.from("inventory").select("scribe_code").eq("user_id", user.id),
+      supabase.from("broadcast_logs").select("scribe_code").eq("user_id", user.id),
+    ]);
+
+    let maxNum = 0;
+    const codes = [
+      ...(invRes.data ?? []).map((r) => r.scribe_code),
+      ...(logRes.data ?? []).map((r) => r.scribe_code),
+    ];
+    for (const c of codes) {
+      const n = extractScribeNumber(c);
+      if (n != null && n > maxNum) maxNum = n;
+    }
+    const next = maxNum > 0 ? maxNum + 1 : 121;
+    return { success: true, next };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
+export type SendSingleResult =
+  | { success: true }
+  | { success: false; error: string };
+
+/** Send a single message to one recipient (used for progress loop) */
+export async function sendSingleMessage(
+  waChatId: string,
+  messageText: string,
+  imageUrl?: string,
+  scribeCode?: string
+): Promise<SendSingleResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const creds = await getGreenApiCredentials(user.id);
+    if (!creds) return { success: false, error: "הגדר Green API בהגדרות" };
+
+    let message = messageText;
+    if (scribeCode?.trim()) {
+      message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+    }
+
+    if (imageUrl?.trim()) {
+      const sizeBytes = await getImageSizeBytes(imageUrl.trim());
+      if (sizeBytes !== null && sizeBytes > IMAGE_SIZE_LIMIT_BYTES) {
+        return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
+      }
+      const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`;
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId: waChatId,
+          urlFile: imageUrl.trim(),
+          fileName: "image.jpg",
+          caption: message,
+        }),
+      });
+      const errBody = await res.text();
+      if (!res.ok) return { success: false, error: errBody || "שגיאה לא ידועה" };
+    } else {
+      const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`;
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: waChatId, message }),
+      });
+      const errBody = await res.text();
+      if (!res.ok) return { success: false, error: errBody || "שגיאה לא ידועה" };
+    }
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
 export type BroadcastLog = {
   id: string;
   sent: number;
@@ -203,6 +301,50 @@ export async function fetchTargetsByTags(
       .eq("user_id", user.id)
       .eq("active", true)
       .overlaps("tags", tags);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const targets = (data ?? [])
+      .filter((r) => r?.wa_chat_id)
+      .map((r) => ({
+        wa_chat_id: String(r.wa_chat_id),
+        name: r?.name ?? null,
+      }));
+
+    return { success: true, targets };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
+/** Fetch targets by specific wa_chat_ids (e.g. groups) */
+export async function fetchTargetsByGroupIds(
+  groupIds: string[]
+): Promise<{ success: true; targets: BroadcastTarget[] } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "יש להתחבר" };
+    }
+
+    if (!Array.isArray(groupIds) || groupIds.length === 0) {
+      return { success: true, targets: [] };
+    }
+
+    const ids = groupIds.filter((id) => id && String(id).trim());
+    if (ids.length === 0) return { success: true, targets: [] };
+
+    const { data, error } = await supabase
+      .from("audience")
+      .select("wa_chat_id, name")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .in("wa_chat_id", ids);
 
     if (error) {
       return { success: false, error: error.message };
@@ -350,6 +492,44 @@ export async function dispatchBroadcast(
 
     revalidatePath("/broadcast");
     return { success: true, sent, failed, results };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    return { success: false, error: msg };
+  }
+}
+
+export type InsertLogResult =
+  | { success: true }
+  | { success: false; error: string };
+
+/** Insert broadcast log after client-side send loop */
+export async function insertBroadcastLog(
+  sent: number,
+  failed: number,
+  errors: string[],
+  tags: string[],
+  scribeCode?: string,
+  internalNotes?: string
+): Promise<InsertLogResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase.from("broadcast_logs").insert({
+      user_id: user.id,
+      sent,
+      failed,
+      errors: errors.slice(0, 50),
+      tags,
+      scribe_code: scribeCode?.trim() || null,
+      internal_notes: internalNotes?.trim() || null,
+    });
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/broadcast");
+    revalidatePath("/whatsapp");
+    return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     return { success: false, error: msg };

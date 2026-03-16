@@ -14,6 +14,11 @@ export type InventoryItem = {
   hidur_level: string | null;
   status: string | null;
   price: number | null;
+  cost_price: number | null;
+  target_price: number | null;
+  category: string | null;
+  category_meta: Record<string, unknown> | null;
+  scribe_code: string | null;
   description: string | null;
 };
 
@@ -30,7 +35,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_type, item_type, script_type, hidur_level, status, price, description")
+      .select("id, user_id, product_type, item_type, script_type, hidur_level, status, price, cost_price, target_price, category, category_meta, scribe_code, description")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -47,6 +52,11 @@ export async function fetchInventory(): Promise<
       hidur_level: r.hidur_level,
       status: r.status,
       price: r.price != null ? Number(r.price) : null,
+      cost_price: r.cost_price != null ? Number(r.cost_price) : null,
+      target_price: r.target_price != null ? Number(r.target_price) : null,
+      category: r.category ?? null,
+      category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
+      scribe_code: r.scribe_code ?? null,
       description: r.description,
     }));
 
@@ -76,6 +86,11 @@ export async function createInventoryItem(
       hidur_level: item.hidur_level,
       status: item.status ?? "available",
       price: item.price,
+      cost_price: item.cost_price,
+      target_price: item.target_price,
+      category: item.category,
+      category_meta: item.category_meta ?? {},
+      scribe_code: item.scribe_code,
       description: item.description,
     });
 
@@ -112,6 +127,11 @@ export async function updateInventoryItem(
         hidur_level: item.hidur_level,
         status: item.status,
         price: item.price,
+        cost_price: item.cost_price,
+        target_price: item.target_price,
+        category: item.category,
+        category_meta: item.category_meta ?? {},
+        scribe_code: item.scribe_code,
         description: item.description,
         updated_at: new Date().toISOString(),
       })
