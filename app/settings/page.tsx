@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/server";
 import SettingsForm from "./SettingsForm";
 import BrandingSection from "./BrandingSection";
+import { Button } from "@/components/ui/button";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -35,6 +37,14 @@ export default async function SettingsPage() {
 
       <div className="mb-8">
         <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
+      </div>
+
+      <div className="mb-8">
+        <Link href="/settings/lists">
+          <Button variant="outline" className="w-full sm:w-auto">
+            רשימות נפתחות
+          </Button>
+        </Link>
       </div>
 
       <Suspense fallback={<div className="animate-pulse h-64 rounded-2xl bg-slate-100" />}>

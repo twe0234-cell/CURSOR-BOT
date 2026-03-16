@@ -2,21 +2,19 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { inventoryItemSchema } from "@/lib/validations";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
 export type InventoryItem = {
   id: string;
   user_id: string | null;
-  product_type: string | null;
-  item_type: string | null;
+  product_category: string | null;
+  category_meta: Record<string, unknown> | null;
   script_type: string | null;
-  hidur_level: string | null;
   status: string | null;
   cost_price: number | null;
   target_price: number | null;
-  category: string | null;
-  category_meta: Record<string, unknown> | null;
   scribe_id: string | null;
   scribe_code: string | null;
   images: string[] | null;
@@ -39,7 +37,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_type, item_type, script_type, hidur_level, status, cost_price, target_price, category, category_meta, scribe_id, scribe_code, images, description")
+      .select("id, user_id, product_category, category_meta, script_type, status, cost_price, target_price, scribe_id, scribe_code, images, description")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -50,19 +48,16 @@ export async function fetchInventory(): Promise<
     const items = (data ?? []).map((r) => ({
       id: r.id,
       user_id: r.user_id,
-      product_type: r.product_type,
-      item_type: r.item_type,
-      script_type: r.script_type,
-      hidur_level: r.hidur_level,
-      status: r.status,
+      product_category: r.product_category ?? null,
+      category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
+      script_type: r.script_type ?? null,
+      status: r.status ?? null,
       cost_price: r.cost_price != null ? Number(r.cost_price) : null,
       target_price: r.target_price != null ? Number(r.target_price) : null,
-      category: r.category ?? null,
-      category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
       scribe_id: r.scribe_id ?? null,
       scribe_code: r.scribe_code ?? null,
       images: (r.images ?? null) as string[] | null,
-      description: r.description,
+      description: r.description ?? null,
     }));
 
     return { success: true, items };
@@ -76,6 +71,12 @@ export async function createInventoryItem(
   item: Partial<InventoryItem>
 ): Promise<ActionResult> {
   try {
+    const parsed = inventoryItemSchema.safeParse(item);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים" };
+    }
+    const data = parsed.data;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -83,21 +84,22 @@ export async function createInventoryItem(
       return { success: false, error: "יש להתחבר" };
     }
 
+    const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
+      ? []
+      : data.images;
+
     const { error } = await supabase.from("inventory").insert({
       user_id: user.id,
-      product_type: item.product_type ?? item.item_type ?? "פריט",
-      item_type: item.item_type ?? item.product_type,
-      script_type: item.script_type,
-      hidur_level: item.hidur_level,
-      status: item.status ?? "available",
-      cost_price: item.cost_price,
-      target_price: item.target_price,
-      category: item.category,
-      category_meta: item.category_meta ?? {},
-      scribe_id: item.scribe_id ?? null,
-      scribe_code: item.scribe_code ?? null,
-      images: item.images ?? [],
-      description: item.description,
+      product_category: data.product_category ?? null,
+      category_meta: data.category_meta ?? {},
+      script_type: data.script_type ?? null,
+      status: data.status ?? "available",
+      cost_price: data.cost_price ?? null,
+      target_price: data.target_price ?? null,
+      scribe_id: data.scribe_id ?? null,
+      scribe_code: data.scribe_code ?? null,
+      images: imagesValue,
+      description: data.description ?? null,
     });
 
     if (error) {
@@ -117,6 +119,12 @@ export async function updateInventoryItem(
   item: Partial<InventoryItem>
 ): Promise<ActionResult> {
   try {
+    const parsed = inventoryItemSchema.safeParse(item);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים" };
+    }
+    const data = parsed.data;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -124,22 +132,23 @@ export async function updateInventoryItem(
       return { success: false, error: "יש להתחבר" };
     }
 
+    const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
+      ? []
+      : data.images;
+
     const { error } = await supabase
       .from("inventory")
       .update({
-        product_type: item.product_type ?? item.item_type,
-        item_type: item.item_type,
-        script_type: item.script_type,
-        hidur_level: item.hidur_level,
-        status: item.status,
-        cost_price: item.cost_price,
-        target_price: item.target_price,
-        category: item.category,
-        category_meta: item.category_meta ?? {},
-        scribe_id: item.scribe_id ?? null,
-        scribe_code: item.scribe_code ?? null,
-        images: item.images ?? [],
-        description: item.description,
+        product_category: data.product_category ?? null,
+        category_meta: data.category_meta ?? {},
+        script_type: data.script_type ?? null,
+        status: data.status ?? null,
+        cost_price: data.cost_price ?? null,
+        target_price: data.target_price ?? null,
+        scribe_id: data.scribe_id ?? null,
+        scribe_code: data.scribe_code ?? null,
+        images: imagesValue,
+        description: data.description ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

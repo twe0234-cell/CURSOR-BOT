@@ -37,7 +37,7 @@ export async function searchByScribeCode(
         .limit(10),
       supabase
         .from("inventory")
-        .select("scribe_code, internal_notes, created_at, product_type, status")
+        .select("scribe_code, internal_notes, created_at, product_category, status")
         .or(`scribe_code.ilike.${pattern},internal_notes.ilike.${pattern}`)
         .order("created_at", { ascending: false })
         .limit(10),
@@ -62,7 +62,7 @@ export async function searchByScribeCode(
           scribe_code: r.scribe_code,
           internal_notes: r.internal_notes,
           created_at: r.created_at ?? "",
-          extra: { product_type: r.product_type, status: r.status },
+          extra: { product_category: r.product_category, status: r.status },
         });
       }
     }

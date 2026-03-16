@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Table,
@@ -25,19 +26,12 @@ import {
   deleteInventoryItem,
   type InventoryItem,
 } from "./actions";
+import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon } from "lucide-react";
-import {
-  CATEGORIES,
-  SEFER_TORAH_SIZES,
-  NEVIIM_LIST,
-  MEGILLA_LINES,
-} from "@/src/lib/constants/stam";
+import type { InventoryItemInput } from "@/lib/validations";
 
-const ITEM_TYPES = ["תפילין", "מזוזה", "ספר תורה"];
-const SCRIPT_TYPES = ['אר"י', "בית יוסף"];
-const HIDUR_LEVELS = ["A", "B", "C"];
 const STATUSES = ["available", "in_use", "sold", "reserved"];
 
 type Props = {
@@ -48,20 +42,67 @@ export default function InventoryClient({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems);
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Partial<InventoryItem>>({});
   const [loading, setLoading] = useState(false);
 
-  const openCreate = () => {
-    setEditingId(null);
-    setForm({
-      item_type: "",
+  const [categories, setCategories] = useState<string[]>([]);
+  const [torahSizes, setTorahSizes] = useState<string[]>([]);
+  const [neviimNames, setNeviimNames] = useState<string[]>([]);
+  const [megillaLines, setMegillaLines] = useState<string[]>([]);
+  const [scriptTypes, setScriptTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      fetchDropdownOptions("categories"),
+      fetchDropdownOptions("torah_sizes"),
+      fetchDropdownOptions("neviim_names"),
+      fetchDropdownOptions("megilla_lines"),
+      fetchDropdownOptions("script_types"),
+    ]).then(([c, t, n, m, s]) => {
+      if (c.success) setCategories(c.options);
+      if (t.success) setTorahSizes(t.options);
+      if (n.success) setNeviimNames(n.options);
+      if (m.success) setMegillaLines(m.options);
+      if (s.success) setScriptTypes(s.options);
+    });
+  }, []);
+
+  const form = useForm<InventoryItemInput & { category_meta?: Record<string, string | number> }>({
+    defaultValues: {
+      product_category: "",
+      category_meta: {},
       script_type: "",
-      hidur_level: "",
       status: "available",
       cost_price: null,
       target_price: null,
-      category: "",
+      scribe_id: null,
+      scribe_code: null,
+      images: [],
+      description: "",
+    },
+  });
+
+  const productCategory = form.watch("product_category");
+  const categoryMeta = form.watch("category_meta") ?? {};
+  const prevCategoryRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!editOpen) return;
+    if (prevCategoryRef.current !== undefined && prevCategoryRef.current !== productCategory) {
+      form.setValue("category_meta", {});
+    }
+    prevCategoryRef.current = productCategory;
+  }, [productCategory, editOpen, form]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    prevCategoryRef.current = undefined;
+    form.reset({
+      product_category: "",
       category_meta: {},
+      script_type: "",
+      status: "available",
+      cost_price: null,
+      target_price: null,
       scribe_id: null,
       scribe_code: null,
       images: [],
@@ -72,15 +113,14 @@ export default function InventoryClient({ initialItems }: Props) {
 
   const openEdit = (item: InventoryItem) => {
     setEditingId(item.id);
-    setForm({
-      item_type: item.item_type ?? item.product_type ?? "",
+    prevCategoryRef.current = undefined;
+    form.reset({
+      product_category: item.product_category ?? "",
+      category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
       script_type: item.script_type ?? "",
-      hidur_level: item.hidur_level ?? "",
       status: item.status ?? "available",
       cost_price: item.cost_price ?? null,
       target_price: item.target_price ?? null,
-      category: item.category ?? "",
-      category_meta: item.category_meta ?? {},
       scribe_id: item.scribe_id ?? null,
       scribe_code: item.scribe_code ?? null,
       images: item.images ?? [],
@@ -89,27 +129,25 @@ export default function InventoryClient({ initialItems }: Props) {
     setEditOpen(true);
   };
 
-  const setCategory = (category: string) => {
-    setForm((p) => ({
-      ...p,
-      category,
-      category_meta: {},
-    }));
-  };
-
-  const setCategoryMeta = (key: string, value: string | number) => {
-    setForm((p) => ({
-      ...p,
-      category_meta: { ...(p.category_meta ?? {}), [key]: value },
-    }));
-  };
-
-  const handleSave = async () => {
+  const handleSave = form.handleSubmit(async (data) => {
     setLoading(true);
     try {
+      const payload: Partial<InventoryItem> = {
+        product_category: data.product_category || null,
+        category_meta: data.category_meta ?? {},
+        script_type: data.script_type || null,
+        status: data.status || null,
+        cost_price: data.cost_price ?? null,
+        target_price: data.target_price ?? null,
+        scribe_id: data.scribe_id ?? null,
+        scribe_code: data.scribe_code ?? null,
+        images: data.images ?? [],
+        description: data.description || null,
+      };
+
       const res = editingId
-        ? await updateInventoryItem(editingId, form)
-        : await createInventoryItem(form);
+        ? await updateInventoryItem(editingId, payload)
+        : await createInventoryItem(payload);
 
       if (res.success) {
         toast.success(editingId ? "עודכן" : "נוסף");
@@ -123,7 +161,7 @@ export default function InventoryClient({ initialItems }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   const handleDelete = async (id: string) => {
     if (!confirm("למחוק?")) return;
@@ -145,18 +183,15 @@ export default function InventoryClient({ initialItems }: Props) {
   };
 
   const getBroadcastMessage = (item: InventoryItem): string => {
-    const type = item.item_type ?? item.product_type ?? "פריט";
+    const type = item.product_category ?? "פריט";
     const script = item.script_type ?? "";
-    const level = item.hidur_level ?? "";
     const price = item.target_price != null ? `מחיר: ${item.target_price} ₪` : "";
-    return `פריט חדש! ${type}${script ? `, כתב ${script}` : ""}${level ? `, הידור ${level}` : ""} זמין. ${price}`.trim();
+    return `פריט חדש! ${type}${script ? `, כתב ${script}` : ""} זמין. ${price}`.trim();
   };
 
-  const category = form.category ?? "";
-  const categoryMeta = form.category_meta ?? {};
-  const showSize = category === "ספר תורה";
-  const showNavi = category === "נביא";
-  const showLines = category === "מגילה";
+  const showSize = productCategory === "ספר תורה";
+  const showNavi = productCategory === "נביא";
+  const showLines = productCategory === "מגילה";
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden">
@@ -172,9 +207,8 @@ export default function InventoryClient({ initialItems }: Props) {
         <Table className="min-w-0">
           <TableHeader>
             <TableRow>
-              <TableHead>סוג</TableHead>
+              <TableHead>קטגוריה</TableHead>
               <TableHead>כתב</TableHead>
-              <TableHead>הידור</TableHead>
               <TableHead>סטטוס</TableHead>
               <TableHead>מחיר יעד</TableHead>
               <TableHead className="w-40">פעולות</TableHead>
@@ -183,9 +217,8 @@ export default function InventoryClient({ initialItems }: Props) {
           <TableBody>
             {items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="truncate max-w-[120px]">{item.item_type ?? item.product_type ?? "—"}</TableCell>
+                <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                 <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
-                <TableCell className="truncate max-w-[60px]">{item.hidur_level ?? "—"}</TableCell>
                 <TableCell>{item.status ?? "—"}</TableCell>
                 <TableCell>
                   {item.target_price != null ? `${item.target_price} ₪` : "—"}
@@ -232,16 +265,15 @@ export default function InventoryClient({ initialItems }: Props) {
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium">קטגוריה</label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                {...form.register("product_category")}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
                 <option value="">בחר</option>
-                {CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -252,12 +284,17 @@ export default function InventoryClient({ initialItems }: Props) {
                 <label className="mb-1 block text-sm font-medium">גודל</label>
                 <select
                   value={String(categoryMeta.size ?? "")}
-                  onChange={(e) => setCategoryMeta("size", e.target.value)}
+                  onChange={(e) =>
+                    form.setValue("category_meta", {
+                      ...categoryMeta,
+                      size: e.target.value,
+                    })
+                  }
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="">בחר</option>
-                  {SEFER_TORAH_SIZES.map((s) => (
-                    <option key={String(s)} value={String(s)}>{String(s)}</option>
+                  {torahSizes.map((s) => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
@@ -268,11 +305,16 @@ export default function InventoryClient({ initialItems }: Props) {
                 <label className="mb-1 block text-sm font-medium">נביא</label>
                 <select
                   value={String(categoryMeta.navi ?? "")}
-                  onChange={(e) => setCategoryMeta("navi", e.target.value)}
+                  onChange={(e) =>
+                    form.setValue("category_meta", {
+                      ...categoryMeta,
+                      navi: e.target.value,
+                    })
+                  }
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="">בחר</option>
-                  {NEVIIM_LIST.map((n) => (
+                  {neviimNames.map((n) => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
@@ -284,11 +326,16 @@ export default function InventoryClient({ initialItems }: Props) {
                 <label className="mb-1 block text-sm font-medium">שורות</label>
                 <select
                   value={String(categoryMeta.lines ?? "")}
-                  onChange={(e) => setCategoryMeta("lines", e.target.value)}
+                  onChange={(e) =>
+                    form.setValue("category_meta", {
+                      ...categoryMeta,
+                      lines: e.target.value,
+                    })
+                  }
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="">בחר</option>
-                  {MEGILLA_LINES.map((l) => (
+                  {megillaLines.map((l) => (
                     <option key={l} value={l}>{l}</option>
                   ))}
                 </select>
@@ -296,24 +343,10 @@ export default function InventoryClient({ initialItems }: Props) {
             )}
 
             <div>
-              <label className="mb-1 block text-sm font-medium">סוג פריט</label>
-              <select
-                value={form.item_type ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, item_type: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">בחר</option>
-                {ITEM_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label className="mb-1 block text-sm font-medium">שם סופר</label>
               <ScribeCombobox
-                value={form.scribe_id ?? null}
-                onChange={(s) => setForm((p) => ({ ...p, scribe_id: s?.id ?? null }))}
+                value={form.watch("scribe_id") ?? null}
+                onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
                 placeholder="בחר סופר"
               />
             </div>
@@ -321,26 +354,11 @@ export default function InventoryClient({ initialItems }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">כתב</label>
               <select
-                value={form.script_type ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, script_type: e.target.value }))}
+                {...form.register("script_type")}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
                 <option value="">בחר</option>
-                {SCRIPT_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">הידור</label>
-              <select
-                value={form.hidur_level ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, hidur_level: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">בחר</option>
-                {HIDUR_LEVELS.map((t) => (
+                {scriptTypes.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
@@ -349,8 +367,7 @@ export default function InventoryClient({ initialItems }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">סטטוס</label>
               <select
-                value={form.status ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+                {...form.register("status")}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
                 {STATUSES.map((t) => (
@@ -362,8 +379,8 @@ export default function InventoryClient({ initialItems }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">תמונות</label>
               <ImageGallery
-                images={form.images ?? []}
-                onChange={(images) => setForm((p) => ({ ...p, images }))}
+                images={form.watch("images") ?? []}
+                onChange={(images) => form.setValue("images", images)}
               />
             </div>
 
@@ -372,13 +389,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 <label className="mb-1 block text-sm font-medium">עלות קנייה</label>
                 <Input
                   type="number"
-                  value={form.cost_price ?? ""}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      cost_price: e.target.value ? Number(e.target.value) : null,
-                    }))
-                  }
+                  {...form.register("cost_price", { valueAsNumber: true })}
                   placeholder="0"
                 />
               </div>
@@ -386,13 +397,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 <label className="mb-1 block text-sm font-medium">מחיר יעד למכירה</label>
                 <Input
                   type="number"
-                  value={form.target_price ?? ""}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      target_price: e.target.value ? Number(e.target.value) : null,
-                    }))
-                  }
+                  {...form.register("target_price", { valueAsNumber: true })}
                   placeholder="0"
                 />
               </div>
@@ -401,21 +406,20 @@ export default function InventoryClient({ initialItems }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">תיאור</label>
               <Input
-                value={form.description ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                {...form.register("description")}
                 placeholder="תיאור"
               />
             </div>
 
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setEditOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                 ביטול
               </Button>
-              <Button onClick={handleSave} disabled={loading}>
+              <Button type="submit" disabled={loading}>
                 {loading ? "שומר..." : "שמור"}
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
