@@ -17,6 +17,9 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
     if (!file || !(file instanceof File)) {
       return { success: false, error: "לא נבחר קובץ" };
     }
+    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
+      return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
+    }
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -49,16 +52,32 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
   }
 }
 
-const DELAY_EVERY_N = 3;
-const DELAY_MS = 3000;
+const DELAY_MS = 2500;
+const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5MB
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-type ActionResult =
-  | { success: true; sent: number; failed: number; errors: string[] }
+export type BroadcastResultItem = {
+  target: string;
+  success: boolean;
+  error?: string;
+};
+
+type DispatchResult =
+  | { success: true; sent: number; failed: number; results: BroadcastResultItem[] }
   | { success: false; error: string };
+
+async function getImageSizeBytes(url: string): Promise<number | null> {
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    const len = res.headers.get("content-length");
+    return len ? parseInt(len, 10) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function getGreenApiCredentials(userId: string) {
   const supabase = await createClient();
@@ -211,57 +230,13 @@ function replaceVariables(text: string, vars: Record<string, string>): string {
   return result;
 }
 
-export type QueueBroadcastResult =
-  | { success: true; queueId: string }
-  | { success: false; error: string };
-
-export async function queueBroadcast(
-  tags: string[],
-  messageText: string,
-  imageUrl?: string,
-  scribeCode?: string,
-  internalNotes?: string
-): Promise<QueueBroadcastResult> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "יש להתחבר" };
-
-    const targetsResult = await fetchTargetsByTags(tags);
-    if (!targetsResult.success) return { success: false, error: targetsResult.error };
-    const targets = targetsResult.targets;
-    if (targets.length === 0) return { success: false, error: "אין נמענים התואמים לתגיות" };
-
-    const payload = {
-      tags,
-      messageText: messageText.trim(),
-      imageUrl: imageUrl?.trim() || null,
-      scribeCode: scribeCode?.trim() || null,
-      internalNotes: internalNotes?.trim() || null,
-      targets,
-    };
-
-    const { data, error } = await supabase
-      .from("broadcast_queue")
-      .insert({ user_id: user.id, payload, status: "pending" })
-      .select("id")
-      .single();
-
-    if (error) return { success: false, error: error.message };
-    revalidatePath("/broadcast");
-    return { success: true, queueId: data.id };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
-  }
-}
-
 export async function dispatchBroadcast(
   tags: string[],
   messageText: string,
   imageUrl?: string,
   scribeCode?: string,
   internalNotes?: string
-): Promise<ActionResult> {
+): Promise<DispatchResult> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -285,9 +260,17 @@ export async function dispatchBroadcast(
       return { success: false, error: "אין נמענים התואמים לתגיות שנבחרו" };
     }
 
+    const results: BroadcastResultItem[] = [];
     const errors: string[] = [];
     let sent = 0;
     let failed = 0;
+
+    if (imageUrl?.trim()) {
+      const sizeBytes = await getImageSizeBytes(imageUrl.trim());
+      if (sizeBytes !== null && sizeBytes > IMAGE_SIZE_LIMIT_BYTES) {
+        return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
+      }
+    }
 
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
@@ -298,9 +281,9 @@ export async function dispatchBroadcast(
       }
 
       try {
-        if (imageUrl && imageUrl.trim()) {
-          const url = `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`;
-          const res = await fetch(url, {
+        if (imageUrl?.trim()) {
+          const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`;
+          const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -311,16 +294,19 @@ export async function dispatchBroadcast(
             }),
           });
 
+          const errBody = await res.text();
           if (!res.ok) {
-            const errBody = await res.text();
-            errors.push(`${target.wa_chat_id}: ${errBody}`);
+            const errMsg = errBody || "שגיאה לא ידועה";
+            errors.push(`${target.wa_chat_id}: ${errMsg}`);
             failed++;
+            results.push({ target: target.wa_chat_id, success: false, error: errMsg });
           } else {
             sent++;
+            results.push({ target: target.wa_chat_id, success: true });
           }
         } else {
-          const url = `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`;
-          const res = await fetch(url, {
+          const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`;
+          const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -329,25 +315,26 @@ export async function dispatchBroadcast(
             }),
           });
 
+          const errBody = await res.text();
           if (!res.ok) {
-            const errBody = await res.text();
-            errors.push(`${target.wa_chat_id}: ${errBody}`);
+            const errMsg = errBody || "שגיאה לא ידועה";
+            errors.push(`${target.wa_chat_id}: ${errMsg}`);
             failed++;
+            results.push({ target: target.wa_chat_id, success: false, error: errMsg });
           } else {
             sent++;
+            results.push({ target: target.wa_chat_id, success: true });
           }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
         errors.push(`${target.wa_chat_id}: ${msg}`);
         failed++;
+        results.push({ target: target.wa_chat_id, success: false, error: msg });
       }
 
       if (i < targets.length - 1) {
-        const msgIndex = i + 1;
-        if (msgIndex % DELAY_EVERY_N === 0) {
-          await sleep(DELAY_MS);
-        }
+        await sleep(DELAY_MS);
       }
     }
 
@@ -362,7 +349,7 @@ export async function dispatchBroadcast(
     });
 
     revalidatePath("/broadcast");
-    return { success: true, sent, failed, errors };
+    return { success: true, sent, failed, results };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     return { success: false, error: msg };

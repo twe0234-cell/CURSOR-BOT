@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   fetchTargetsByTags,
-  queueBroadcast,
+  dispatchBroadcast,
   uploadMedia,
   fetchBroadcastLogs,
   fetchBroadcastQueueItems,
@@ -112,6 +112,11 @@ export default function BroadcastClient({
       toast.error("נא לבחור קובץ תמונה");
       return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("התמונה חורגת ממגבלת 5MB");
+      e.target.value = "";
+      return;
+    }
     setImageFile(file);
     setUploading(true);
     try {
@@ -166,7 +171,7 @@ export default function BroadcastClient({
 
     setLoading(true);
     try {
-      const res = await queueBroadcast(
+      const res = await dispatchBroadcast(
         [...selectedTags],
         messageText.trim(),
         finalImageUrl || undefined,
@@ -175,9 +180,18 @@ export default function BroadcastClient({
       );
 
       if (res.success) {
-        toast.success("השידור הוכנס לתור וישלח ברקע", {
-          description: "ניתן לסגור את הדף – השידור ימשיך",
-        });
+        const total = res.sent + res.failed;
+        const failedList = res.results
+          .filter((r) => !r.success)
+          .map((r) => r.error || "שגיאה")
+          .slice(0, 3);
+        const failedSummary = failedList.length > 0
+          ? ` נכשלו: ${failedList.join("; ")}${res.failed > 3 ? ` +${res.failed - 3} נוספות` : ""}`
+          : "";
+        toast.success(
+          `נשלחו ${res.sent}/${total}${res.failed > 0 ? `.${failedSummary}` : ""}`,
+          { duration: res.failed > 0 ? 6000 : 4000 }
+        );
         setScribeCode("");
         setInternalNotes("");
         setNextScribeNum((n) => n + 1);
