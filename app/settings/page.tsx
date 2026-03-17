@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/server";
 import SettingsForm from "./SettingsForm";
 import BrandingSection from "./BrandingSection";
+import EmailSignatureSection from "./EmailSignatureSection";
 import LogExportButton from "./LogExportButton";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +26,7 @@ export default async function SettingsPage() {
 
   const { data: sysSettings } = await supabase
     .from("sys_settings")
-    .select("logo_url")
+    .select("logo_url, email_signature")
     .eq("id", "default")
     .single();
 
@@ -39,6 +40,8 @@ export default async function SettingsPage() {
       <div className="mb-8">
         <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
       </div>
+
+      <EmailSignatureSection initialSignature={sysSettings?.email_signature ?? null} />
 
       <div className="mb-8 flex flex-wrap gap-2">
         <Link href="/settings/lists">

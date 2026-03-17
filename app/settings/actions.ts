@@ -71,6 +71,29 @@ export async function disconnectGmail(): Promise<SettingsActionResult> {
   }
 }
 
+export async function saveEmailSignature(signature: string): Promise<SettingsActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("sys_settings")
+      .upsert(
+        { id: "default", email_signature: signature.trim(), updated_at: new Date().toISOString() },
+        { onConflict: "id" }
+      );
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/settings");
+    revalidatePath("/email");
+    revalidatePath("/email/campaigns");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function updateAllowedTags(allowedTags: string[]): Promise<SettingsActionResult> {
   try {
     const supabase = await createClient();

@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
 import ContactsTab from "./ContactsTab";
 import CampaignsTab from "./CampaignsTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 
 export default async function EmailPage() {
   const supabase = await createClient();
@@ -32,11 +34,21 @@ export default async function EmailPage() {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50/50">
       <div className="w-full max-w-6xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-2">דיוור אימייל</h1>
-          <p className="text-muted-foreground">
-            ייבוא אנשי קשר, שליחת קמפיינים מ-Gmail ומעקב פתיחות והסרות
-          </p>
+        <div className="mb-6 sm:mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-2">דיוור אימייל</h1>
+            <p className="text-muted-foreground">
+              ייבוא אנשי קשר, שליחת קמפיינים מ-Gmail ומעקב פתיחות והסרות
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/email/import">
+              <Button variant="outline" className="rounded-xl">ייבוא מ-Gmail (CRM)</Button>
+            </Link>
+            <Link href="/email/campaigns">
+              <Button variant="outline" className="rounded-xl">עורך קמפיין</Button>
+            </Link>
+          </div>
         </div>
         <Tabs defaultValue="contacts" className="w-full">
           <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
