@@ -2,6 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { logError, logInfo } from "@/lib/logger";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -48,6 +49,7 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
     return { success: true, url: publicUrl };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה בהעלאה";
+    logError("Broadcast", "uploadMedia failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }
@@ -189,6 +191,7 @@ export async function sendSingleMessage(
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Broadcast", "sendSingleMessage failed", { error: String(err), waChatId });
     return { success: false, error: msg };
   }
 }
@@ -491,9 +494,11 @@ export async function dispatchBroadcast(
     });
 
     revalidatePath("/broadcast");
+    logInfo("Broadcast", `Broadcast completed for ${targets.length} contacts`, { sent, failed, userId: user.id });
     return { success: true, sent, failed, results };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Broadcast", "dispatchBroadcast failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }
@@ -529,9 +534,11 @@ export async function insertBroadcastLog(
     if (error) return { success: false, error: error.message };
     revalidatePath("/broadcast");
     revalidatePath("/whatsapp");
+    logInfo("Broadcast", "insertBroadcastLog completed", { sent, failed, userId: user.id });
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Broadcast", "insertBroadcastLog failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }

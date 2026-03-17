@@ -1,15 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { fetchScribes, createScribeContact } from "@/app/crm/actions";
+import { AddScribeModal, type NewScribe } from "./AddScribeModal";
+import { fetchScribes } from "@/app/crm/actions";
 import { PlusIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,15 +26,17 @@ export function ScribeCombobox({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [newScribeName, setNewScribeName] = useState("");
-  const [creating, setCreating] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetchScribes().then((r) => {
-      if (r.success) setScribes(r.scribes);
-      setLoading(false);
+      if (!cancelled) {
+        if (r.success) setScribes(r.scribes);
+        setLoading(false);
+      }
     });
+    return () => { cancelled = true; };
   }, [addModalOpen]);
 
   const selected = scribes.find((s) => s.id === value);
@@ -57,22 +52,11 @@ export function ScribeCombobox({
     setOpen(false);
   };
 
-  const handleAddNew = async () => {
-    const name = newScribeName.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
-      const res = await createScribeContact(name);
-      if (res.success) {
-        setScribes((prev) => [...prev, res.scribe]);
-        onChange(res.scribe);
-        setAddModalOpen(false);
-        setNewScribeName("");
-        setOpen(false);
-      }
-    } finally {
-      setCreating(false);
-    }
+  const handleAddSuccess = (newScribe: NewScribe) => {
+    const scribe = { id: newScribe.id, name: newScribe.name };
+    setScribes((prev) => [...prev, scribe]);
+    onChange(scribe);
+    setOpen(false);
   };
 
   useEffect(() => {
@@ -147,29 +131,11 @@ export function ScribeCombobox({
         </div>
       )}
 
-      <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>הוסף סופר חדש</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              value={newScribeName}
-              onChange={(e) => setNewScribeName(e.target.value)}
-              placeholder="שם הסופר"
-              onKeyDown={(e) => e.key === "Enter" && handleAddNew()}
-            />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setAddModalOpen(false)}>
-                ביטול
-              </Button>
-              <Button onClick={handleAddNew} disabled={!newScribeName.trim() || creating}>
-                {creating ? "שומר..." : "הוסף"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AddScribeModal
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        onSuccess={handleAddSuccess}
+      />
     </div>
   );
 }

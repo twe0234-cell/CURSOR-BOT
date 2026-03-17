@@ -3,6 +3,7 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getAccessToken } from "@/src/lib/gmail";
+import { logError, logInfo } from "@/lib/logger";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -183,10 +184,15 @@ export async function createScribeContact(name: string): Promise<
       .select("id, name")
       .single();
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      logError("CRM", "createScribeContact DB error", { error: error.message, name: name.trim() });
+      return { success: false, error: error.message };
+    }
     revalidatePath("/crm");
+    logInfo("CRM", "createScribeContact completed", { scribeId: data.id, name: data.name, userId: user.id });
     return { success: true, scribe: { id: data.id, name: data.name ?? "" } };
   } catch (err) {
+    logError("CRM", "createScribeContact failed", { error: String(err), name });
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }

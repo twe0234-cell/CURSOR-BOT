@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/server";
 import SettingsForm from "./SettingsForm";
 import BrandingSection from "./BrandingSection";
+import LogExportButton from "./LogExportButton";
 import { Button } from "@/components/ui/button";
 
 export default async function SettingsPage() {
@@ -56,6 +57,8 @@ export default async function SettingsPage() {
           gmailEmail={settings?.gmail_email ?? null}
         />
       </Suspense>
+
+      <LogExportButton />
     </div>
   );
 }

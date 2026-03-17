@@ -2,7 +2,8 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { inventoryItemSchema } from "@/lib/validations";
+import { inventoryItemSchema } from "@/lib/validations/inventory";
+import { logError, logInfo } from "@/lib/logger";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -103,13 +104,16 @@ export async function createInventoryItem(
     });
 
     if (error) {
+      logError("Inventory", "createInventoryItem DB error", { error: error.message, userId: user.id });
       return { success: false, error: error.message };
     }
 
     revalidatePath("/inventory");
+    logInfo("Inventory", "createInventoryItem completed", { userId: user.id, product_category: data.product_category });
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Inventory", "createInventoryItem failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }
@@ -155,13 +159,16 @@ export async function updateInventoryItem(
       .eq("user_id", user.id);
 
     if (error) {
+      logError("Inventory", "updateInventoryItem DB error", { error: error.message, id, userId: user.id });
       return { success: false, error: error.message };
     }
 
     revalidatePath("/inventory");
+    logInfo("Inventory", "updateInventoryItem completed", { id, userId: user.id });
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Inventory", "updateInventoryItem failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }
@@ -202,6 +209,7 @@ export async function uploadInventoryImage(formData: FormData): Promise<UploadIm
 
     return { success: true, url: publicUrl };
   } catch (err) {
+    logError("Inventory", "uploadInventoryImage failed", { error: String(err) });
     return { success: false, error: err instanceof Error ? err.message : "שגיאה בהעלאה" };
   }
 }
@@ -222,13 +230,16 @@ export async function deleteInventoryItem(id: string): Promise<ActionResult> {
       .eq("user_id", user.id);
 
     if (error) {
+      logError("Inventory", "deleteInventoryItem DB error", { error: error.message, id, userId: user.id });
       return { success: false, error: error.message };
     }
 
     revalidatePath("/inventory");
+    logInfo("Inventory", "deleteInventoryItem completed", { id, userId: user.id });
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+    logError("Inventory", "deleteInventoryItem failed", { error: String(err) });
     return { success: false, error: msg };
   }
 }

@@ -39,8 +39,8 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-3 p-2 rounded-xl bg-slate-50/50 border border-dashed border-slate-200 min-h-[7rem]">
         {images.map((url, idx) => (
           <div key={url} className="relative group">
             <Image
@@ -48,7 +48,7 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
               alt=""
               width={80}
               height={80}
-              className="h-20 w-20 object-cover rounded-lg border"
+              className="h-20 w-20 object-cover rounded-xl border border-slate-200 shadow-sm"
             />
             {!disabled && (
               <button
@@ -65,9 +65,10 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="h-20 w-20 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:bg-muted"
+            className="h-24 w-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:bg-amber-50/80 hover:border-amber-300 transition-colors"
           >
             <PlusIcon className="size-6" />
+            <span className="text-xs">הוסף</span>
           </button>
         )}
       </div>

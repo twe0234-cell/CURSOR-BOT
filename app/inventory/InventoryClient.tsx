@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Table,
@@ -21,6 +21,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
   createInventoryItem,
   updateInventoryItem,
   deleteInventoryItem,
@@ -29,8 +36,9 @@ import {
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
-import { PlusIcon, PencilIcon, TrashIcon, SendIcon } from "lucide-react";
-import type { InventoryItemInput } from "@/lib/validations";
+import { DependentCategories } from "@/components/inventory/DependentCategories";
+import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check } from "lucide-react";
+import type { InventoryItemInput } from "@/lib/validations/inventory";
 
 const STATUSES = ["available", "in_use", "sold", "reserved"];
 
@@ -45,23 +53,14 @@ export default function InventoryClient({ initialItems }: Props) {
   const [loading, setLoading] = useState(false);
 
   const [categories, setCategories] = useState<string[]>([]);
-  const [torahSizes, setTorahSizes] = useState<string[]>([]);
-  const [neviimNames, setNeviimNames] = useState<string[]>([]);
-  const [megillaLines, setMegillaLines] = useState<string[]>([]);
   const [scriptTypes, setScriptTypes] = useState<string[]>([]);
 
   useEffect(() => {
     Promise.all([
       fetchDropdownOptions("categories"),
-      fetchDropdownOptions("torah_sizes"),
-      fetchDropdownOptions("neviim_names"),
-      fetchDropdownOptions("megilla_lines"),
       fetchDropdownOptions("script_types"),
-    ]).then(([c, t, n, m, s]) => {
+    ]).then(([c, s]) => {
       if (c.success) setCategories(c.options);
-      if (t.success) setTorahSizes(t.options);
-      if (n.success) setNeviimNames(n.options);
-      if (m.success) setMegillaLines(m.options);
       if (s.success) setScriptTypes(s.options);
     });
   }, []);
@@ -81,21 +80,8 @@ export default function InventoryClient({ initialItems }: Props) {
     },
   });
 
-  const productCategory = form.watch("product_category");
-  const categoryMeta = form.watch("category_meta") ?? {};
-  const prevCategoryRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (!editOpen) return;
-    if (prevCategoryRef.current !== undefined && prevCategoryRef.current !== productCategory) {
-      form.setValue("category_meta", {});
-    }
-    prevCategoryRef.current = productCategory;
-  }, [productCategory, editOpen, form]);
-
   const openCreate = () => {
     setEditingId(null);
-    prevCategoryRef.current = undefined;
     form.reset({
       product_category: "",
       category_meta: {},
@@ -113,7 +99,6 @@ export default function InventoryClient({ initialItems }: Props) {
 
   const openEdit = (item: InventoryItem) => {
     setEditingId(item.id);
-    prevCategoryRef.current = undefined;
     form.reset({
       product_category: item.product_category ?? "",
       category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
@@ -189,12 +174,8 @@ export default function InventoryClient({ initialItems }: Props) {
     return `פריט חדש! ${type}${script ? `, כתב ${script}` : ""} זמין. ${price}`.trim();
   };
 
-  const showSize = productCategory === "ספר תורה";
-  const showNavi = productCategory === "נביא";
-  const showLines = productCategory === "מגילה";
-
   return (
-    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden bg-slate-50/50 min-h-screen" dir="rtl">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-teal-800">מלאי</h1>
         <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700">
@@ -261,165 +242,143 @@ export default function InventoryClient({ initialItems }: Props) {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-slate-50/30" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">קטגוריה</label>
-              <select
-                {...form.register("product_category")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">בחר</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
+          <FormProvider {...form} key={editingId ?? "create"}>
+            <form onSubmit={handleSave} className="space-y-6">
+              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-indigo-500" />
+                    <CardTitle className="text-base font-semibold text-slate-700">פרטי המוצר</CardTitle>
+                  </div>
+                  <CardDescription>קטגוריה ותכונות תלויות</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">קטגוריה</label>
+                      <select
+                        {...form.register("product_category")}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      >
+                        <option value="">בחר</option>
+                        {categories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <DependentCategories />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">כתב</label>
+                      <select
+                        {...form.register("script_type")}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      >
+                        <option value="">בחר</option>
+                        {scriptTypes.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">סטטוס</label>
+                      <select
+                        {...form.register("status")}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      >
+                        {STATUSES.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-            {showSize && (
-              <div>
-                <label className="mb-1 block text-sm font-medium">גודל</label>
-                <select
-                  value={String(categoryMeta.size ?? "")}
-                  onChange={(e) =>
-                    form.setValue("category_meta", {
-                      ...categoryMeta,
-                      size: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-500" />
+                    <CardTitle className="text-base font-semibold text-slate-700">ספק ותמחור</CardTitle>
+                  </div>
+                  <CardDescription>סופר, עלויות ומחיר יעד</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">שם סופר</label>
+                    <ScribeCombobox
+                      value={form.watch("scribe_id") ?? null}
+                      onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
+                      placeholder="בחר סופר"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">עלות קנייה</label>
+                      <Input
+                        type="number"
+                        {...form.register("cost_price", { valueAsNumber: true })}
+                        placeholder="0"
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">מחיר יעד למכירה</label>
+                      <Input
+                        type="number"
+                        {...form.register("target_price", { valueAsNumber: true })}
+                        placeholder="0"
+                        className="rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">תיאור</label>
+                    <Input
+                      {...form.register("description")}
+                      placeholder="תיאור"
+                      className="rounded-xl"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-amber-500" />
+                    <CardTitle className="text-base font-semibold text-slate-700">גלריה</CardTitle>
+                  </div>
+                  <CardDescription>תמונות המוצר</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ImageGallery
+                    images={form.watch("images") ?? []}
+                    onChange={(images) => form.setValue("images", images)}
+                  />
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)} className="rounded-xl">
+                  ביטול
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6"
                 >
-                  <option value="">בחר</option>
-                  {torahSizes.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  <Check className="w-4 h-4 ml-2" />
+                  {loading ? "שומר..." : "שמור"}
+                </Button>
               </div>
-            )}
-
-            {showNavi && (
-              <div>
-                <label className="mb-1 block text-sm font-medium">נביא</label>
-                <select
-                  value={String(categoryMeta.navi ?? "")}
-                  onChange={(e) =>
-                    form.setValue("category_meta", {
-                      ...categoryMeta,
-                      navi: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                >
-                  <option value="">בחר</option>
-                  {neviimNames.map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {showLines && (
-              <div>
-                <label className="mb-1 block text-sm font-medium">שורות</label>
-                <select
-                  value={String(categoryMeta.lines ?? "")}
-                  onChange={(e) =>
-                    form.setValue("category_meta", {
-                      ...categoryMeta,
-                      lines: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                >
-                  <option value="">בחר</option>
-                  {megillaLines.map((l) => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">שם סופר</label>
-              <ScribeCombobox
-                value={form.watch("scribe_id") ?? null}
-                onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
-                placeholder="בחר סופר"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">כתב</label>
-              <select
-                {...form.register("script_type")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">בחר</option>
-                {scriptTypes.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">סטטוס</label>
-              <select
-                {...form.register("status")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                {STATUSES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">תמונות</label>
-              <ImageGallery
-                images={form.watch("images") ?? []}
-                onChange={(images) => form.setValue("images", images)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">עלות קנייה</label>
-                <Input
-                  type="number"
-                  {...form.register("cost_price", { valueAsNumber: true })}
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">מחיר יעד למכירה</label>
-                <Input
-                  type="number"
-                  {...form.register("target_price", { valueAsNumber: true })}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">תיאור</label>
-              <Input
-                {...form.register("description")}
-                placeholder="תיאור"
-              />
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
-                ביטול
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "שומר..." : "שמור"}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </FormProvider>
         </DialogContent>
       </Dialog>
     </div>
