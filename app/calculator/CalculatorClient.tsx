@@ -10,13 +10,11 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import {
-  PARCHMENT_PRICES,
-  NEVIIM_DATA,
-  TORAH_DATA,
-} from "@/lib/constants/calculator";
+import type { ParchmentPrice, NeviimData } from "./actions";
 import { CalculatorIcon, WalletIcon, TrendingUpIcon } from "lucide-react";
 import { useMemo } from "react";
+
+const TORAH_DATA = { pages: 245, yeriot: 62 };
 
 type ProductType = "torah" | "nevi";
 
@@ -31,17 +29,27 @@ type FormValues = {
   receipt: boolean;
 };
 
-const NEVIIM_KEYS = Object.keys(NEVIIM_DATA);
-const PARCHMENT_KEYS = Object.keys(PARCHMENT_PRICES);
+type Props = {
+  parchmentPrices: ParchmentPrice[];
+  neviimData: NeviimData;
+};
 
-export default function CalculatorClient() {
+export default function CalculatorClient({ parchmentPrices, neviimData }: Props) {
+  const parchmentMap = useMemo(
+    () => Object.fromEntries(parchmentPrices.map((p) => [p.name, p.price])),
+    [parchmentPrices]
+  );
+  const neviimKeys = useMemo(() => Object.keys(neviimData), [neviimData]);
+  const firstParchment = parchmentPrices[0];
+  const firstNevi = neviimKeys[0];
+
   const form = useForm<FormValues>({
     defaultValues: {
       productType: "torah",
-      nevi: NEVIIM_KEYS[0] ?? "",
+      nevi: firstNevi ?? "",
       scribePricePerPage: 0,
-      parchmentType: PARCHMENT_KEYS[0] ?? "",
-      pricePerYeria: PARCHMENT_KEYS[0] ? PARCHMENT_PRICES[PARCHMENT_KEYS[0]] ?? 0 : 0,
+      parchmentType: firstParchment?.name ?? "",
+      pricePerYeria: firstParchment?.price ?? 0,
       additionalCosts: 0,
       targetSalePrice: 0,
       receipt: false,
@@ -57,10 +65,9 @@ export default function CalculatorClient() {
   const targetSalePrice = form.watch("targetSalePrice");
   const receipt = form.watch("receipt");
 
-  // Sync price per yeria when parchment type changes
   const handleParchmentChange = (value: string) => {
     form.setValue("parchmentType", value);
-    const price = PARCHMENT_PRICES[value];
+    const price = parchmentMap[value];
     if (price != null) {
       form.setValue("pricePerYeria", price);
     }
@@ -70,9 +77,9 @@ export default function CalculatorClient() {
     if (productType === "torah") {
       return { pages: TORAH_DATA.pages, yeriot: TORAH_DATA.yeriot };
     }
-    const data = NEVIIM_DATA[nevi];
+    const data = neviimData[nevi];
     return data ? { pages: data.pages, yeriot: data.yeriot } : { pages: 0, yeriot: 0 };
-  }, [productType, nevi]);
+  }, [productType, nevi, neviimData]);
 
   const results = useMemo(() => {
     const totalParchmentCost = yeriot * (pricePerYeria || 0);
@@ -102,7 +109,6 @@ export default function CalculatorClient() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 w-full max-w-6xl mx-auto">
-      {/* Inputs Card - Right side in RTL */}
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden order-2 lg:order-1">
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -140,7 +146,7 @@ export default function CalculatorClient() {
             </div>
           </div>
 
-          {productType === "nevi" && (
+          {productType === "nevi" && neviimKeys.length > 0 && (
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">נביא</label>
               <select
@@ -148,7 +154,7 @@ export default function CalculatorClient() {
                 onChange={(e) => form.setValue("nevi", e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
-                {NEVIIM_KEYS.map((k) => (
+                {neviimKeys.map((k) => (
                   <option key={k} value={k}>
                     {k}
                   </option>
@@ -171,34 +177,38 @@ export default function CalculatorClient() {
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג קלף</label>
-            <select
-              value={parchmentType}
-              onChange={(e) => handleParchmentChange(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              {PARCHMENT_KEYS.map((k) => (
-                <option key={k} value={k}>
-                  {k} ({PARCHMENT_PRICES[k]} ₪/יריעה)
-                </option>
-              ))}
-            </select>
-          </div>
+          {parchmentPrices.length > 0 && (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג קלף</label>
+                <select
+                  value={parchmentType}
+                  onChange={(e) => handleParchmentChange(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                >
+                  {parchmentPrices.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name} ({p.price} ₪/יריעה)
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-              מחיר ליריעה (₪) – ניתן לעריכה
-            </label>
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              {...form.register("pricePerYeria", { valueAsNumber: true })}
-              placeholder="0"
-              className="rounded-xl"
-            />
-          </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  מחיר ליריעה (₪) – ניתן לעריכה
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  {...form.register("pricePerYeria", { valueAsNumber: true })}
+                  placeholder="0"
+                  className="rounded-xl"
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">
@@ -244,7 +254,6 @@ export default function CalculatorClient() {
         </CardContent>
       </Card>
 
-      {/* Results Dashboard - Left side in RTL */}
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden order-1 lg:order-2">
         <CardHeader>
           <div className="flex items-center gap-2">

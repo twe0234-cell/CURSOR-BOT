@@ -40,10 +40,15 @@ export default async function SettingsPage() {
         <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
       </div>
 
-      <div className="mb-8">
+      <div className="mb-8 flex flex-wrap gap-2">
         <Link href="/settings/lists">
           <Button variant="outline" className="w-full sm:w-auto">
             רשימות נפתחות
+          </Button>
+        </Link>
+        <Link href="/settings/calculator">
+          <Button variant="outline" className="w-full sm:w-auto">
+            הגדרות מחשבון
           </Button>
         </Link>
       </div>

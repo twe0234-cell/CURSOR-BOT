@@ -1,6 +1,15 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/src/lib/supabase/server";
+import { fetchCalculatorConfig } from "./actions";
 import CalculatorClient from "./CalculatorClient";
 
-export default function CalculatorPage() {
+export default async function CalculatorPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { parchmentPrices, neviimData } = await fetchCalculatorConfig();
+
   return (
     <div className="min-h-screen bg-slate-50/50" dir="rtl">
       <div className="w-full max-w-6xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
@@ -10,7 +19,10 @@ export default function CalculatorPage() {
             חישוב עלויות, רווח ותשואה לספר תורה ונביא
           </p>
         </div>
-        <CalculatorClient />
+        <CalculatorClient
+          parchmentPrices={parchmentPrices}
+          neviimData={neviimData}
+        />
       </div>
     </div>
   );
