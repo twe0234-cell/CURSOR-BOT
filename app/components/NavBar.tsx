@@ -10,11 +10,11 @@ import {
   Mail,
   HandshakeIcon,
   Wallet,
-  UserCog,
   Package,
   Calculator,
   Settings,
   LogOut,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,8 +35,8 @@ export default function NavBar() {
     { href: "/email", label: "דיוור", icon: Mail },
     { href: "/calculator", label: "מחשבון", icon: Calculator },
     { href: "/crm", label: "CRM", icon: HandshakeIcon },
-    { href: "/coming-soon", label: "תזרים כספים", icon: Wallet },
-    { href: "/coming-soon", label: "סופרים וספקים", icon: UserCog },
+    { href: "/sales", label: "מכירות ותזרים", icon: Wallet },
+    { href: "/investments", label: "תיק השקעות", icon: TrendingUp },
     { href: "/inventory", label: "ניהול מלאי סת״ם", icon: Package },
     { href: "/settings", label: "הגדרות", icon: Settings },
   ];
