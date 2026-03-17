@@ -2,6 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getAccessToken } from "@/src/lib/gmail";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -154,6 +155,82 @@ export async function updateEmailContactTags(
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
+export async function importGmailContactsForEmail(): Promise<
+  { success: true; imported: number } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("gmail_refresh_token")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!settings?.gmail_refresh_token) {
+      return { success: false, error: "חבר Gmail בהגדרות" };
+    }
+
+    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    const res = await fetch(
+      "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&pageSize=1000",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { success: false, error: `שליפת אנשי קשר נכשלה: ${err.slice(0, 150)}` };
+    }
+
+    const data = (await res.json()) as {
+      connections?: Array<{
+        names?: Array<{ displayName?: string }>;
+        emailAddresses?: Array<{ value?: string }>;
+        phoneNumbers?: Array<{ value?: string }>;
+      }>;
+    };
+
+    const connections = data.connections ?? [];
+    const toUpsert: { user_id: string; email: string; name: string | null; phone: string | null; tags: string[]; subscribed: boolean; source: string }[] = [];
+
+    for (const c of connections) {
+      const email = c.emailAddresses?.[0]?.value?.trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+
+      const name = c.names?.[0]?.displayName?.trim() || email.split("@")[0];
+      const phone = c.phoneNumbers?.[0]?.value?.trim() || null;
+      toUpsert.push({
+        user_id: user.id,
+        email,
+        name: name || null,
+        phone,
+        tags: ["Gmail_Import"],
+        subscribed: true,
+        source: "gmail",
+      });
+    }
+
+    if (toUpsert.length === 0) {
+      return { success: true, imported: 0 };
+    }
+
+    const { error } = await supabase.from("email_contacts").upsert(toUpsert, {
+      onConflict: "user_id,email",
+      ignoreDuplicates: false,
+    });
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/email");
+    return { success: true, imported: toUpsert.length };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 

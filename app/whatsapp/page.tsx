@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
-import BroadcastClient from "@/app/broadcast/BroadcastClient";
-import AudienceClient from "@/app/audience/AudienceClient";
+import BroadcastTab from "@/app/whatsapp/BroadcastTab";
+import GroupManagementTab from "@/app/whatsapp/GroupManagementTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Props = { searchParams: Promise<{ message?: string }> };
@@ -35,41 +35,41 @@ export default async function WhatsAppPage({ searchParams }: Props) {
   const audienceTags = [...new Set((audience ?? []).flatMap((a) => (a?.tags ?? []) as string[]))];
   const allTags = [...new Set([...allowedTags, ...audienceTags])].sort();
 
-  const initialAudience = (audience ?? []).map((a) => ({
-    id: a.id,
-    name: a.name ?? null,
-    wa_chat_id: a.wa_chat_id ?? "",
-    tags: (a.tags ?? []) as string[],
-    active: a.active ?? true,
-  }));
-
   const groups = (audience ?? [])
     .filter((a) => a?.wa_chat_id && String(a.wa_chat_id).endsWith("@g.us"))
-    .map((a) => ({ wa_chat_id: a.wa_chat_id!, name: a.name ?? null }));
+    .map((a) => ({
+      id: a.id,
+      wa_chat_id: a.wa_chat_id!,
+      name: a.name ?? null,
+    }));
+
+  const groupOptions = groups.map((g) => ({ wa_chat_id: g.wa_chat_id, name: g.name }));
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
-      <Tabs defaultValue="broadcast" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="broadcast">יצירת שידור</TabsTrigger>
-          <TabsTrigger value="audience">נמענים וקבוצות</TabsTrigger>
-        </TabsList>
-        <TabsContent value="broadcast" className="mt-0">
-          <BroadcastClient
-            key={prefilledMessage}
-            allTags={allTags}
-            prefilledMessage={prefilledMessage}
-            groups={groups}
-          />
-        </TabsContent>
-        <TabsContent value="audience" className="mt-0">
-          <AudienceClient
-            initialAudience={initialAudience}
-            allTags={allTags}
-            allowedTags={allowedTags}
-          />
-        </TabsContent>
-      </Tabs>
+    <div dir="rtl" className="min-h-screen bg-slate-50/50">
+      <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
+        <Tabs defaultValue="broadcast" className="w-full">
+          <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
+            <TabsTrigger value="broadcast" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              שידור הודעות
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              ניהול קבוצות
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="broadcast" className="mt-0">
+            <BroadcastTab
+              key={prefilledMessage}
+              allTags={allTags}
+              prefilledMessage={prefilledMessage}
+              groups={groupOptions}
+            />
+          </TabsContent>
+          <TabsContent value="groups" className="mt-0">
+            <GroupManagementTab initialGroups={groups} />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
