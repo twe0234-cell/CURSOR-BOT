@@ -20,6 +20,8 @@ export type InventoryItem = {
   scribe_code: string | null;
   images: string[] | null;
   description: string | null;
+  is_public?: boolean;
+  public_slug?: string | null;
 };
 
 const MEDIA_BUCKET = "media";
@@ -38,7 +40,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_category, category_meta, script_type, status, cost_price, target_price, scribe_id, scribe_code, images, description")
+      .select("id, user_id, product_category, category_meta, script_type, status, cost_price, target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -59,6 +61,8 @@ export async function fetchInventory(): Promise<
       scribe_code: r.scribe_code ?? null,
       images: (r.images ?? null) as string[] | null,
       description: r.description ?? null,
+      is_public: r.is_public ?? false,
+      public_slug: r.public_slug ?? null,
     }));
 
     return { success: true, items };

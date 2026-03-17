@@ -2,11 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/server";
-import SettingsForm from "./SettingsForm";
-import BrandingSection from "./BrandingSection";
-import EmailSignatureSection from "./EmailSignatureSection";
-import LogExportButton from "./LogExportButton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import BrandingSection from "./BrandingSection";
+import BusinessProfileTab from "./BusinessProfileTab";
+import ApiIntegrationsTab from "./ApiIntegrationsTab";
+import LogExportButton from "./LogExportButton";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -26,22 +27,45 @@ export default async function SettingsPage() {
 
   const { data: sysSettings } = await supabase
     .from("sys_settings")
-    .select("logo_url, email_signature")
+    .select("logo_url, email_signature, whatsapp_number")
     .eq("id", "default")
     .single();
 
   return (
-    <div className="w-full max-w-lg mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
+    <div className="w-full max-w-2xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
       <h1 className="mb-6 text-3xl sm:text-4xl font-bold text-teal-800">הגדרות</h1>
-      <p className="mb-6 text-slate-600">
-        הזן את פרטי Green API לשידור הודעות וואטסאפ
-      </p>
 
       <div className="mb-8">
         <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
       </div>
 
-      <EmailSignatureSection initialSignature={sysSettings?.email_signature ?? null} />
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
+          <TabsTrigger value="profile" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            פרופיל עסק
+          </TabsTrigger>
+          <TabsTrigger value="api" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            חיבורי API
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="profile" className="mt-0">
+          <BusinessProfileTab
+            initialWhatsappNumber={sysSettings?.whatsapp_number ?? null}
+            initialEmailSignature={sysSettings?.email_signature ?? null}
+          />
+        </TabsContent>
+        <TabsContent value="api" className="mt-0">
+          <Suspense fallback={<div className="animate-pulse h-64 rounded-2xl bg-slate-100" />}>
+            <ApiIntegrationsTab
+              defaultGreenApiId={settings?.green_api_id ?? ""}
+              defaultGreenApiToken={settings?.green_api_token ?? ""}
+              defaultAllowedTags={allowedTags}
+              gmailConnected={!!settings?.gmail_refresh_token}
+              gmailEmail={settings?.gmail_email ?? null}
+            />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
 
       <div className="mb-8 flex flex-wrap gap-2">
         <Link href="/settings/lists">
@@ -55,16 +79,6 @@ export default async function SettingsPage() {
           </Button>
         </Link>
       </div>
-
-      <Suspense fallback={<div className="animate-pulse h-64 rounded-2xl bg-slate-100" />}>
-        <SettingsForm
-          defaultGreenApiId={settings?.green_api_id ?? ""}
-          defaultGreenApiToken={settings?.green_api_token ?? ""}
-          defaultAllowedTags={allowedTags}
-          gmailConnected={!!settings?.gmail_refresh_token}
-          gmailEmail={settings?.gmail_email ?? null}
-        />
-      </Suspense>
 
       <LogExportButton />
     </div>

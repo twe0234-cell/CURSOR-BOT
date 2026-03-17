@@ -33,11 +33,12 @@ import {
   deleteInventoryItem,
   type InventoryItem,
 } from "./actions";
+import { toggleInventoryShare } from "./actions-share";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
-import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check } from "lucide-react";
+import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 
 const STATUSES = ["available", "in_use", "sold", "reserved"];
@@ -148,6 +149,38 @@ export default function InventoryClient({ initialItems }: Props) {
     }
   });
 
+  const handleShare = async (item: InventoryItem) => {
+    if (item.is_public && item.public_slug) {
+      const url = `${window.location.origin}/p/${item.public_slug}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("הקישור הועתק ללוח");
+      return;
+    }
+    const res = await toggleInventoryShare(item.id);
+    if (res.success && res.link) {
+      const url = `${window.location.origin}${res.link}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("הקישור הועתק ללוח");
+      window.location.reload();
+    } else if (res.success) {
+      toast.success("שיתוף בוטל");
+      window.location.reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const handleUnshare = async (item: InventoryItem) => {
+    if (!item.is_public) return;
+    const res = await toggleInventoryShare(item.id);
+    if (res.success) {
+      toast.success("שיתוף בוטל");
+      window.location.reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("למחוק?")) return;
     setLoading(true);
@@ -205,6 +238,22 @@ export default function InventoryClient({ initialItems }: Props) {
                   {item.target_price != null ? `${item.target_price} ₪` : "—"}
                 </TableCell>
                 <TableCell>
+                  {item.is_public ? (
+                    <>
+                      <Button size="sm" variant="default" onClick={() => handleShare(item)} title="העתק קישור" className="rounded-lg">
+                        <LinkIcon className="size-4 ml-1" />
+                        העתק קישור
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleUnshare(item)} title="בטל שיתוף" className="rounded-lg text-slate-500">
+                        <UnlinkIcon className="size-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => handleShare(item)} title="שיתוף והעתק קישור" className="rounded-lg">
+                      <Share2Icon className="size-4 ml-1" />
+                      שיתוף
+                    </Button>
+                  )}
                   <Link
                     href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}
                   >
