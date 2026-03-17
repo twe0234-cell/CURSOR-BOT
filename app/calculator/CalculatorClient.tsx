@@ -1,191 +1,228 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  NEVIIM_DATA,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
   PARCHMENT_PRICES,
-  SEFER_TORAH_PAGES,
-  SEFER_TORAH_YERIOT,
-  NEVIIM_LIST,
-} from "@/src/lib/constants/stam";
+  NEVIIM_DATA,
+  TORAH_DATA,
+} from "@/lib/constants/calculator";
+import { CalculatorIcon, WalletIcon, TrendingUpIcon } from "lucide-react";
+import { useMemo } from "react";
 
-type CalcType = "ספר תורה" | "נביא";
+type ProductType = "torah" | "nevi";
 
-const PARCHMENT_OPTIONS = Object.keys(PARCHMENT_PRICES);
+type FormValues = {
+  productType: ProductType;
+  nevi: string;
+  scribePricePerPage: number;
+  parchmentType: string;
+  pricePerYeria: number;
+  additionalCosts: number;
+  targetSalePrice: number;
+  receipt: boolean;
+};
+
+const NEVIIM_KEYS = Object.keys(NEVIIM_DATA);
+const PARCHMENT_KEYS = Object.keys(PARCHMENT_PRICES);
 
 export default function CalculatorClient() {
-  const [calcType, setCalcType] = useState<CalcType>("ספר תורה");
-  const [scribePricePerPage, setScribePricePerPage] = useState<number>(0);
-  const [parchmentManufacturer, setParchmentManufacturer] = useState<string>("");
-  const [parchmentPricePerYeria, setParchmentPricePerYeria] = useState<number>(0);
-  const [proofreading, setProofreading] = useState<number>(0);
-  const [targetSalePrice, setTargetSalePrice] = useState<number>(0);
-  const [receipt, setReceipt] = useState(false);
-  const [navi, setNavi] = useState<string>("");
+  const form = useForm<FormValues>({
+    defaultValues: {
+      productType: "torah",
+      nevi: NEVIIM_KEYS[0] ?? "",
+      scribePricePerPage: 0,
+      parchmentType: PARCHMENT_KEYS[0] ?? "",
+      pricePerYeria: PARCHMENT_KEYS[0] ? PARCHMENT_PRICES[PARCHMENT_KEYS[0]] ?? 0 : 0,
+      additionalCosts: 0,
+      targetSalePrice: 0,
+      receipt: false,
+    },
+  });
 
-  const effectiveParchmentPrice = useMemo(() => {
-    if (parchmentManufacturer && PARCHMENT_PRICES[parchmentManufacturer] != null) {
-      return parchmentPricePerYeria || PARCHMENT_PRICES[parchmentManufacturer];
-    }
-    return parchmentPricePerYeria;
-  }, [parchmentManufacturer, parchmentPricePerYeria]);
+  const productType = form.watch("productType");
+  const nevi = form.watch("nevi");
+  const scribePricePerPage = form.watch("scribePricePerPage");
+  const parchmentType = form.watch("parchmentType");
+  const pricePerYeria = form.watch("pricePerYeria");
+  const additionalCosts = form.watch("additionalCosts");
+  const targetSalePrice = form.watch("targetSalePrice");
+  const receipt = form.watch("receipt");
 
-  const { pages, yeriot } = useMemo(() => {
-    if (calcType === "ספר תורה") {
-      return { pages: SEFER_TORAH_PAGES, yeriot: SEFER_TORAH_YERIOT };
-    }
-    const data = navi ? NEVIIM_DATA[navi] : null;
-    return data
-      ? { pages: data.pages, yeriot: data.yeriot }
-      : { pages: 0, yeriot: 0 };
-  }, [calcType, navi]);
-
-  const totalCost = useMemo(() => {
-    return (
-      scribePricePerPage * pages +
-      effectiveParchmentPrice * yeriot +
-      proofreading
-    );
-  }, [scribePricePerPage, effectiveParchmentPrice, yeriot, proofreading, pages]);
-
-  const netSalePrice = useMemo(() => {
-    return receipt ? targetSalePrice * 0.96 : targetSalePrice;
-  }, [targetSalePrice, receipt]);
-
-  const profit = useMemo(() => {
-    return netSalePrice - totalCost;
-  }, [netSalePrice, totalCost]);
-
-  const handleParchmentSelect = (m: string) => {
-    setParchmentManufacturer(m);
-    if (PARCHMENT_PRICES[m] != null) {
-      setParchmentPricePerYeria(PARCHMENT_PRICES[m]);
+  // Sync price per yeria when parchment type changes
+  const handleParchmentChange = (value: string) => {
+    form.setValue("parchmentType", value);
+    const price = PARCHMENT_PRICES[value];
+    if (price != null) {
+      form.setValue("pricePerYeria", price);
     }
   };
 
-  return (
-    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
-      <div className="mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">מחשבון עלויות</h1>
-        <p className="text-muted-foreground">חישוב עלות כוללת ורווח צפוי</p>
-      </div>
+  const { pages, yeriot } = useMemo(() => {
+    if (productType === "torah") {
+      return { pages: TORAH_DATA.pages, yeriot: TORAH_DATA.yeriot };
+    }
+    const data = NEVIIM_DATA[nevi];
+    return data ? { pages: data.pages, yeriot: data.yeriot } : { pages: 0, yeriot: 0 };
+  }, [productType, nevi]);
 
-      <Card className="border-teal-100 rounded-2xl shadow-sm overflow-hidden">
+  const results = useMemo(() => {
+    const totalParchmentCost = yeriot * (pricePerYeria || 0);
+    const totalScribeCost = pages * (scribePricePerPage || 0);
+    const totalCost = totalParchmentCost + totalScribeCost + (additionalCosts || 0);
+    const netSalePrice = receipt ? (targetSalePrice || 0) * 0.96 : (targetSalePrice || 0);
+    const netProfit = netSalePrice - totalCost;
+    const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+
+    return {
+      totalParchmentCost,
+      totalScribeCost,
+      totalCost,
+      netSalePrice,
+      netProfit,
+      roi,
+    };
+  }, [
+    yeriot,
+    pricePerYeria,
+    pages,
+    scribePricePerPage,
+    additionalCosts,
+    targetSalePrice,
+    receipt,
+  ]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 w-full max-w-6xl mx-auto">
+      {/* Inputs Card - Right side in RTL */}
+      <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden order-2 lg:order-1">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-teal-800">פרטי חישוב</h2>
+          <div className="flex items-center gap-2">
+            <CalculatorIcon className="w-5 h-5 text-indigo-500" />
+            <CardTitle className="text-base font-semibold text-slate-700">הזנת נתונים</CardTitle>
+          </div>
+          <CardDescription>בחר סוג מוצר, קלף ועלויות</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">סוג</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="calcType"
-                  checked={calcType === "ספר תורה"}
-                  onChange={() => {
-                    setCalcType("ספר תורה");
-                    setNavi("");
-                  }}
-                  className="rounded"
-                />
-                <span>ספר תורה</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="calcType"
-                  checked={calcType === "נביא"}
-                  onChange={() => setCalcType("נביא")}
-                  className="rounded"
-                />
-                <span>נביא</span>
-              </label>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג מוצר</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => form.setValue("productType", "torah")}
+                className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
+                  productType === "torah"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                ספר תורה
+              </button>
+              <button
+                type="button"
+                onClick={() => form.setValue("productType", "nevi")}
+                className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
+                  productType === "nevi"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                נביא
+              </button>
             </div>
           </div>
 
-          {calcType === "נביא" && (
+          {productType === "nevi" && (
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">נביא</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">נביא</label>
               <select
-                value={navi}
-                onChange={(e) => setNavi(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2"
+                value={nevi}
+                onChange={(e) => form.setValue("nevi", e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
-                <option value="">בחר נביא</option>
-                {NEVIIM_LIST.map((n) => (
-                  <option key={n} value={n}>{n}</option>
+                {NEVIIM_KEYS.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
                 ))}
               </select>
             </div>
           )}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              מחיר סופר לעמוד (₪)
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              מחיר סופר לדף (₪)
             </label>
             <Input
               type="number"
-              value={scribePricePerPage || ""}
-              onChange={(e) => setScribePricePerPage(Number(e.target.value) || 0)}
+              min={0}
+              step={1}
+              {...form.register("scribePricePerPage", { valueAsNumber: true })}
               placeholder="0"
               className="rounded-xl"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              יצרן קלף
-            </label>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג קלף</label>
             <select
-              value={parchmentManufacturer}
-              onChange={(e) => handleParchmentSelect(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-4 py-2"
+              value={parchmentType}
+              onChange={(e) => handleParchmentChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             >
-              <option value="">בחר יצרן</option>
-              {PARCHMENT_OPTIONS.map((m) => (
-                <option key={m} value={m}>{m}</option>
+              {PARCHMENT_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {k} ({PARCHMENT_PRICES[k]} ₪/יריעה)
+                </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              מחיר קלף ליריעה (₪)
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              מחיר ליריעה (₪) – ניתן לעריכה
             </label>
             <Input
               type="number"
-              value={effectiveParchmentPrice || ""}
-              onChange={(e) => setParchmentPricePerYeria(Number(e.target.value) || 0)}
+              min={0}
+              step={1}
+              {...form.register("pricePerYeria", { valueAsNumber: true })}
               placeholder="0"
               className="rounded-xl"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              הגהה ותפירה (₪)
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              עלויות נוספות (₪) – הגהה, תפירה וכו׳
             </label>
             <Input
               type="number"
-              value={proofreading || ""}
-              onChange={(e) => setProofreading(Number(e.target.value) || 0)}
+              min={0}
+              step={1}
+              {...form.register("additionalCosts", { valueAsNumber: true })}
               placeholder="0"
               className="rounded-xl"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              מחיר יעד למכירה (₪)
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              מחיר סופי ללקוח (₪)
             </label>
             <Input
               type="number"
-              value={targetSalePrice || ""}
-              onChange={(e) => setTargetSalePrice(Number(e.target.value) || 0)}
+              min={0}
+              step={1}
+              {...form.register("targetSalePrice", { valueAsNumber: true })}
               placeholder="0"
               className="rounded-xl"
             />
@@ -195,34 +232,80 @@ export default function CalculatorClient() {
             <Checkbox
               id="receipt"
               checked={receipt}
-              onCheckedChange={(c) => setReceipt(!!c)}
+              onCheckedChange={(checked) => form.setValue("receipt", !!checked)}
             />
-            <label htmlFor="receipt" className="text-sm font-medium cursor-pointer">
-              קבלה
+            <label
+              htmlFor="receipt"
+              className="text-sm font-medium text-slate-700 cursor-pointer"
+            >
+              קבלה (ניכוי 4%)
             </label>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mt-6 border-teal-200 bg-teal-50/50 rounded-2xl shadow-sm overflow-hidden">
+      {/* Results Dashboard - Left side in RTL */}
+      <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden order-1 lg:order-2">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-teal-800">תוצאות</h2>
+          <div className="flex items-center gap-2">
+            <WalletIcon className="w-5 h-5 text-emerald-500" />
+            <CardTitle className="text-base font-semibold text-slate-700">תוצאות</CardTitle>
+          </div>
+          <CardDescription>פירוט עלויות ורווח</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex justify-between items-center text-xl">
-            <span className="font-medium text-slate-700">עלות כוללת</span>
-            <span className="font-bold text-teal-800 text-2xl">
-              {totalCost.toLocaleString("he-IL")} ₪
-            </span>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">עלות קלף</span>
+              <span className="font-medium">{results.totalParchmentCost.toLocaleString("he-IL")} ₪</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">עלות סופר</span>
+              <span className="font-medium">{results.totalScribeCost.toLocaleString("he-IL")} ₪</span>
+            </div>
+            <div className="flex justify-between text-sm font-semibold border-t border-slate-200 pt-3">
+              <span>הון נדרש</span>
+              <span>{results.totalCost.toLocaleString("he-IL")} ₪</span>
+            </div>
           </div>
-          <div className="flex justify-between items-center text-xl">
-            <span className="font-medium text-slate-700">רווח נקי</span>
-            <span
-              className={`font-bold text-2xl ${profit >= 0 ? "text-green-700" : "text-red-600"}`}
+
+          <div className="rounded-xl bg-slate-50/80 p-4 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {receipt ? "מחיר נטו (אחרי ניכוי 4%)" : "מחיר מכירה"}
+            </p>
+            <p className="text-lg font-medium">
+              {results.netSalePrice.toLocaleString("he-IL")} ₪
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <TrendingUpIcon className="w-5 h-5 text-slate-500" />
+              <span className="text-sm font-medium text-slate-700">רווח</span>
+            </div>
+            <p
+              className={`text-4xl font-bold ${
+                results.netProfit >= 0 ? "text-emerald-600" : "text-red-600"
+              }`}
             >
-              {profit.toLocaleString("he-IL")} ₪
-            </span>
+              {results.netProfit.toLocaleString("he-IL")} ₪
+            </p>
           </div>
+
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">אחוז תשואה (ROI)</span>
+            <p
+              className={`text-4xl font-bold ${
+                results.roi >= 0 ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {results.roi.toFixed(1)}%
+            </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground pt-2">
+            {pages} דפים • {yeriot} יריעות
+          </p>
         </CardContent>
       </Card>
     </div>
