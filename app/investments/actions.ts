@@ -9,6 +9,8 @@ export type InvestmentRecord = {
   id: string;
   scribe_id: string | null;
   item_details: string | null;
+  quantity: number;
+  cost_per_unit: number | null;
   total_agreed_price: number;
   amount_paid: number;
   remaining_balance: number;
@@ -29,7 +31,7 @@ export async function fetchInvestments(): Promise<
 
     const { data, error } = await supabase
       .from("erp_investments")
-      .select("id, scribe_id, item_details, total_agreed_price, amount_paid, target_date, status, notes, created_at")
+      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, target_date, status, notes, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -44,10 +46,14 @@ export async function fetchInvestments(): Promise<
     const investments = (data ?? []).map((r) => {
       const total = Number(r.total_agreed_price ?? 0);
       const paid = Number(r.amount_paid ?? 0);
+      const qty = Number(r.quantity ?? 1);
+      const cpu = r.cost_per_unit != null ? Number(r.cost_per_unit) : null;
       return {
         id: r.id,
         scribe_id: r.scribe_id ?? null,
         item_details: r.item_details ?? null,
+        quantity: qty,
+        cost_per_unit: cpu,
         total_agreed_price: total,
         amount_paid: paid,
         remaining_balance: total - paid,
@@ -70,7 +76,9 @@ export async function createInvestment(
   itemDetails: string,
   totalAgreedPrice: number,
   targetDate?: string,
-  notes?: string
+  notes?: string,
+  quantity?: number,
+  costPerUnit?: number
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
@@ -78,10 +86,15 @@ export async function createInvestment(
     if (!user) return { success: false, error: "יש להתחבר" };
     if (totalAgreedPrice <= 0) return { success: false, error: "הזן סכום" };
 
+    const qty = quantity != null && quantity > 0 ? quantity : 1;
+    const cpu = costPerUnit != null && costPerUnit >= 0 ? costPerUnit : null;
+
     const { error } = await supabase.from("erp_investments").insert({
       user_id: user.id,
       scribe_id: scribeId || null,
       item_details: itemDetails.trim() || null,
+      quantity: qty,
+      cost_per_unit: cpu,
       total_agreed_price: totalAgreedPrice,
       amount_paid: 0,
       target_date: targetDate || null,

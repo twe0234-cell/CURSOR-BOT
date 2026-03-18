@@ -165,7 +165,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-slate-800">
-              מחיר סופר לדף (₪)
+              מחיר סופר לעמוד (₪)
             </label>
             <Input
               type="number"
@@ -313,7 +313,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
           </div>
 
           <p className="text-xs text-muted-foreground pt-2">
-            {pages} דפים • {yeriot} יריעות
+            {pages} עמודים • {yeriot} יריעות
           </p>
         </CardContent>
       </Card>

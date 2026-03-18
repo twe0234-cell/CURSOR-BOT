@@ -71,6 +71,30 @@ export default function DashboardClient({ kpis, chartData }: Props) {
         </Card>
       </div>
 
+      {kpis && kpis.cashFlowRequired.length > 0 && (
+        <Card className="rounded-2xl border-amber-100 shadow-sm">
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">תזרים – סכום נדרש בעו״ש עד תאריך סיום הכתיבה</p>
+            <p className="mt-1 text-xs text-muted-foreground mb-3">
+              יתרת תשלומים לסופרים שטרם שולמה – יש להבטיח זמינות בעו״ש
+            </p>
+            <ul className="space-y-2 max-h-40 overflow-y-auto">
+              {kpis.cashFlowRequired.map((inv) => (
+                <li key={inv.id} className="flex justify-between items-center gap-2 text-sm border-b border-slate-100 pb-2 last:border-0">
+                  <span className="truncate min-w-0 flex-1">
+                    {inv.scribe_name ?? "—"} • {inv.item_details ?? "—"}
+                  </span>
+                  <span className="font-medium shrink-0 text-left">
+                    {inv.remaining_balance.toLocaleString("he-IL")} ₪
+                    {inv.target_date ? ` עד ${new Date(inv.target_date).toLocaleDateString("he-IL")}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Income vs Expenses Chart */}
       <Card className="rounded-2xl border-teal-100 shadow-sm">
         <CardContent className="pt-6">

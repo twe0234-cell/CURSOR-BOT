@@ -6,6 +6,8 @@ export type DashboardKpis = {
   totalInventoryValue: number;
   monthlyNetProfit: number;
   activeInvestmentsBalance: number;
+  /** Unpaid investments with target_date - money needed in bank until writing completion */
+  cashFlowRequired: Array<{ id: string; scribe_name: string | null; item_details: string | null; remaining_balance: number; target_date: string }>;
 };
 
 export type MonthlyDataPoint = {
@@ -63,16 +65,34 @@ export async function fetchDashboardKpis(): Promise<
 
     const { data: investments } = await supabase
       .from("erp_investments")
-      .select("total_agreed_price, amount_paid")
+      .select("id, scribe_id, item_details, total_agreed_price, amount_paid, target_date")
       .eq("user_id", user.id)
       .eq("status", "active");
 
     let activeInvestmentsBalance = 0;
+    const cashFlowRequired: Array<{ id: string; scribe_name: string | null; item_details: string | null; remaining_balance: number; target_date: string }> = [];
+    const scribeIds = [...new Set((investments ?? []).map((r) => r.scribe_id).filter(Boolean))];
+    const { data: scribeData } = scribeIds.length > 0
+      ? await supabase.from("crm_contacts").select("id, name").in("id", scribeIds)
+      : { data: [] };
+    const scribeMap = new Map((scribeData ?? []).map((s) => [s.id, s.name]));
+
     for (const inv of investments ?? []) {
       const total = Number(inv.total_agreed_price ?? 0);
       const paid = Number(inv.amount_paid ?? 0);
-      activeInvestmentsBalance += total - paid;
+      const remaining = total - paid;
+      activeInvestmentsBalance += remaining;
+      if (remaining > 0) {
+        cashFlowRequired.push({
+          id: inv.id,
+          scribe_name: inv.scribe_id ? (scribeMap.get(inv.scribe_id) ?? null) : null,
+          item_details: inv.item_details ?? null,
+          remaining_balance: remaining,
+          target_date: inv.target_date ?? "",
+        });
+      }
     }
+    cashFlowRequired.sort((a, b) => (a.target_date || "9999").localeCompare(b.target_date || "9999"));
 
     return {
       success: true,
@@ -80,6 +100,7 @@ export async function fetchDashboardKpis(): Promise<
         totalInventoryValue,
         monthlyNetProfit,
         activeInvestmentsBalance,
+        cashFlowRequired,
       },
     };
   } catch (err) {

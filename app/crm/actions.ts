@@ -165,6 +165,35 @@ export async function fetchScribes(): Promise<
   }
 }
 
+export async function createClientContact(name: string, phone?: string): Promise<
+  { success: true; contact: { id: string; name: string } } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .insert({
+        user_id: user.id,
+        name: name.trim(),
+        type: "End_Customer",
+        preferred_contact: "WhatsApp",
+        phone: phone?.trim() || null,
+      })
+      .select("id, name")
+      .single();
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/crm");
+    revalidatePath("/sales");
+    return { success: true, contact: { id: data.id, name: data.name ?? "" } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function createScribeContact(name: string): Promise<
   { success: true; scribe: { id: string; name: string } } | { success: false; error: string }
 > {

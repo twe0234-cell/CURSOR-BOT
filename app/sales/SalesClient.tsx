@@ -38,6 +38,7 @@ import {
 import { fetchInventory } from "@/app/inventory/actions";
 import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
+import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon } from "lucide-react";
 
 const EXPENSE_CATEGORIES = ["משלוח", "פרסום", "הגהה", "תפירה", "אחר"];
@@ -56,6 +57,7 @@ export default function SalesClient() {
   const [newExpCategory, setNewExpCategory] = useState("");
   const [newExpAmount, setNewExpAmount] = useState("");
   const [newExpNotes, setNewExpNotes] = useState("");
+  const [addClientOpen, setAddClientOpen] = useState(false);
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -308,16 +310,28 @@ export default function SalesClient() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">קונה (אופציונלי)</label>
-              <select
-                value={newSaleBuyerId}
-                onChange={(e) => setNewSaleBuyerId(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2"
-              >
-                <option value="">—</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={newSaleBuyerId}
+                  onChange={(e) => setNewSaleBuyerId(e.target.value)}
+                  className="flex-1 rounded-xl border px-3 py-2"
+                >
+                  <option value="">—</option>
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddClientOpen(true)}
+                  className="rounded-xl shrink-0"
+                >
+                  <PlusIcon className="size-4 ml-1" />
+                  הוסף חדש
+                </Button>
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
@@ -344,6 +358,15 @@ export default function SalesClient() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AddClientModal
+        open={addClientOpen}
+        onOpenChange={setAddClientOpen}
+        onSuccess={(c) => {
+          setContacts((prev) => [...prev, c]);
+          setNewSaleBuyerId(c.id);
+        }}
+      />
     </div>
   );
 }

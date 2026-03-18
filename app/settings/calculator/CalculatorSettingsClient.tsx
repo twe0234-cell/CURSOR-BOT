@@ -110,7 +110,7 @@ export default function CalculatorSettingsClient({
     const parsed: Array<{ name: string; pages: number; yeriot: number }> = rows
       .map((r) => {
         const name = String(r["name"] ?? r["Name"] ?? r["שם"] ?? Object.values(r)[0] ?? "").trim();
-        const pages = Number(r["pages"] ?? r["Pages"] ?? r["דפים"] ?? 0) || 0;
+        const pages = Number(r["pages"] ?? r["Pages"] ?? r["עמודים"] ?? r["דפים"] ?? 0) || 0;
         const yeriot = Number(r["yeriot"] ?? r["Yeriot"] ?? r["יריעות"] ?? 0) || 0;
         return name ? { name, pages, yeriot } : null;
       })
@@ -123,7 +123,7 @@ export default function CalculatorSettingsClient({
       });
       toast.success(`יובאו ${parsed.length} נביאים`);
     } else {
-      toast.error("לא נמצאו שורות תקינות (שם, דפים, יריעות)");
+      toast.error("לא נמצאו שורות תקינות (שם, עמודים, יריעות)");
     }
   };
 
@@ -229,7 +229,7 @@ export default function CalculatorSettingsClient({
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base font-semibold text-slate-700">הגדרות נביאים</CardTitle>
-              <CardDescription>דפים ויריעות לכל נביא</CardDescription>
+              <CardDescription>עמודים ויריעות לכל נביא</CardDescription>
             </div>
             <div className="flex gap-2">
               <CsvActions
@@ -261,7 +261,7 @@ export default function CalculatorSettingsClient({
               <TableHeader>
                 <TableRow className="bg-slate-50/80">
                   <TableHead className="font-semibold">נביא</TableHead>
-                  <TableHead className="font-semibold">דפים</TableHead>
+                  <TableHead className="font-semibold">עמודים</TableHead>
                   <TableHead className="font-semibold">יריעות</TableHead>
                   <TableHead className="w-16 font-semibold">פעולות</TableHead>
                 </TableRow>

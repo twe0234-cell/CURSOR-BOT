@@ -31,7 +31,8 @@ import {
   addPayment,
   type InvestmentRecord,
 } from "./actions";
-import { fetchCrmContacts } from "@/app/crm/actions";
+import { fetchScribes } from "@/app/crm/actions";
+import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
 import { PlusIcon, WalletIcon } from "lucide-react";
 
 export default function InvestmentsClient() {
@@ -40,9 +41,12 @@ export default function InvestmentsClient() {
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+  const [scribes, setScribes] = useState<{ id: string; name: string }[]>([]);
+  const [addScribeOpen, setAddScribeOpen] = useState(false);
   const [newScribeId, setNewScribeId] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
+  const [newQuantity, setNewQuantity] = useState("1");
+  const [newCostPerUnit, setNewCostPerUnit] = useState("");
   const [newTotalPrice, setNewTotalPrice] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
@@ -57,11 +61,16 @@ export default function InvestmentsClient() {
 
   useEffect(() => {
     if (createOpen) {
-      fetchCrmContacts().then((r) => {
-        if (r.success) setContacts(r.contacts.map((c) => ({ id: c.id, name: c.name })));
+      fetchScribes().then((r) => {
+        if (r.success) setScribes(r.scribes);
       });
     }
   }, [createOpen]);
+
+  const handleAddScribeSuccess = (scribe: NewScribe) => {
+    setScribes((prev) => [...prev, { id: scribe.id, name: scribe.name }]);
+    setNewScribeId(scribe.id);
+  };
 
   const handleCreate = async () => {
     const total = parseFloat(newTotalPrice);
@@ -69,13 +78,17 @@ export default function InvestmentsClient() {
       toast.error("הזן סכום");
       return;
     }
+    const qty = parseFloat(newQuantity);
+    const cpu = newCostPerUnit.trim() ? parseFloat(newCostPerUnit) : undefined;
     setLoading(true);
     const res = await createInvestment(
       newScribeId || null,
       newItemDetails,
       total,
       newTargetDate || undefined,
-      newNotes || undefined
+      newNotes || undefined,
+      !isNaN(qty) && qty > 0 ? qty : undefined,
+      cpu != null && !isNaN(cpu) ? cpu : undefined
     );
     setLoading(false);
     if (res.success) {
@@ -83,6 +96,8 @@ export default function InvestmentsClient() {
       setCreateOpen(false);
       setNewScribeId("");
       setNewItemDetails("");
+      setNewQuantity("1");
+      setNewCostPerUnit("");
       setNewTotalPrice("");
       setNewTargetDate("");
       setNewNotes("");
@@ -132,6 +147,8 @@ export default function InvestmentsClient() {
                 <TableRow className="bg-slate-50/80">
                   <TableHead className="font-semibold">סופר</TableHead>
                   <TableHead className="font-semibold">פרטי פריט</TableHead>
+                  <TableHead className="font-semibold">כמות</TableHead>
+                  <TableHead className="font-semibold">עלות ליחידה</TableHead>
                   <TableHead className="font-semibold">מחיר מוסכם</TableHead>
                   <TableHead className="font-semibold">שולם</TableHead>
                   <TableHead className="font-semibold">יתרה</TableHead>
@@ -148,6 +165,12 @@ export default function InvestmentsClient() {
                     <TableRow key={inv.id}>
                       <TableCell>{inv.scribe_name ?? "—"}</TableCell>
                       <TableCell className="max-w-[120px] truncate">{inv.item_details ?? "—"}</TableCell>
+                      <TableCell>{inv.quantity}</TableCell>
+                      <TableCell>
+                        {inv.cost_per_unit != null
+                          ? `${inv.cost_per_unit.toLocaleString("he-IL")} ₪`
+                          : "—"}
+                      </TableCell>
                       <TableCell>{inv.total_agreed_price.toLocaleString("he-IL")} ₪</TableCell>
                       <TableCell>{inv.amount_paid.toLocaleString("he-IL")} ₪</TableCell>
                       <TableCell className="font-medium">{inv.remaining_balance.toLocaleString("he-IL")} ₪</TableCell>
@@ -195,16 +218,28 @@ export default function InvestmentsClient() {
           <div className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-semibold">סופר</label>
-              <select
-                value={newScribeId}
-                onChange={(e) => setNewScribeId(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2"
-              >
-                <option value="">—</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={newScribeId}
+                  onChange={(e) => setNewScribeId(e.target.value)}
+                  className="flex-1 rounded-xl border px-3 py-2"
+                >
+                  <option value="">—</option>
+                  {scribes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddScribeOpen(true)}
+                  className="rounded-xl shrink-0"
+                >
+                  <PlusIcon className="size-4 ml-1" />
+                  הוסף חדש
+                </Button>
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">פרטי פריט</label>
@@ -214,6 +249,31 @@ export default function InvestmentsClient() {
                 placeholder="ספר תורה, סופר X..."
                 className="rounded-xl"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold">כמות</label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={newQuantity}
+                  onChange={(e) => setNewQuantity(e.target.value)}
+                  placeholder="1"
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold">עלות ליחידה (₪)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newCostPerUnit}
+                  onChange={(e) => setNewCostPerUnit(e.target.value)}
+                  placeholder="אופציונלי"
+                  className="rounded-xl"
+                />
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">מחיר מוסכם (₪)</label>
@@ -248,6 +308,12 @@ export default function InvestmentsClient() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AddScribeModal
+        open={addScribeOpen}
+        onOpenChange={setAddScribeOpen}
+        onSuccess={handleAddScribeSuccess}
+      />
 
       <Dialog open={!!paymentOpen} onOpenChange={(o) => !o && setPaymentOpen(null)}>
         <DialogContent className="sm:max-w-sm rounded-2xl">
