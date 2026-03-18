@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
+import { DROPDOWN_FALLBACKS } from "@/lib/constants";
 
 type FormValues = {
   product_category?: string | null;
@@ -18,6 +19,7 @@ export function DependentCategories() {
   const [torahSizes, setTorahSizes] = useState<string[]>([]);
   const [neviimNames, setNeviimNames] = useState<string[]>([]);
   const [megillaLines, setMegillaLines] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (prevCategoryRef.current !== undefined && prevCategoryRef.current !== category) {
@@ -28,11 +30,23 @@ export function DependentCategories() {
 
   useEffect(() => {
     if (category === "ספר תורה") {
-      fetchDropdownOptions("torah_sizes").then((r) => r.success && setTorahSizes(r.options));
+      queueMicrotask(() => setLoading(true));
+      fetchDropdownOptions("torah_sizes")
+        .then((r) => setTorahSizes(r.success && r.options.length > 0 ? r.options : DROPDOWN_FALLBACKS.torah_sizes))
+        .catch(() => setTorahSizes(DROPDOWN_FALLBACKS.torah_sizes))
+        .finally(() => setLoading(false));
     } else if (category === "נביא") {
-      fetchDropdownOptions("neviim_names").then((r) => r.success && setNeviimNames(r.options));
+      queueMicrotask(() => setLoading(true));
+      fetchDropdownOptions("neviim_names")
+        .then((r) => setNeviimNames(r.success && r.options.length > 0 ? r.options : DROPDOWN_FALLBACKS.neviim_names))
+        .catch(() => setNeviimNames(DROPDOWN_FALLBACKS.neviim_names))
+        .finally(() => setLoading(false));
     } else if (category === "מגילה") {
-      fetchDropdownOptions("megilla_lines").then((r) => r.success && setMegillaLines(r.options));
+      queueMicrotask(() => setLoading(true));
+      fetchDropdownOptions("megilla_lines")
+        .then((r) => setMegillaLines(r.success && r.options.length > 0 ? r.options : DROPDOWN_FALLBACKS.megilla_lines))
+        .catch(() => setMegillaLines(DROPDOWN_FALLBACKS.megilla_lines))
+        .finally(() => setLoading(false));
     }
   }, [category]);
 
@@ -42,11 +56,17 @@ export function DependentCategories() {
 
   if (!showSize && !showNavi && !showLines) return null;
 
+  const selectClass =
+    "w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
+
   return (
     <>
       {showSize && (
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-semibold text-slate-800">גודל</label>
+          {loading ? (
+            <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+          ) : (
           <select
             value={String(categoryMeta.size ?? "")}
             onChange={(e) =>
@@ -55,19 +75,23 @@ export function DependentCategories() {
                 size: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            className={selectClass}
           >
             <option value="">בחר</option>
             {torahSizes.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          )}
         </div>
       )}
 
       {showNavi && (
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-semibold text-slate-800">נביא</label>
+          {loading ? (
+            <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+          ) : (
           <select
             value={String(categoryMeta.navi ?? "")}
             onChange={(e) =>
@@ -76,19 +100,23 @@ export function DependentCategories() {
                 navi: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            className={selectClass}
           >
             <option value="">בחר</option>
             {neviimNames.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
+          )}
         </div>
       )}
 
       {showLines && (
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-semibold text-slate-800">שורות</label>
+          {loading ? (
+            <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+          ) : (
           <select
             value={String(categoryMeta.lines ?? "")}
             onChange={(e) =>
@@ -97,13 +125,14 @@ export function DependentCategories() {
                 lines: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            className={selectClass}
           >
             <option value="">בחר</option>
             {megillaLines.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
+          )}
         </div>
       )}
     </>

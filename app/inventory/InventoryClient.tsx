@@ -35,6 +35,7 @@ import {
 } from "./actions";
 import { toggleInventoryShare } from "./actions-share";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
+import { SCRIPT_TYPES } from "@/lib/constants";
 import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
@@ -55,23 +56,24 @@ export default function InventoryClient({ initialItems }: Props) {
   const [loading, setLoading] = useState(false);
 
   const [categories, setCategories] = useState<string[]>([]);
-  const [scriptTypes, setScriptTypes] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetchDropdownOptions("categories"),
-      fetchDropdownOptions("script_types"),
-    ]).then(([c, s]) => {
-      if (c.success) setCategories(c.options);
-      if (s.success) setScriptTypes(s.options);
-    });
+    fetchDropdownOptions("categories")
+      .then((r) => {
+        if (r.success && r.options.length > 0) setCategories(r.options);
+        else setCategories(["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"]);
+      })
+      .catch(() => setCategories(["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"]))
+      .finally(() => setCategoriesLoading(false));
   }, []);
 
-  const form = useForm<InventoryItemInput & { category_meta?: Record<string, string | number> }>({
+  type FormValues = Omit<InventoryItemInput, "script_type"> & { script_type?: string | null };
+  const form = useForm<FormValues>({
     defaultValues: {
       product_category: "",
       category_meta: {},
-      script_type: "",
+      script_type: "" as string | null,
       status: "available",
       quantity: 1,
       cost_price: null,
@@ -89,7 +91,7 @@ export default function InventoryClient({ initialItems }: Props) {
     form.reset({
       product_category: "",
       category_meta: {},
-      script_type: "",
+      script_type: "" as string | null,
       status: "available",
       quantity: 1,
       cost_price: null,
@@ -108,7 +110,7 @@ export default function InventoryClient({ initialItems }: Props) {
     form.reset({
       product_category: item.product_category ?? "",
       category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
-      script_type: item.script_type ?? "",
+      script_type: item.script_type && SCRIPT_TYPES.includes(item.script_type as (typeof SCRIPT_TYPES)[number]) ? item.script_type : ("" as string | null),
       status: item.status ?? "available",
       quantity: item.quantity ?? 1,
       cost_price: item.cost_price ?? null,
@@ -334,6 +336,9 @@ export default function InventoryClient({ initialItems }: Props) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-semibold text-slate-800">קטגוריה</label>
+                      {categoriesLoading ? (
+                        <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+                      ) : (
                       <select
                         {...form.register("product_category")}
                         className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -343,6 +348,7 @@ export default function InventoryClient({ initialItems }: Props) {
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
+                      )}
                     </div>
                     <DependentCategories />
                   </div>
@@ -354,7 +360,7 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       >
                         <option value="">בחר</option>
-                        {scriptTypes.map((t) => (
+                        {SCRIPT_TYPES.map((t) => (
                           <option key={t} value={t}>{t}</option>
                         ))}
                       </select>

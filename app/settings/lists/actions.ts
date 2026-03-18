@@ -53,6 +53,7 @@ export async function fetchDropdownOptions(listKey: string): Promise<
     const options = Array.isArray(data.options) ? (data.options as string[]) : [];
     return { success: true, options };
   } catch (err) {
+    console.error("[fetchDropdownOptions]", err);
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
@@ -70,11 +71,15 @@ export async function updateDropdownOptions(
       .from("sys_dropdowns")
       .upsert({ list_key: listKey, options }, { onConflict: "list_key" });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error("[updateDropdownOptions]", error);
+      return { success: false, error: error.message };
+    }
     revalidatePath("/settings/lists");
     revalidatePath("/inventory");
     return { success: true };
   } catch (err) {
+    console.error("[updateDropdownOptions]", err);
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }

@@ -16,7 +16,10 @@ const baseSchema = z.object({
     .record(z.string(), z.union([z.string(), z.number()]))
     .optional()
     .default({}),
-  script_type: z.string().optional().nullable(),
+  script_type: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.enum(['אר"י', 'בית יוסף', 'ספרדי']).nullable().optional()
+  ),
   status: z.string().optional().nullable(),
   quantity: coerceNumDefault0,
   cost_price: numericNullable,

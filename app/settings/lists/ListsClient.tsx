@@ -42,6 +42,7 @@ const LIST_LABELS: Record<string, string> = {
 const MAIN_SECTIONS: { listKey: string; title: string; subtitle: string }[] = [
   { listKey: "categories", title: "סוגי מוצרים", subtitle: "קטגוריות מוצרים (ספר תורה, נביא, מגילה וכו')" },
   { listKey: "torah_sizes", title: "מידות ס\"ת", subtitle: "גדלי ספר תורה (17, 24, 30 וכו')" },
+  { listKey: "neviim_names", title: "שמות נביאים", subtitle: "שמות ספרי נביאים (יהושע, שופטים, שמואל וכו')" },
   { listKey: "megilla_lines", title: "שורות מגילה", subtitle: "מספר שורות במגילה (11, 21, 28 וכו')" },
 ];
 
@@ -105,8 +106,9 @@ export default function ListsClient({ initialLists }: Props) {
       } else {
         toast.error(res.error);
       }
-    } catch {
-      toast.error("שגיאה");
+    } catch (e) {
+      console.error("[ListsClient handleSave]", e);
+      toast.error("שגיאה בשמירה");
     } finally {
       setLoading(false);
     }
@@ -124,14 +126,19 @@ export default function ListsClient({ initialLists }: Props) {
     for (const v of newValues) {
       if (!merged.includes(v)) merged.push(v);
     }
-    const res = await updateDropdownOptions(listKey, merged);
-    if (res.success) {
-      setLists((prev) =>
-        prev.map((l) => (l.list_key === listKey ? { ...l, options: merged } : l))
-      );
-      toast.success(`נוספו ${newValues.length} פריטים`);
-    } else {
-      toast.error(res.error);
+    try {
+      const res = await updateDropdownOptions(listKey, merged);
+      if (res.success) {
+        setLists((prev) =>
+          prev.map((l) => (l.list_key === listKey ? { ...l, options: merged } : l))
+        );
+        toast.success(`נוספו ${newValues.length} פריטים`);
+      } else {
+        toast.error(res.error);
+      }
+    } catch (e) {
+      console.error("[ListsClient handleCsvImport]", e);
+      toast.error("שגיאה בייבוא CSV");
     }
   };
 
@@ -208,7 +215,11 @@ export default function ListsClient({ initialLists }: Props) {
             </TableHeader>
             <TableBody>
               {lists
-                .filter((l) => !MAIN_SECTIONS.some((s) => s.listKey === l.list_key))
+                .filter(
+                  (l) =>
+                    !MAIN_SECTIONS.some((s) => s.listKey === l.list_key) &&
+                    l.list_key !== "script_types"
+                )
                 .map((list) => (
                   <TableRow key={list.list_key}>
                     <TableCell className="font-medium">
