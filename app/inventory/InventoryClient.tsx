@@ -38,6 +38,7 @@ import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
+import { CsvActions } from "@/components/shared/CsvActions";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 
@@ -211,10 +212,26 @@ export default function InventoryClient({ initialItems }: Props) {
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden bg-slate-50/50 min-h-screen" dir="rtl">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-teal-800">מלאי</h1>
-        <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700">
+        <div className="flex items-center gap-2">
+          <CsvActions
+            data={items.map((i) => ({
+              id: i.id,
+              product_category: i.product_category,
+              script_type: i.script_type,
+              status: i.status,
+              cost_price: i.cost_price,
+              target_price: i.target_price,
+              scribe_code: i.scribe_code,
+              description: i.description,
+            }))}
+            onImport={(rows) => toast.info(`יובאו ${rows.length} שורות. ייבוא מלאי יתווסף בעדכון.`)}
+            filename="inventory"
+          />
+          <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700">
           <PlusIcon className="size-4 ml-2" />
           הוסף פריט
         </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">

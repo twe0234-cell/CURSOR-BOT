@@ -10,8 +10,10 @@ import {
   fetchCrmContacts,
   importGmailContacts,
   createCrmContact,
+  bulkImportCrmContacts,
   type CrmContact,
 } from "./actions";
+import { CsvActions } from "@/components/shared/CsvActions";
 import {
   UsersIcon,
   DownloadIcon,
@@ -87,6 +89,21 @@ export default function CrmClient({
     }
   };
 
+  const handleCsvImport = async (rows: Record<string, unknown>[]) => {
+    if (rows.length === 0) {
+      toast.error("הקובץ ריק או בפורמט לא תקין");
+      return;
+    }
+    const res = await bulkImportCrmContacts(rows);
+    if (res.success) {
+      toast.success(`יובאו ${res.imported} אנשי קשר${res.errors.length > 0 ? `. ${res.errors.length} שגיאות` : ""}`);
+      const refreshed = await fetchCrmContacts();
+      if (refreshed.success) setContacts(refreshed.contacts);
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8">
@@ -107,6 +124,16 @@ export default function CrmClient({
           />
         </div>
         <div className="flex gap-2">
+          <CsvActions
+            data={contacts.map((c) => ({
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              type: c.type,
+            }))}
+            onImport={handleCsvImport}
+            filename="crm-contacts"
+          />
           {gmailConnected && (
             <Button
               variant="outline"

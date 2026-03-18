@@ -37,6 +37,7 @@ import {
 } from "./actions";
 import { fetchInventory } from "@/app/inventory/actions";
 import { fetchCrmContacts } from "@/app/crm/actions";
+import { CsvActions } from "@/components/shared/CsvActions";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon } from "lucide-react";
 
 const EXPENSE_CATEGORIES = ["משלוח", "פרסום", "הגהה", "תפירה", "אחר"];
@@ -159,10 +160,23 @@ export default function SalesClient() {
                 <CardTitle className="text-base font-semibold">מכירות</CardTitle>
                 <CardDescription>היסטוריית מכירות</CardDescription>
               </div>
-              <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
+              <div className="flex gap-2">
+                <CsvActions
+                  data={sales.map((s) => ({
+                    sale_date: s.sale_date,
+                    item_category: s.item_category,
+                    buyer_name: s.buyer_name,
+                    sale_price: s.sale_price,
+                    profit: s.profit,
+                  }))}
+                  onImport={(rows) => toast.info(`יובאו ${rows.length} שורות. ייבוא מכירות יתווסף בעדכון.`)}
+                  filename="sales"
+                />
+                <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
                 <PlusIcon className="size-4 ml-1" />
                 מכירה חדשה
               </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="rounded-xl border overflow-hidden">

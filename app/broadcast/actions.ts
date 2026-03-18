@@ -140,6 +140,19 @@ export type SendSingleResult =
   | { success: true }
   | { success: false; error: string };
 
+/** Reject data URLs - images must be uploaded to Supabase first for GreenAPI sendFileByUrl */
+function ensurePublicImageUrl(url: string): { ok: true; url: string } | { ok: false; error: string } {
+  const u = url.trim();
+  if (!u) return { ok: false, error: "חסר קישור" };
+  if (u.startsWith("data:")) {
+    return { ok: false, error: "יש להעלות תמונה תחילה (לא ניתן לשלוח data URL ישירות)" };
+  }
+  if (!u.startsWith("http://") && !u.startsWith("https://")) {
+    return { ok: false, error: "קישור תמונה לא תקין" };
+  }
+  return { ok: true, url: u };
+}
+
 /** Send a single message to one recipient (used for progress loop) */
 export async function sendSingleMessage(
   waChatId: string,
@@ -161,7 +174,9 @@ export async function sendSingleMessage(
     }
 
     if (imageUrl?.trim()) {
-      const sizeBytes = await getImageSizeBytes(imageUrl.trim());
+      const urlCheck = ensurePublicImageUrl(imageUrl.trim());
+      if (!urlCheck.ok) return { success: false, error: urlCheck.error };
+      const sizeBytes = await getImageSizeBytes(urlCheck.url);
       if (sizeBytes !== null && sizeBytes > IMAGE_SIZE_LIMIT_BYTES) {
         return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
       }
@@ -171,7 +186,7 @@ export async function sendSingleMessage(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: waChatId,
-          urlFile: imageUrl.trim(),
+          urlFile: urlCheck.url,
           fileName: "image.jpg",
           caption: message,
         }),
@@ -410,30 +425,34 @@ export async function dispatchBroadcast(
     let sent = 0;
     let failed = 0;
 
+    let validatedImageUrl: string | null = null;
     if (imageUrl?.trim()) {
-      const sizeBytes = await getImageSizeBytes(imageUrl.trim());
+      const urlCheck = ensurePublicImageUrl(imageUrl.trim());
+      if (!urlCheck.ok) return { success: false, error: urlCheck.error };
+      const sizeBytes = await getImageSizeBytes(urlCheck.url);
       if (sizeBytes !== null && sizeBytes > IMAGE_SIZE_LIMIT_BYTES) {
         return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
       }
+      validatedImageUrl = urlCheck.url;
     }
 
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
-      const vars = { Name: target.name ?? "", name: target.name ?? "" };
-      let message = replaceVariables(messageText, vars);
-      if (scribeCode?.trim()) {
-        message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
-      }
-
       try {
-        if (imageUrl?.trim()) {
+        const vars = { Name: target.name ?? "", name: target.name ?? "" };
+        let message = replaceVariables(messageText, vars);
+        if (scribeCode?.trim()) {
+          message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+        }
+
+        if (validatedImageUrl) {
           const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`;
           const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chatId: target.wa_chat_id,
-              urlFile: imageUrl.trim(),
+              urlFile: validatedImageUrl,
               fileName: "image.jpg",
               caption: message,
             }),
@@ -473,13 +492,14 @@ export async function dispatchBroadcast(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+        console.error(`Broadcast failed for ${target.wa_chat_id}`, err);
         errors.push(`${target.wa_chat_id}: ${msg}`);
         failed++;
         results.push({ target: target.wa_chat_id, success: false, error: msg });
       }
 
       if (i < targets.length - 1) {
-        await sleep(DELAY_MS);
+        await sleep(2000);
       }
     }
 

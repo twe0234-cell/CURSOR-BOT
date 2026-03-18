@@ -245,24 +245,31 @@ export default function BroadcastClient({
       for (let i = 0; i < targets.length; i++) {
         setSendProgress({ current: i + 1, total });
         const target = targets[i];
-        const vars = { Name: target.name ?? "", name: target.name ?? "" };
-        let msg = messageText.trim();
-        msg = msg.replace(/\{Name\}/gi, vars.Name).replace(/\{name\}/gi, vars.name);
+        try {
+          const vars = { Name: target.name ?? "", name: target.name ?? "" };
+          let msg = messageText.trim();
+          msg = msg.replace(/\{Name\}/gi, vars.Name).replace(/\{name\}/gi, vars.name);
 
-        const res = await sendSingleMessage(
-          target.wa_chat_id,
-          msg,
-          finalImageUrl || undefined,
-          finalScribe
-        );
-        if (res.success) {
-          sent++;
-        } else {
+          const res = await sendSingleMessage(
+            target.wa_chat_id,
+            msg,
+            finalImageUrl || undefined,
+            finalScribe
+          );
+          if (res.success) {
+            sent++;
+          } else {
+            failed++;
+            errors.push(`${target.wa_chat_id}: ${res.error}`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+          console.error(`Failed for ${target.wa_chat_id}`, err);
           failed++;
-          errors.push(`${target.wa_chat_id}: ${res.error}`);
+          errors.push(`${target.wa_chat_id}: ${msg}`);
         }
         if (i < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, 2500));
+          await new Promise((r) => setTimeout(r, 2000));
         }
       }
 

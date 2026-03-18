@@ -28,6 +28,7 @@ import {
   bulkDeleteEmailContacts,
   type EmailContact,
 } from "./actions";
+import { CsvActions } from "@/components/shared/CsvActions";
 import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon } from "lucide-react";
 
 type Props = {
@@ -142,6 +143,28 @@ export default function ContactsTab({ initialContacts }: Props) {
     } else toast.error(res.error);
   };
 
+  const handleCsvImport = async (rows: Record<string, unknown>[]) => {
+    const mapped = rows.map((r) => ({
+      email: String(r.email ?? r.Email ?? r.אימייל ?? "").trim(),
+      name: String(r.name ?? r.Name ?? r.שם ?? "").trim() || undefined,
+      tags: (r.tags ?? r.Tags ?? r.תגיות) ? [String(r.tags ?? r.Tags ?? r.תגיות).trim()] : undefined,
+    })).filter((r) => r.email);
+    if (mapped.length === 0) {
+      toast.error("לא נמצאו אימיילים תקינים בקובץ");
+      return;
+    }
+    setImportLoading(true);
+    const res = await importEmailContacts(mapped);
+    setImportLoading(false);
+    if (res.success) {
+      toast.success(`יובאו ${mapped.length} אנשי קשר`);
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -166,6 +189,11 @@ export default function ContactsTab({ initialContacts }: Props) {
             </div>
           </div>
           <div className="flex gap-2">
+            <CsvActions
+              data={contacts.map((c) => ({ email: c.email, name: c.name, phone: c.phone, tags: c.tags?.join(",") }))}
+              onImport={handleCsvImport}
+              filename="email-contacts"
+            />
             <Button
               variant="outline"
               size="sm"

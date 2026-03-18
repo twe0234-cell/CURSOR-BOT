@@ -86,16 +86,20 @@ export async function GET(req: Request) {
     let sent = 0;
     let failed = 0;
 
+    const validatedImageUrl = imageUrl?.trim() && !imageUrl.trim().startsWith("data:")
+      ? imageUrl.trim()
+      : null;
+
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
-      const vars = { Name: target.name ?? "", name: target.name ?? "" };
-      let message = replaceVariables(messageText, vars);
-      if (scribeCode?.trim()) {
-        message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
-      }
-
       try {
-        if (imageUrl?.trim()) {
+        const vars = { Name: target.name ?? "", name: target.name ?? "" };
+        let message = replaceVariables(messageText, vars);
+        if (scribeCode?.trim()) {
+          message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+        }
+
+        if (validatedImageUrl && (validatedImageUrl.startsWith("http://") || validatedImageUrl.startsWith("https://"))) {
           const res = await fetch(
             `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`,
             {
@@ -103,7 +107,7 @@ export async function GET(req: Request) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chatId: target.wa_chat_id,
-                urlFile: imageUrl.trim(),
+                urlFile: validatedImageUrl,
                 fileName: "image.jpg",
                 caption: message,
               }),

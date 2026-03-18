@@ -197,6 +197,51 @@ export async function createScribeContact(name: string): Promise<
   }
 }
 
+export async function bulkImportCrmContacts(
+  rows: Record<string, unknown>[]
+): Promise<{ success: true; imported: number; errors: string[] } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const errors: string[] = [];
+    let imported = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const name = (r.name ?? r.Name ?? r.שם ?? "").toString().trim();
+      if (!name) {
+        errors.push(`שורה ${i + 1}: חסר שם`);
+        continue;
+      }
+      const email = (r.email ?? r.Email ?? r.אימייל ?? "").toString().trim() || null;
+      const phone = (r.phone ?? r.Phone ?? r.טלפון ?? "").toString().trim() || null;
+      const type = (r.type ?? r.Type ?? r.סוג ?? "Other").toString().trim() || "Other";
+      const validTypes = ["Scribe", "Merchant", "End_Customer", "Other"];
+      const typeVal = validTypes.includes(type) ? type : "Other";
+
+      const { error } = await supabase.from("crm_contacts").insert({
+        user_id: user.id,
+        name,
+        type: typeVal,
+        preferred_contact: "WhatsApp",
+        email,
+        phone,
+        tags: [],
+      });
+      if (error) {
+        errors.push(`שורה ${i + 1}: ${error.message}`);
+      } else {
+        imported++;
+      }
+    }
+    revalidatePath("/crm");
+    return { success: true, imported, errors };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function createCrmContact(data: {
   name: string;
   type?: string;
