@@ -73,7 +73,9 @@ export default function InventoryClient({ initialItems }: Props) {
       category_meta: {},
       script_type: "",
       status: "available",
+      quantity: 1,
       cost_price: null,
+      amount_paid: 0,
       target_price: null,
       scribe_id: null,
       scribe_code: null,
@@ -89,7 +91,9 @@ export default function InventoryClient({ initialItems }: Props) {
       category_meta: {},
       script_type: "",
       status: "available",
+      quantity: 1,
       cost_price: null,
+      amount_paid: 0,
       target_price: null,
       scribe_id: null,
       scribe_code: null,
@@ -106,7 +110,9 @@ export default function InventoryClient({ initialItems }: Props) {
       category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
       script_type: item.script_type ?? "",
       status: item.status ?? "available",
+      quantity: item.quantity ?? 1,
       cost_price: item.cost_price ?? null,
+      amount_paid: item.amount_paid ?? 0,
       target_price: item.target_price ?? null,
       scribe_id: item.scribe_id ?? null,
       scribe_code: item.scribe_code ?? null,
@@ -124,7 +130,9 @@ export default function InventoryClient({ initialItems }: Props) {
         category_meta: data.category_meta ?? {},
         script_type: data.script_type || null,
         status: data.status || null,
+        quantity: data.quantity ?? 1,
         cost_price: data.cost_price ?? null,
+        amount_paid: data.amount_paid ?? 0,
         target_price: data.target_price ?? null,
         scribe_id: data.scribe_id ?? null,
         scribe_code: data.scribe_code ?? null,
@@ -385,24 +393,62 @@ export default function InventoryClient({ initialItems }: Props) {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">עלות קנייה</label>
+                      <label className="text-sm font-semibold text-slate-800">כמות</label>
                       <Input
                         type="number"
+                        min={1}
+                        {...form.register("quantity", { valueAsNumber: true })}
+                        placeholder="1"
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">עלות ליחידה (₪)</label>
+                      <Input
+                        type="number"
+                        min={0}
                         {...form.register("cost_price", { valueAsNumber: true })}
                         placeholder="0"
                         className="rounded-xl"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">מחיר יעד למכירה</label>
+                      <label className="text-sm font-semibold text-slate-800">שולם עד כה (₪)</label>
                       <Input
                         type="number"
+                        min={0}
+                        {...form.register("amount_paid", { valueAsNumber: true })}
+                        placeholder="0"
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">מחיר יעד למכירה (₪)</label>
+                      <Input
+                        type="number"
+                        min={0}
                         {...form.register("target_price", { valueAsNumber: true })}
                         placeholder="0"
                         className="rounded-xl"
                       />
                     </div>
                   </div>
+                  {(() => {
+                    const qty = form.watch("quantity") ?? 1;
+                    const cost = form.watch("cost_price");
+                    const paid = form.watch("amount_paid") ?? 0;
+                    const total = cost != null && !Number.isNaN(cost) ? (qty || 1) * cost : null;
+                    const remaining = total != null ? total - paid : null;
+                    if (total == null) return null;
+                    return (
+                      <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-sm">
+                        <p className="font-medium">סה״כ לתשלום: {total.toLocaleString("he-IL")} ₪</p>
+                        <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
+                          יתרה לתשלום: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
+                        </p>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-semibold text-slate-800">תיאור</label>
                     <Input

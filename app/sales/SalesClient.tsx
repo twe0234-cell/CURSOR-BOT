@@ -63,7 +63,9 @@ export default function SalesClient() {
   const [newSaleSellerId, setNewSaleSellerId] = useState("");
   const [newSaleInvestmentId, setNewSaleInvestmentId] = useState("");
   const [newSaleItemDescription, setNewSaleItemDescription] = useState("");
+  const [newSaleQuantity, setNewSaleQuantity] = useState("1");
   const [newSalePrice, setNewSalePrice] = useState("");
+  const [newSaleAmountPaid, setNewSaleAmountPaid] = useState("0");
   const [newSaleCommission, setNewSaleCommission] = useState("");
   const [newSaleNotes, setNewSaleNotes] = useState("");
   const [newExpCategory, setNewExpCategory] = useState("");
@@ -114,9 +116,11 @@ export default function SalesClient() {
 
   const handleCreateSale = async () => {
     if (saleType === "ממלאי") {
-      const price = parseFloat(newSalePrice);
-      if (!newSaleItemId || isNaN(price) || price <= 0) {
-        toast.error("בחר פריט והזן מחיר");
+      const unitPrice = parseFloat(newSalePrice);
+      const qty = parseInt(newSaleQuantity, 10) || 1;
+      const amountPaid = parseFloat(newSaleAmountPaid) || 0;
+      if (!newSaleItemId || isNaN(unitPrice) || unitPrice <= 0) {
+        toast.error("בחר פריט והזן מחיר ליחידה");
         return;
       }
       setLoading(true);
@@ -124,7 +128,9 @@ export default function SalesClient() {
         sale_type: "ממלאי",
         item_id: newSaleItemId,
         buyer_id: newSaleBuyerId || null,
-        sale_price: price,
+        quantity: qty,
+        sale_price: unitPrice,
+        amount_paid: amountPaid,
         notes: newSaleNotes || undefined,
       });
       setLoading(false);
@@ -158,6 +164,7 @@ export default function SalesClient() {
       } else toast.error(res.error);
     } else if (saleType === "פרויקט חדש") {
       const price = parseFloat(newSalePrice);
+      const amountPaid = parseFloat(newSaleAmountPaid) || 0;
       if (!newSaleInvestmentId || isNaN(price) || price <= 0) {
         toast.error("בחר השקעה והזן מחיר מכירה");
         return;
@@ -168,6 +175,7 @@ export default function SalesClient() {
         investment_id: newSaleInvestmentId,
         buyer_id: newSaleBuyerId || null,
         sale_price: price,
+        amount_paid: amountPaid,
         notes: newSaleNotes || undefined,
       });
       setLoading(false);
@@ -186,7 +194,9 @@ export default function SalesClient() {
     setNewSaleSellerId("");
     setNewSaleInvestmentId("");
     setNewSaleItemDescription("");
+    setNewSaleQuantity("1");
     setNewSalePrice("");
+    setNewSaleAmountPaid("0");
     setNewSaleCommission("");
     setNewSaleNotes("");
     setInventorySearch("");
@@ -439,16 +449,57 @@ export default function SalesClient() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
-                  <Input
-                    type="number"
-                    value={newSalePrice}
-                    onChange={(e) => setNewSalePrice(e.target.value)}
-                    placeholder="0"
-                    className="rounded-xl"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold">כמות</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newSaleQuantity}
+                      onChange={(e) => setNewSaleQuantity(e.target.value)}
+                      placeholder="1"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold">מחיר ליחידה (₪)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newSalePrice}
+                      onChange={(e) => setNewSalePrice(e.target.value)}
+                      placeholder="0"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold">שולם עד כה (₪)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newSaleAmountPaid}
+                      onChange={(e) => setNewSaleAmountPaid(e.target.value)}
+                      placeholder="0"
+                      className="rounded-xl"
+                    />
+                  </div>
                 </div>
+                {(() => {
+                  const qty = parseInt(newSaleQuantity, 10) || 1;
+                  const unitPrice = parseFloat(newSalePrice);
+                  const paid = parseFloat(newSaleAmountPaid) || 0;
+                  const total = !isNaN(unitPrice) && unitPrice >= 0 ? qty * unitPrice : null;
+                  const remaining = total != null ? total - paid : null;
+                  if (total == null) return null;
+                  return (
+                    <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-sm">
+                      <p className="font-medium">סה״כ עסקה: {total.toLocaleString("he-IL")} ₪</p>
+                      <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
+                        יתרת חוב של הלקוח: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
+                      </p>
+                    </div>
+                  );
+                })()}
               </>
             )}
 
@@ -508,8 +559,20 @@ export default function SalesClient() {
                   <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
                   <Input
                     type="number"
+                    min={0}
                     value={newSalePrice}
                     onChange={(e) => setNewSalePrice(e.target.value)}
+                    placeholder="0"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">שולם עד כה (₪)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newSaleAmountPaid}
+                    onChange={(e) => setNewSaleAmountPaid(e.target.value)}
                     placeholder="0"
                     className="rounded-xl"
                   />

@@ -98,9 +98,9 @@ export async function fetchSales(): Promise<
 }
 
 export type CreateSaleParams =
-  | { sale_type: "ממלאי"; item_id: string; buyer_id?: string | null; sale_price: number; notes?: string }
+  | { sale_type: "ממלאי"; item_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string }
   | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; commission_profit: number; notes?: string }
-  | { sale_type: "פרויקט חדש"; investment_id: string; buyer_id?: string | null; sale_price: number; notes?: string };
+  | { sale_type: "פרויקט חדש"; investment_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string };
 
 export async function createSale(params: CreateSaleParams): Promise<ActionResult> {
   try {
@@ -119,15 +119,21 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
       if (!item) return { success: false, error: "פריט לא נמצא" };
       if (item.status === "sold") return { success: false, error: "הפריט כבר נמכר" };
 
-      const costPrice = item.cost_price != null ? Number(item.cost_price) : null;
-      const profit = costPrice != null ? params.sale_price - costPrice : null;
+      const qty = (params.quantity ?? 1) > 0 ? (params.quantity ?? 1) : 1;
+      const totalPrice = qty * params.sale_price;
+      const amountPaid = params.amount_paid ?? 0;
+      const costPrice = item.cost_price != null ? Number(item.cost_price) * qty : null;
+      const profit = costPrice != null ? totalPrice - costPrice : null;
 
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
         sale_type: "ממלאי",
         item_id: params.item_id,
         buyer_id: params.buyer_id || null,
+        quantity: qty,
         sale_price: params.sale_price,
+        total_price: totalPrice,
+        amount_paid: amountPaid,
         cost_price: costPrice,
         profit,
         notes: params.notes?.trim() || null,
@@ -150,7 +156,10 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         item_description: params.item_description.trim() || null,
         buyer_id: params.buyer_id || null,
         seller_id: params.seller_id || null,
+        quantity: 1,
         sale_price: params.commission_profit,
+        total_price: params.commission_profit,
+        amount_paid: 0,
         cost_price: null,
         profit: params.commission_profit,
         commission_profit: params.commission_profit,
@@ -166,8 +175,10 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         .single();
       if (!inv) return { success: false, error: "השקעה לא נמצאה" };
 
+      const totalPrice = params.sale_price;
+      const amountPaid = params.amount_paid ?? 0;
       const costPrice = Number(inv.total_agreed_price ?? 0);
-      const profit = params.sale_price - costPrice;
+      const profit = totalPrice - costPrice;
 
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
@@ -175,7 +186,10 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         item_id: null,
         investment_id: params.investment_id,
         buyer_id: params.buyer_id || null,
-        sale_price: params.sale_price,
+        quantity: 1,
+        sale_price: totalPrice,
+        total_price: totalPrice,
+        amount_paid: amountPaid,
         cost_price: costPrice,
         profit,
         notes: params.notes?.trim() || null,

@@ -39,6 +39,9 @@ type Props = {
   transactions: Array<{ id: string; amount: number; type: string; description: string | null; date: string }>;
   documents: Array<{ id: string; file_url: string; doc_type: string; name: string | null }>;
   logs: Array<{ id: string; channel: string; content: string | null; timestamp: string }>;
+  debtToContact?: number;
+  debtFromContact?: number;
+  typeLabel?: string;
 };
 
 export default function ContactDetailClient({
@@ -46,7 +49,10 @@ export default function ContactDetailClient({
   transactions: initialTx,
   documents: initialDocs,
   logs,
-  }: Props) {
+  debtToContact = 0,
+  debtFromContact = 0,
+  typeLabel = "אחר",
+}: Props) {
   const [contact, setContact] = useState(initialContact);
   const [transactions, setTransactions] = useState(initialTx);
   const [documents, setDocuments] = useState(initialDocs);
@@ -162,7 +168,12 @@ export default function ContactDetailClient({
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="text-2xl font-semibold">{contact.name}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-2xl font-semibold">{contact.name}</p>
+                <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
+                  {typeLabel}
+                </span>
+              </div>
               <p className="text-sm text-muted-foreground">מזהה: {contact.id.slice(0, 8)}...</p>
             </div>
 
@@ -239,14 +250,27 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            <div className="rounded-lg bg-slate-50 p-4 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">חוב (מגיע לי)</p>
-                <p className="text-lg font-bold text-red-600">₪{totalOwed.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">זכות (מגיע לו)</p>
-                <p className="text-lg font-bold text-green-600">₪{totalDue.toFixed(2)}</p>
+            <div className="rounded-lg bg-slate-50 p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-700">סיכום פיננסי</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">חוב שלי אליו</p>
+                  <p className="text-lg font-bold text-amber-600">₪{debtToContact.toLocaleString("he-IL")}</p>
+                  <p className="text-xs text-muted-foreground">מלאי + השקעות</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">חוב שלו אליי</p>
+                  <p className="text-lg font-bold text-emerald-600">₪{debtFromContact.toLocaleString("he-IL")}</p>
+                  <p className="text-xs text-muted-foreground">מכירות</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">חוב (מגיע לי) – עסקאות</p>
+                  <p className="text-lg font-bold text-red-600">₪{totalOwed.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">זכות (מגיע לו) – עסקאות</p>
+                  <p className="text-lg font-bold text-green-600">₪{totalDue.toFixed(2)}</p>
+                </div>
               </div>
             </div>
           </CardContent>

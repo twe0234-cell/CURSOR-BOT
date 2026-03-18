@@ -22,13 +22,38 @@ export default async function ContactDetailPage({
 
   if (!contact) notFound();
 
-  const [txRes, docsRes, logsRes] = await Promise.all([
+  const [txRes, docsRes, logsRes, invRes, investRes, salesRes] = await Promise.all([
     supabase.from("crm_transactions").select("id, amount, type, description, date").eq("contact_id", id).order("date", { ascending: false }),
     supabase.from("crm_documents").select("id, file_url, doc_type, name").eq("contact_id", id).order("created_at", { ascending: false }),
     supabase.from("crm_communication_logs").select("id, channel, content, timestamp").eq("contact_id", id).order("timestamp", { ascending: false }).limit(20),
+    supabase.from("inventory").select("quantity, cost_price, total_cost, amount_paid").eq("scribe_id", id).neq("status", "sold"),
+    supabase.from("erp_investments").select("total_agreed_price, amount_paid").eq("scribe_id", id).eq("status", "active"),
+    supabase.from("erp_sales").select("sale_price, quantity, total_price, amount_paid").eq("buyer_id", id),
   ]);
 
   const transactions = txRes.data ?? [];
+
+  let debtToContact = 0;
+  for (const inv of invRes.data ?? []) {
+    const total = inv.total_cost != null ? Number(inv.total_cost) : (Number(inv.quantity ?? 1) * Number(inv.cost_price ?? 0));
+    debtToContact += Math.max(0, total - Number(inv.amount_paid ?? 0));
+  }
+  for (const inv of investRes.data ?? []) {
+    debtToContact += Math.max(0, Number(inv.total_agreed_price ?? 0) - Number(inv.amount_paid ?? 0));
+  }
+
+  let debtFromContact = 0;
+  for (const s of salesRes.data ?? []) {
+    const total = s.total_price != null ? Number(s.total_price) : Number(s.sale_price ?? 0);
+    debtFromContact += Math.max(0, total - Number(s.amount_paid ?? 0));
+  }
+
+  const TYPE_LABELS: Record<string, string> = {
+    Scribe: "סופר",
+    Merchant: "סוחר",
+    End_Customer: "לקוח",
+    Other: "אחר",
+  };
 
   return (
     <ContactDetailClient
@@ -44,6 +69,9 @@ export default async function ContactDetailPage({
         notes: contact.notes ?? null,
         created_at: contact.created_at ?? "",
       }}
+      debtToContact={debtToContact}
+      debtFromContact={debtFromContact}
+      typeLabel={TYPE_LABELS[contact.type ?? "Other"] ?? contact.type ?? "אחר"}
       transactions={transactions.map((t) => ({
         id: t.id,
         amount: Number(t.amount ?? 0),

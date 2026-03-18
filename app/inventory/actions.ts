@@ -14,7 +14,10 @@ export type InventoryItem = {
   category_meta: Record<string, unknown> | null;
   script_type: string | null;
   status: string | null;
+  quantity: number;
   cost_price: number | null;
+  total_cost: number | null;
+  amount_paid: number;
   target_price: number | null;
   scribe_id: string | null;
   scribe_code: string | null;
@@ -40,7 +43,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_category, category_meta, script_type, status, cost_price, target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
+      .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -48,22 +51,31 @@ export async function fetchInventory(): Promise<
       return { success: false, error: error.message };
     }
 
-    const items = (data ?? []).map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      product_category: r.product_category ?? null,
-      category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
-      script_type: r.script_type ?? null,
-      status: r.status ?? null,
-      cost_price: r.cost_price != null ? Number(r.cost_price) : null,
-      target_price: r.target_price != null ? Number(r.target_price) : null,
-      scribe_id: r.scribe_id ?? null,
-      scribe_code: r.scribe_code ?? null,
-      images: (r.images ?? null) as string[] | null,
-      description: r.description ?? null,
-      is_public: r.is_public ?? false,
-      public_slug: r.public_slug ?? null,
-    }));
+    const items = (data ?? []).map((r) => {
+      const qty = Number(r.quantity ?? 1);
+      const cost = r.cost_price != null ? Number(r.cost_price) : null;
+      const paid = Number(r.amount_paid ?? 0);
+      const total = r.total_cost != null ? Number(r.total_cost) : (cost != null ? qty * cost : null);
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        product_category: r.product_category ?? null,
+        category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
+        script_type: r.script_type ?? null,
+        status: r.status ?? null,
+        quantity: qty,
+        cost_price: cost,
+        total_cost: total,
+        amount_paid: paid,
+        target_price: r.target_price != null ? Number(r.target_price) : null,
+        scribe_id: r.scribe_id ?? null,
+        scribe_code: r.scribe_code ?? null,
+        images: (r.images ?? null) as string[] | null,
+        description: r.description ?? null,
+        is_public: r.is_public ?? false,
+        public_slug: r.public_slug ?? null,
+      };
+    });
 
     return { success: true, items };
   } catch (err) {
@@ -89,27 +101,42 @@ export async function createInventoryItem(
       return { success: false, error: "יש להתחבר" };
     }
 
+    const qty = (data.quantity ?? 1) > 0 ? (data.quantity ?? 1) : 1;
+    const costPerUnit = data.cost_price ?? null;
+    const totalCost = costPerUnit != null ? qty * costPerUnit : null;
+    const amountPaid = data.amount_paid ?? 0;
+
     const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
       ? []
       : data.images;
 
-    const { error } = await supabase.from("inventory").insert({
-      user_id: user.id,
-      product_category: data.product_category ?? null,
-      category_meta: data.category_meta ?? {},
-      script_type: data.script_type ?? null,
-      status: data.status ?? "available",
-      cost_price: data.cost_price ?? null,
-      target_price: data.target_price ?? null,
-      scribe_id: data.scribe_id ?? null,
-      scribe_code: data.scribe_code ?? null,
-      images: imagesValue,
-      description: data.description ?? null,
-    });
+    try {
+      const { error } = await supabase.from("inventory").insert({
+        user_id: user.id,
+        product_category: data.product_category ?? null,
+        category_meta: data.category_meta ?? {},
+        script_type: data.script_type ?? null,
+        status: data.status ?? "available",
+        quantity: qty,
+        cost_price: costPerUnit,
+        total_cost: totalCost,
+        amount_paid: amountPaid,
+        target_price: data.target_price ?? null,
+        scribe_id: data.scribe_id ?? null,
+        scribe_code: data.scribe_code ?? null,
+        images: imagesValue,
+        description: data.description ?? null,
+      });
 
-    if (error) {
-      logError("Inventory", "createInventoryItem DB error", { error: error.message, userId: user.id });
-      return { success: false, error: error.message };
+      if (error) {
+        console.error("DB_INSERT_ERROR:", error);
+        logError("Inventory", "createInventoryItem DB error", { error: error.message, userId: user.id });
+        return { success: false, error: error.message };
+      }
+    } catch (dbErr) {
+      console.error("DB_INSERT_ERROR:", dbErr);
+      const msg = dbErr instanceof Error ? dbErr.message : "שגיאת מסד נתונים";
+      return { success: false, error: msg };
     }
 
     revalidatePath("/inventory");
@@ -140,31 +167,46 @@ export async function updateInventoryItem(
       return { success: false, error: "יש להתחבר" };
     }
 
+    const qty = (data.quantity ?? 1) > 0 ? (data.quantity ?? 1) : 1;
+    const costPerUnit = data.cost_price ?? null;
+    const totalCost = costPerUnit != null ? qty * costPerUnit : null;
+    const amountPaid = data.amount_paid ?? 0;
+
     const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
       ? []
       : data.images;
 
-    const { error } = await supabase
-      .from("inventory")
-      .update({
-        product_category: data.product_category ?? null,
-        category_meta: data.category_meta ?? {},
-        script_type: data.script_type ?? null,
-        status: data.status ?? null,
-        cost_price: data.cost_price ?? null,
-        target_price: data.target_price ?? null,
-        scribe_id: data.scribe_id ?? null,
-        scribe_code: data.scribe_code ?? null,
-        images: imagesValue,
-        description: data.description ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .eq("user_id", user.id);
+    try {
+      const { error } = await supabase
+        .from("inventory")
+        .update({
+          product_category: data.product_category ?? null,
+          category_meta: data.category_meta ?? {},
+          script_type: data.script_type ?? null,
+          status: data.status ?? null,
+          quantity: qty,
+          cost_price: costPerUnit,
+          total_cost: totalCost,
+          amount_paid: amountPaid,
+          target_price: data.target_price ?? null,
+          scribe_id: data.scribe_id ?? null,
+          scribe_code: data.scribe_code ?? null,
+          images: imagesValue,
+          description: data.description ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .eq("user_id", user.id);
 
-    if (error) {
-      logError("Inventory", "updateInventoryItem DB error", { error: error.message, id, userId: user.id });
-      return { success: false, error: error.message };
+      if (error) {
+        console.error("DB_UPDATE_ERROR:", error);
+        logError("Inventory", "updateInventoryItem DB error", { error: error.message, id, userId: user.id });
+        return { success: false, error: error.message };
+      }
+    } catch (dbErr) {
+      console.error("DB_UPDATE_ERROR:", dbErr);
+      const msg = dbErr instanceof Error ? dbErr.message : "שגיאת מסד נתונים";
+      return { success: false, error: msg };
     }
 
     revalidatePath("/inventory");
