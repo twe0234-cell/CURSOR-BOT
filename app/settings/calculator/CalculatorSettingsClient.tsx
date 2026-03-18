@@ -25,6 +25,7 @@ import {
   type ParchmentPrice,
   type NeviimData,
 } from "./actions";
+import { CsvActions } from "@/components/shared/CsvActions";
 import { PlusIcon, Trash2Icon, SaveIcon } from "lucide-react";
 
 type Props = {
@@ -85,6 +86,47 @@ export default function CalculatorSettingsClient({
     });
   };
 
+  const handleParchmentCsvImport = (rows: Record<string, unknown>[]) => {
+    const parsed: ParchmentPrice[] = rows
+      .map((r) => {
+        const name = String(r["name"] ?? r["Name"] ?? r["שם"] ?? "").trim();
+        const price = Number(r["price"] ?? r["Price"] ?? r["מחיר"] ?? 0) || 0;
+        return name ? { name, price } : null;
+      })
+      .filter((p): p is ParchmentPrice => p != null);
+    if (parsed.length > 0) {
+      setParchmentPrices((prev) => {
+        const byName = new Map(prev.map((p) => [p.name, p]));
+        for (const p of parsed) byName.set(p.name, p);
+        return Array.from(byName.values());
+      });
+      toast.success(`יובאו ${parsed.length} יצרני קלף`);
+    } else {
+      toast.error("לא נמצאו שורות תקינות (שם, מחיר)");
+    }
+  };
+
+  const handleNeviimCsvImport = (rows: Record<string, unknown>[]) => {
+    const parsed: Array<{ name: string; pages: number; yeriot: number }> = rows
+      .map((r) => {
+        const name = String(r["name"] ?? r["Name"] ?? r["שם"] ?? Object.values(r)[0] ?? "").trim();
+        const pages = Number(r["pages"] ?? r["Pages"] ?? r["דפים"] ?? 0) || 0;
+        const yeriot = Number(r["yeriot"] ?? r["Yeriot"] ?? r["יריעות"] ?? 0) || 0;
+        return name ? { name, pages, yeriot } : null;
+      })
+      .filter((p): p is { name: string; pages: number; yeriot: number } => p != null);
+    if (parsed.length > 0) {
+      setNeviimData((prev) => {
+        const next = { ...prev };
+        for (const p of parsed) next[p.name] = { pages: p.pages, yeriot: p.yeriot };
+        return next;
+      });
+      toast.success(`יובאו ${parsed.length} נביאים`);
+    } else {
+      toast.error("לא נמצאו שורות תקינות (שם, דפים, יריעות)");
+    }
+  };
+
   const handleSave = async () => {
     const validParchment = parchmentPrices.filter((p) => p.name.trim());
     if (validParchment.length === 0) {
@@ -111,15 +153,24 @@ export default function CalculatorSettingsClient({
               <CardTitle className="text-base font-semibold text-slate-700">מחירון קלף</CardTitle>
               <CardDescription>מחירי יריעות לפי יצרן</CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addParchment}
-              className="rounded-xl"
-            >
-              <PlusIcon className="size-4 ml-1" />
-              הוסף יצרן קלף
-            </Button>
+            <div className="flex gap-2">
+              <CsvActions
+                data={parchmentPrices.map((p) => ({ name: p.name, price: p.price }))}
+                onImport={handleParchmentCsvImport}
+                filename="parchment_prices"
+                exportLabel="ייצוא CSV"
+                importLabel="ייבוא CSV"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addParchment}
+                className="rounded-xl"
+              >
+                <PlusIcon className="size-4 ml-1" />
+                הוסף יצרן קלף
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -180,15 +231,28 @@ export default function CalculatorSettingsClient({
               <CardTitle className="text-base font-semibold text-slate-700">הגדרות נביאים</CardTitle>
               <CardDescription>דפים ויריעות לכל נביא</CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addNevi}
-              className="rounded-xl"
-            >
-              <PlusIcon className="size-4 ml-1" />
-              הוסף נביא
-            </Button>
+            <div className="flex gap-2">
+              <CsvActions
+                data={Object.entries(neviimData).map(([name, v]) => ({
+                  name,
+                  pages: v.pages,
+                  yeriot: v.yeriot,
+                }))}
+                onImport={handleNeviimCsvImport}
+                filename="neviim_data"
+                exportLabel="ייצוא CSV"
+                importLabel="ייבוא CSV"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addNevi}
+                className="rounded-xl"
+              >
+                <PlusIcon className="size-4 ml-1" />
+                הוסף נביא
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
