@@ -19,6 +19,7 @@ export type InventoryItem = {
   total_cost: number | null;
   amount_paid: number;
   target_price: number | null;
+  total_target_price: number | null;
   scribe_id: string | null;
   scribe_code: string | null;
   images: string[] | null;
@@ -43,7 +44,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
+      .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -68,6 +69,7 @@ export async function fetchInventory(): Promise<
         total_cost: total,
         amount_paid: paid,
         target_price: r.target_price != null ? Number(r.target_price) : null,
+        total_target_price: r.total_target_price != null ? Number(r.total_target_price) : null,
         scribe_id: r.scribe_id ?? null,
         scribe_code: r.scribe_code ?? null,
         images: (r.images ?? null) as string[] | null,
@@ -105,10 +107,14 @@ export async function createInventoryItem(
     const costPerUnit = data.cost_price ?? null;
     const totalCost = costPerUnit != null ? qty * costPerUnit : null;
     const amountPaid = data.amount_paid ?? 0;
+    const targetPrice = data.target_price ?? null;
+    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;
 
-    const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
-      ? []
-      : data.images;
+    const imagesValue = Array.isArray(data.images)
+      ? data.images
+      : data.images == null || data.images === undefined
+        ? []
+        : [];
 
     try {
       const { error } = await supabase.from("inventory").insert({
@@ -121,10 +127,11 @@ export async function createInventoryItem(
         cost_price: costPerUnit,
         total_cost: totalCost,
         amount_paid: amountPaid,
-        target_price: data.target_price ?? null,
+        target_price: targetPrice,
+        total_target_price: totalTargetPrice,
         scribe_id: data.scribe_id ?? null,
         scribe_code: data.scribe_code ?? null,
-        images: imagesValue,
+        images: imagesValue ?? [],
         description: data.description ?? null,
       });
 
@@ -171,10 +178,14 @@ export async function updateInventoryItem(
     const costPerUnit = data.cost_price ?? null;
     const totalCost = costPerUnit != null ? qty * costPerUnit : null;
     const amountPaid = data.amount_paid ?? 0;
+    const targetPrice = data.target_price ?? null;
+    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;
 
-    const imagesValue = data.images == null || (Array.isArray(data.images) && data.images.length === 0)
-      ? []
-      : data.images;
+    const imagesValue = Array.isArray(data.images)
+      ? data.images
+      : data.images == null || data.images === undefined
+        ? []
+        : [];
 
     try {
       const { error } = await supabase
@@ -188,10 +199,11 @@ export async function updateInventoryItem(
           cost_price: costPerUnit,
           total_cost: totalCost,
           amount_paid: amountPaid,
-          target_price: data.target_price ?? null,
+          target_price: targetPrice,
+          total_target_price: totalTargetPrice,
           scribe_id: data.scribe_id ?? null,
           scribe_code: data.scribe_code ?? null,
-          images: imagesValue,
+          images: imagesValue ?? [],
           description: data.description ?? null,
           updated_at: new Date().toISOString(),
         })

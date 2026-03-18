@@ -12,7 +12,7 @@ export default async function InventoryPage() {
 
   const { data: items } = await supabase
     .from("inventory")
-    .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
+    .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -35,6 +35,7 @@ export default async function InventoryPage() {
           total_cost: total,
           amount_paid: paid,
           target_price: r.target_price != null ? Number(r.target_price) : null,
+          total_target_price: r.total_target_price != null ? Number(r.total_target_price) : null,
           scribe_id: r.scribe_id ?? null,
           scribe_code: r.scribe_code ?? null,
           images: (r.images ?? null) as string[] | null,

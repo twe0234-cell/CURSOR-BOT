@@ -429,7 +429,7 @@ export default function InventoryClient({ initialItems }: Props) {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">מחיר יעד למכירה (₪)</label>
+                      <label className="text-sm font-semibold text-slate-800">מחיר יעד (ליחידה)</label>
                       <Input
                         type="number"
                         min={0}
@@ -437,6 +437,17 @@ export default function InventoryClient({ initialItems }: Props) {
                         placeholder="0"
                         className="rounded-xl"
                       />
+                      {(() => {
+                        const q = form.watch("quantity") ?? 1;
+                        const tp = form.watch("target_price");
+                        const totalTarget = tp != null && !Number.isNaN(tp) ? (q || 1) * tp : null;
+                        if (totalTarget == null || totalTarget <= 0) return null;
+                        return (
+                          <p className="text-sm text-emerald-700 font-medium mt-1">
+                            סה״כ צפי הכנסה: ₪{totalTarget.toLocaleString("he-IL")}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                   {(() => {
