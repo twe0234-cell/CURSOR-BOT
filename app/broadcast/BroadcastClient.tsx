@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,7 @@ export default function BroadcastClient({
   const [internalNotes, setInternalNotes] = useState("");
   const [nextScribeNum, setNextScribeNum] = useState(121);
   const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -190,7 +191,7 @@ export default function BroadcastClient({
     toast.info(`נמענים: ${combined.length}`);
   };
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (selectedTags.size === 0 && selectedGroups.size === 0) {
       toast.error("בחר לפחות תגית אחת או קבוצה");
       return;
@@ -206,8 +207,10 @@ export default function BroadcastClient({
       return;
     }
 
-    setLoading(true);
-    try {
+    startTransition(() => {
+      void (async () => {
+        setLoading(true);
+        try {
       const tagRes = selectedTags.size > 0
         ? await fetchTargetsByTags([...selectedTags])
         : { success: true as const, targets: [] };
@@ -215,15 +218,15 @@ export default function BroadcastClient({
         ? await fetchTargetsByGroupIds([...selectedGroups])
         : { success: true as const, targets: [] };
       if (!tagRes.success) {
-        toast.error(tagRes.error);
-        setLoading(false);
-        return;
-      }
-      if (!groupRes.success) {
-        toast.error(groupRes.error);
-        setLoading(false);
-        return;
-      }
+          toast.error(tagRes.error);
+          setLoading(false);
+          return;
+        }
+        if (!groupRes.success) {
+          toast.error(groupRes.error);
+          setLoading(false);
+          return;
+        }
       const seen = new Set<string>();
       const targets = [...tagRes.targets, ...groupRes.targets].filter((t) => {
         if (seen.has(t.wa_chat_id)) return false;
@@ -231,10 +234,10 @@ export default function BroadcastClient({
         return true;
       });
       if (targets.length === 0) {
-        toast.error("אין נמענים התואמים לתגיות או לקבוצות שנבחרו");
-        setLoading(false);
-        return;
-      }
+          toast.error("אין נמענים התואמים לתגיות או לקבוצות שנבחרו");
+          setLoading(false);
+          return;
+        }
 
       const total = targets.length;
       let sent = 0;
@@ -242,8 +245,11 @@ export default function BroadcastClient({
       const errors: string[] = [];
       const finalScribe = scribeCode.trim() || undefined;
 
+      const progressInterval = 5;
       for (let i = 0; i < targets.length; i++) {
-        setSendProgress({ current: i + 1, total });
+        if (i % progressInterval === 0 || i === targets.length - 1) {
+          setSendProgress({ current: i + 1, total });
+        }
         const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };
@@ -293,12 +299,14 @@ export default function BroadcastClient({
         if (r.success) setNextScribeNum(r.next);
       });
       refreshLogs();
-    } catch {
-      setSendProgress(null);
-      toast.error("שגיאה לא צפויה");
-    } finally {
-      setLoading(false);
-    }
+        } catch {
+          setSendProgress(null);
+          toast.error("שגיאה לא צפויה");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    });
   };
 
   const formatDate = (s: string) => {
@@ -506,7 +514,7 @@ export default function BroadcastClient({
 
       <Button
         onClick={handleSend}
-        disabled={loading || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
+        disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
         className="w-full rounded-xl bg-teal-600 py-6 text-base font-semibold hover:bg-teal-700 hover:shadow-lg"
       >
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />

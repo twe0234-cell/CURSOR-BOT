@@ -66,8 +66,8 @@ export function AddScribeModal({ open, onOpenChange, onSuccess }: Props) {
           <DialogTitle>הוסף סופר חדש</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">שם</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">שם</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -75,16 +75,16 @@ export function AddScribeModal({ open, onOpenChange, onSuccess }: Props) {
               required
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">טלפון</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">טלפון</label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="טלפון"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">עיר</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">עיר</label>
             <Input
               value={city}
               onChange={(e) => setCity(e.target.value)}

@@ -118,8 +118,8 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
           <CardDescription>בחר סוג מוצר, קלף ועלויות</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג מוצר</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">סוג מוצר</label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -147,12 +147,12 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
           </div>
 
           {productType === "nevi" && neviimKeys.length > 0 && (
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-slate-700">נביא</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-800">נביא</label>
               <select
                 value={nevi}
                 onChange={(e) => form.setValue("nevi", e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               >
                 {neviimKeys.map((k) => (
                   <option key={k} value={k}>
@@ -163,8 +163,8 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">
               מחיר סופר לדף (₪)
             </label>
             <Input
@@ -179,12 +179,12 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
 
           {parchmentPrices.length > 0 && (
             <>
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">סוג קלף</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-slate-800">סוג קלף</label>
                 <select
                   value={parchmentType}
                   onChange={(e) => handleParchmentChange(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 >
                   {parchmentPrices.map((p) => (
                     <option key={p.name} value={p.name}>
@@ -194,8 +194,8 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
                 </select>
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-slate-800">
                   מחיר ליריעה (₪) – ניתן לעריכה
                 </label>
                 <Input
@@ -210,8 +210,8 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
             </>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">
               עלויות נוספות (₪) – הגהה, תפירה וכו׳
             </label>
             <Input
@@ -224,8 +224,8 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">
               מחיר סופי ללקוח (₪)
             </label>
             <Input

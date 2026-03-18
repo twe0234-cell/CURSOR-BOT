@@ -45,8 +45,8 @@ export function DependentCategories() {
   return (
     <>
       {showSize && (
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">גודל</label>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-800">גודל</label>
           <select
             value={String(categoryMeta.size ?? "")}
             onChange={(e) =>
@@ -55,7 +55,7 @@ export function DependentCategories() {
                 size: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">בחר</option>
             {torahSizes.map((s) => (
@@ -66,8 +66,8 @@ export function DependentCategories() {
       )}
 
       {showNavi && (
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">נביא</label>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-800">נביא</label>
           <select
             value={String(categoryMeta.navi ?? "")}
             onChange={(e) =>
@@ -76,7 +76,7 @@ export function DependentCategories() {
                 navi: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">בחר</option>
             {neviimNames.map((n) => (
@@ -87,8 +87,8 @@ export function DependentCategories() {
       )}
 
       {showLines && (
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-700">שורות</label>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-800">שורות</label>
           <select
             value={String(categoryMeta.lines ?? "")}
             onChange={(e) =>
@@ -97,7 +97,7 @@ export function DependentCategories() {
                 lines: e.target.value,
               })
             }
-            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">בחר</option>
             {megillaLines.map((l) => (

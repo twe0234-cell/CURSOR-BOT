@@ -324,11 +324,11 @@ export default function InventoryClient({ initialItems }: Props) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">קטגוריה</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">קטגוריה</label>
                       <select
                         {...form.register("product_category")}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       >
                         <option value="">בחר</option>
                         {categories.map((c) => (
@@ -339,11 +339,11 @@ export default function InventoryClient({ initialItems }: Props) {
                     <DependentCategories />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">כתב</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">כתב</label>
                       <select
                         {...form.register("script_type")}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       >
                         <option value="">בחר</option>
                         {scriptTypes.map((t) => (
@@ -351,11 +351,11 @@ export default function InventoryClient({ initialItems }: Props) {
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">סטטוס</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">סטטוס</label>
                       <select
                         {...form.register("status")}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       >
                         {STATUSES.map((t) => (
                           <option key={t} value={t}>{t}</option>
@@ -375,8 +375,8 @@ export default function InventoryClient({ initialItems }: Props) {
                   <CardDescription>סופר, עלויות ומחיר יעד</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">שם סופר</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-semibold text-slate-800">שם סופר</label>
                     <ScribeCombobox
                       value={form.watch("scribe_id") ?? null}
                       onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
@@ -384,8 +384,8 @@ export default function InventoryClient({ initialItems }: Props) {
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">עלות קנייה</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">עלות קנייה</label>
                       <Input
                         type="number"
                         {...form.register("cost_price", { valueAsNumber: true })}
@@ -393,8 +393,8 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="rounded-xl"
                       />
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">מחיר יעד למכירה</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-semibold text-slate-800">מחיר יעד למכירה</label>
                       <Input
                         type="number"
                         {...form.register("target_price", { valueAsNumber: true })}
@@ -403,8 +403,8 @@ export default function InventoryClient({ initialItems }: Props) {
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">תיאור</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-semibold text-slate-800">תיאור</label>
                     <Input
                       {...form.register("description")}
                       placeholder="תיאור"

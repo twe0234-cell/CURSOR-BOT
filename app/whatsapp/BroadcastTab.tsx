@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,7 @@ export default function BroadcastTab({
   const [internalNotes, setInternalNotes] = useState("");
   const [nextScribeNum, setNextScribeNum] = useState(121);
   const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isPending, startTransition] = useTransition();
   const [groupSearch, setGroupSearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -213,7 +214,7 @@ export default function BroadcastTab({
     toast.info(`נמענים: ${combined.length}`);
   };
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (selectedTags.size === 0 && selectedGroups.size === 0) {
       toast.error("בחר לפחות תגית אחת או קבוצה");
       return;
@@ -229,8 +230,10 @@ export default function BroadcastTab({
       return;
     }
 
-    setLoading(true);
-    try {
+    startTransition(() => {
+      void (async () => {
+        setLoading(true);
+        try {
       const tagRes = selectedTags.size > 0
         ? await fetchTargetsByTags([...selectedTags])
         : { success: true as const, targets: [] };
@@ -265,27 +268,37 @@ export default function BroadcastTab({
       const errors: string[] = [];
       const finalScribe = scribeCode.trim() || undefined;
 
+      const progressInterval = 5;
       for (let i = 0; i < targets.length; i++) {
-        setSendProgress({ current: i + 1, total });
+        if (i % progressInterval === 0 || i === targets.length - 1) {
+          setSendProgress({ current: i + 1, total });
+        }
         const target = targets[i];
-        const vars = { Name: target.name ?? "", name: target.name ?? "" };
-        let msg = messageText.trim();
-        msg = msg.replace(/\{Name\}/gi, vars.Name).replace(/\{name\}/gi, vars.name);
+        try {
+          const vars = { Name: target.name ?? "", name: target.name ?? "" };
+          let msg = messageText.trim();
+          msg = msg.replace(/\{Name\}/gi, vars.Name).replace(/\{name\}/gi, vars.name);
 
-        const res = await sendSingleMessage(
-          target.wa_chat_id,
-          msg,
-          finalImageUrl || undefined,
-          finalScribe
-        );
-        if (res.success) {
-          sent++;
-        } else {
+          const res = await sendSingleMessage(
+            target.wa_chat_id,
+            msg,
+            finalImageUrl || undefined,
+            finalScribe
+          );
+          if (res.success) {
+            sent++;
+          } else {
+            failed++;
+            errors.push(`${target.wa_chat_id}: ${res.error}`);
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "שגיאה לא צפויה";
+          console.error(`Failed for ${target.wa_chat_id}`, err);
           failed++;
-          errors.push(`${target.wa_chat_id}: ${res.error}`);
+          errors.push(`${target.wa_chat_id}: ${errMsg}`);
         }
         if (i < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, 2500));
+          await new Promise((r) => setTimeout(r, 2000));
         }
       }
 
@@ -309,12 +322,14 @@ export default function BroadcastTab({
         if (r.success) setNextScribeNum(r.next);
       });
       refreshLogs();
-    } catch {
-      setSendProgress(null);
-      toast.error("שגיאה לא צפויה");
-    } finally {
-      setLoading(false);
-    }
+        } catch {
+          setSendProgress(null);
+          toast.error("שגיאה לא צפויה");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    });
   };
 
   const formatDate = (s: string) => {
@@ -533,7 +548,7 @@ export default function BroadcastTab({
 
         <Button
           onClick={handleSend}
-          disabled={loading || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
+          disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
           className="w-full rounded-xl bg-indigo-600 py-6 text-base font-semibold hover:bg-indigo-700 hover:shadow-lg"
         >
           <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />

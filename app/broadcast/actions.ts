@@ -54,7 +54,6 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
   }
 }
 
-const DELAY_MS = 2500;
 const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5MB
 
 function sleep(ms: number): Promise<void> {
