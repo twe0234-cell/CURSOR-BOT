@@ -74,7 +74,6 @@ export async function fetchInvestments(): Promise<
 export async function createInvestment(
   scribeId: string | null,
   itemDetails: string,
-  totalAgreedPrice: number,
   targetDate?: string,
   notes?: string,
   quantity?: number,
@@ -84,10 +83,11 @@ export async function createInvestment(
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
-    if (totalAgreedPrice <= 0) return { success: false, error: "הזן סכום" };
 
     const qty = quantity != null && quantity > 0 ? quantity : 1;
-    const cpu = costPerUnit != null && costPerUnit >= 0 ? costPerUnit : null;
+    const cpu = costPerUnit != null && costPerUnit >= 0 ? costPerUnit : 0;
+    const totalAgreedPrice = qty * cpu;
+    if (totalAgreedPrice <= 0) return { success: false, error: "הזן כמות ועלות ליחידה" };
 
     const { error } = await supabase.from("erp_investments").insert({
       user_id: user.id,
@@ -105,6 +105,64 @@ export async function createInvestment(
     revalidatePath("/investments");
     revalidatePath("/");
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function bulkImportInvestments(
+  rows: Record<string, unknown>[]
+): Promise<{ success: true; imported: number; errors: string[] } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: scribes } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .eq("type", "Scribe");
+    const scribeByName = new Map((scribes ?? []).map((s) => [s.name?.trim().toLowerCase() ?? "", s.id]));
+
+    const errors: string[] = [];
+    let imported = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const scribeName = String(r["scribe"] ?? r["סופר"] ?? r["scribe_name"] ?? "").trim();
+      const scribeId = scribeName ? scribeByName.get(scribeName.toLowerCase()) ?? null : null;
+      const itemDetails = String(r["item_details"] ?? r["פרטי פריט"] ?? r["details"] ?? "").trim();
+      const qty = Number(r["quantity"] ?? r["כמות"] ?? 1) || 1;
+      const cpu = Number(r["cost_per_unit"] ?? r["עלות ליחידה"] ?? r["cost"] ?? 0) || 0;
+      const total = qty * cpu;
+      const targetDate = String(r["target_date"] ?? r["תאריך יעד"] ?? r["date"] ?? "").trim() || null;
+      const notes = String(r["notes"] ?? r["הערות"] ?? "").trim() || null;
+
+      if (total <= 0) {
+        errors.push(`שורה ${i + 1}: כמות × עלות ליחידה חייב להיות חיובי`);
+        continue;
+      }
+
+      const { error } = await supabase.from("erp_investments").insert({
+        user_id: user.id,
+        scribe_id: scribeId,
+        item_details: itemDetails || null,
+        quantity: qty,
+        cost_per_unit: cpu,
+        total_agreed_price: total,
+        amount_paid: 0,
+        target_date: targetDate,
+        notes,
+      });
+      if (error) {
+        errors.push(`שורה ${i + 1}: ${error.message}`);
+      } else {
+        imported++;
+      }
+    }
+    revalidatePath("/investments");
+    revalidatePath("/");
+    return { success: true, imported, errors };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

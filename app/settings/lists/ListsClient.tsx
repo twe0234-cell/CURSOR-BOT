@@ -195,7 +195,7 @@ export default function ListsClient({ initialLists }: Props) {
       <Card className="rounded-xl border-slate-200 bg-white overflow-hidden">
         <CardHeader>
           <CardTitle className="text-base font-semibold text-slate-700">רשימות נוספות</CardTitle>
-          <CardDescription>סוגי קלף, נביאים, סוגי כתב, סטטוסים</CardDescription>
+          <CardDescription>סוגי קלף, נביאים, סוגי כתב, סטטוסים – ייבוא/ייצוא CSV זמין</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -203,7 +203,7 @@ export default function ListsClient({ initialLists }: Props) {
               <TableRow>
                 <TableHead>רשימה</TableHead>
                 <TableHead>אפשרויות</TableHead>
-                <TableHead className="w-24">פעולות</TableHead>
+                <TableHead className="w-48">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,9 +218,18 @@ export default function ListsClient({ initialLists }: Props) {
                       {list.options.length} פריטים
                     </TableCell>
                     <TableCell>
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(list)}>
-                        <PencilIcon className="size-4" />
-                      </Button>
+                      <div className="flex gap-1 items-center">
+                        <CsvActions
+                          data={list.options.map((o) => ({ value: o }))}
+                          onImport={(rows) => handleCsvImport(list.list_key, rows)}
+                          filename={`${list.list_key}_export`}
+                          exportLabel="ייצוא"
+                          importLabel="ייבוא"
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => openEdit(list)}>
+                          <PencilIcon className="size-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

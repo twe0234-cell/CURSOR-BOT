@@ -29,10 +29,12 @@ import {
   fetchInvestments,
   createInvestment,
   addPayment,
+  bulkImportInvestments,
   type InvestmentRecord,
 } from "./actions";
 import { fetchScribes } from "@/app/crm/actions";
 import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
+import { CsvActions } from "@/components/shared/CsvActions";
 import { PlusIcon, WalletIcon } from "lucide-react";
 
 export default function InvestmentsClient() {
@@ -47,7 +49,6 @@ export default function InvestmentsClient() {
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newQuantity, setNewQuantity] = useState("1");
   const [newCostPerUnit, setNewCostPerUnit] = useState("");
-  const [newTotalPrice, setNewTotalPrice] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
 
@@ -73,22 +74,20 @@ export default function InvestmentsClient() {
   };
 
   const handleCreate = async () => {
-    const total = parseFloat(newTotalPrice);
-    if (isNaN(total) || total <= 0) {
-      toast.error("הזן סכום");
+    const qty = parseFloat(newQuantity);
+    const cpu = parseFloat(newCostPerUnit);
+    if (isNaN(qty) || qty <= 0 || isNaN(cpu) || cpu < 0) {
+      toast.error("הזן כמות ועלות ליחידה");
       return;
     }
-    const qty = parseFloat(newQuantity);
-    const cpu = newCostPerUnit.trim() ? parseFloat(newCostPerUnit) : undefined;
     setLoading(true);
     const res = await createInvestment(
       newScribeId || null,
       newItemDetails,
-      total,
       newTargetDate || undefined,
       newNotes || undefined,
-      !isNaN(qty) && qty > 0 ? qty : undefined,
-      cpu != null && !isNaN(cpu) ? cpu : undefined
+      qty,
+      cpu
     );
     setLoading(false);
     if (res.success) {
@@ -98,7 +97,6 @@ export default function InvestmentsClient() {
       setNewItemDetails("");
       setNewQuantity("1");
       setNewCostPerUnit("");
-      setNewTotalPrice("");
       setNewTargetDate("");
       setNewNotes("");
       loadData();
@@ -135,10 +133,36 @@ export default function InvestmentsClient() {
             <CardTitle className="text-base font-semibold">תיק השקעות</CardTitle>
             <CardDescription>פרויקטי כתיבה פעילים</CardDescription>
           </div>
-          <Button onClick={() => setCreateOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
-            <PlusIcon className="size-4 ml-1" />
-            השקעה חדשה
-          </Button>
+          <div className="flex gap-2">
+            <CsvActions
+              data={investments.map((inv) => ({
+                scribe: inv.scribe_name ?? "",
+                item_details: inv.item_details ?? "",
+                quantity: inv.quantity,
+                cost_per_unit: inv.cost_per_unit ?? "",
+                total_agreed_price: inv.total_agreed_price,
+                amount_paid: inv.amount_paid,
+                target_date: inv.target_date ?? "",
+                status: inv.status,
+                notes: inv.notes ?? "",
+              }))}
+              onImport={async (rows) => {
+                const res = await bulkImportInvestments(rows);
+                if (res.success) {
+                  toast.success(`יובאו ${res.imported} השקעות`);
+                  if (res.errors.length > 0) toast.warning(res.errors.slice(0, 3).join("; "));
+                  loadData();
+                } else toast.error(res.error);
+              }}
+              filename="investments"
+              exportLabel="ייצוא CSV"
+              importLabel="ייבוא CSV"
+            />
+            <Button onClick={() => setCreateOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
+              <PlusIcon className="size-4 ml-1" />
+              השקעה חדשה
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-xl border overflow-hidden">
@@ -149,9 +173,11 @@ export default function InvestmentsClient() {
                   <TableHead className="font-semibold">פרטי פריט</TableHead>
                   <TableHead className="font-semibold">כמות</TableHead>
                   <TableHead className="font-semibold">עלות ליחידה</TableHead>
-                  <TableHead className="font-semibold">מחיר מוסכם</TableHead>
+                  <TableHead className="font-semibold">ס״ה השקעה</TableHead>
                   <TableHead className="font-semibold">שולם</TableHead>
                   <TableHead className="font-semibold">יתרה</TableHead>
+                  <TableHead className="font-semibold">תאריך יעד</TableHead>
+                  <TableHead className="font-semibold">סטטוס</TableHead>
                   <TableHead className="font-semibold">התקדמות</TableHead>
                   <TableHead className="font-semibold w-24">פעולות</TableHead>
                 </TableRow>
@@ -174,6 +200,18 @@ export default function InvestmentsClient() {
                       <TableCell>{inv.total_agreed_price.toLocaleString("he-IL")} ₪</TableCell>
                       <TableCell>{inv.amount_paid.toLocaleString("he-IL")} ₪</TableCell>
                       <TableCell className="font-medium">{inv.remaining_balance.toLocaleString("he-IL")} ₪</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {inv.target_date ? new Date(inv.target_date).toLocaleDateString("he-IL") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          inv.status === "active" ? "bg-amber-100 text-amber-800" :
+                          inv.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                          "bg-slate-100 text-slate-600"
+                        }`}>
+                          {inv.status === "active" ? "פעיל" : inv.status === "completed" ? "הושלם" : "בוטל"}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
@@ -270,21 +308,23 @@ export default function InvestmentsClient() {
                   min={0}
                   value={newCostPerUnit}
                   onChange={(e) => setNewCostPerUnit(e.target.value)}
-                  placeholder="אופציונלי"
+                  placeholder="0"
                   className="rounded-xl"
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">מחיר מוסכם (₪)</label>
-              <Input
-                type="number"
-                value={newTotalPrice}
-                onChange={(e) => setNewTotalPrice(e.target.value)}
-                placeholder="0"
-                className="rounded-xl"
-              />
-            </div>
+            {(() => {
+              const q = parseFloat(newQuantity);
+              const c = parseFloat(newCostPerUnit);
+              if (!isNaN(q) && !isNaN(c) && q > 0 && c >= 0) {
+                return (
+                  <p className="text-sm font-medium text-slate-700">
+                    ס״ה השקעה: {(q * c).toLocaleString("he-IL")} ₪
+                  </p>
+                );
+              }
+              return null;
+            })()}
             <div>
               <label className="mb-1.5 block text-sm font-semibold">תאריך יעד</label>
               <Input

@@ -32,14 +32,19 @@ import {
   fetchExpenses,
   createExpense,
   deleteExpense,
+  bulkImportSales,
   type SaleRecord,
   type ExpenseRecord,
 } from "./actions";
 import { fetchInventory } from "@/app/inventory/actions";
+import { fetchInvestments } from "@/app/investments/actions";
 import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
-import { PlusIcon, ShoppingCartIcon, ReceiptIcon } from "lucide-react";
+import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon } from "lucide-react";
+
+const SALE_TYPES = ["ממלאי", "תיווך", "פרויקט חדש"] as const;
+type SaleType = (typeof SALE_TYPES)[number];
 
 const EXPENSE_CATEGORIES = ["משלוח", "פרסום", "הגהה", "תפירה", "אחר"];
 
@@ -48,11 +53,18 @@ export default function SalesClient() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [saleOpen, setSaleOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [saleType, setSaleType] = useState<SaleType>("ממלאי");
   const [inventoryItems, setInventoryItems] = useState<{ id: string; product_category: string | null; status: string | null }[]>([]);
+  const [investments, setInvestments] = useState<{ id: string; item_details: string | null; status: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+  const [inventorySearch, setInventorySearch] = useState("");
   const [newSaleItemId, setNewSaleItemId] = useState("");
   const [newSaleBuyerId, setNewSaleBuyerId] = useState("");
+  const [newSaleSellerId, setNewSaleSellerId] = useState("");
+  const [newSaleInvestmentId, setNewSaleInvestmentId] = useState("");
+  const [newSaleItemDescription, setNewSaleItemDescription] = useState("");
   const [newSalePrice, setNewSalePrice] = useState("");
+  const [newSaleCommission, setNewSaleCommission] = useState("");
   const [newSaleNotes, setNewSaleNotes] = useState("");
   const [newExpCategory, setNewExpCategory] = useState("");
   const [newExpAmount, setNewExpAmount] = useState("");
@@ -79,37 +91,105 @@ export default function SalesClient() {
           })));
         }
       });
+      fetchInvestments().then((r) => {
+        if (r.success) {
+          setInvestments(r.investments.filter((i) => i.status === "active").map((i) => ({
+            id: i.id,
+            item_details: i.item_details,
+            status: i.status,
+          })));
+        }
+      });
       fetchCrmContacts().then((r) => {
         if (r.success) setContacts(r.contacts.map((c) => ({ id: c.id, name: c.name })));
       });
     }
   }, [saleOpen]);
 
+  const filteredInventory = inventorySearch.trim()
+    ? inventoryItems.filter((i) =>
+        (i.product_category ?? "").toLowerCase().includes(inventorySearch.toLowerCase())
+      )
+    : inventoryItems;
+
   const handleCreateSale = async () => {
-    const price = parseFloat(newSalePrice);
-    if (!newSaleItemId || isNaN(price) || price <= 0) {
-      toast.error("בחר פריט והזן מחיר");
-      return;
+    if (saleType === "ממלאי") {
+      const price = parseFloat(newSalePrice);
+      if (!newSaleItemId || isNaN(price) || price <= 0) {
+        toast.error("בחר פריט והזן מחיר");
+        return;
+      }
+      setLoading(true);
+      const res = await createSale({
+        sale_type: "ממלאי",
+        item_id: newSaleItemId,
+        buyer_id: newSaleBuyerId || null,
+        sale_price: price,
+        notes: newSaleNotes || undefined,
+      });
+      setLoading(false);
+      if (res.success) {
+        toast.success("המכירה נרשמה");
+        resetSaleForm();
+        setSaleOpen(false);
+        loadData();
+      } else toast.error(res.error);
+    } else if (saleType === "תיווך") {
+      const commission = parseFloat(newSaleCommission);
+      if (!newSaleItemDescription.trim() || isNaN(commission) || commission <= 0) {
+        toast.error("הזן תיאור פריט ועמלת תיווך");
+        return;
+      }
+      setLoading(true);
+      const res = await createSale({
+        sale_type: "תיווך",
+        item_description: newSaleItemDescription,
+        buyer_id: newSaleBuyerId || null,
+        seller_id: newSaleSellerId || null,
+        commission_profit: commission,
+        notes: newSaleNotes || undefined,
+      });
+      setLoading(false);
+      if (res.success) {
+        toast.success("עמלת התיווך נרשמה");
+        resetSaleForm();
+        setSaleOpen(false);
+        loadData();
+      } else toast.error(res.error);
+    } else if (saleType === "פרויקט חדש") {
+      const price = parseFloat(newSalePrice);
+      if (!newSaleInvestmentId || isNaN(price) || price <= 0) {
+        toast.error("בחר השקעה והזן מחיר מכירה");
+        return;
+      }
+      setLoading(true);
+      const res = await createSale({
+        sale_type: "פרויקט חדש",
+        investment_id: newSaleInvestmentId,
+        buyer_id: newSaleBuyerId || null,
+        sale_price: price,
+        notes: newSaleNotes || undefined,
+      });
+      setLoading(false);
+      if (res.success) {
+        toast.success("מכירת הפרויקט נרשמה");
+        resetSaleForm();
+        setSaleOpen(false);
+        loadData();
+      } else toast.error(res.error);
     }
-    setLoading(true);
-    const res = await createSale(
-      newSaleItemId,
-      newSaleBuyerId || null,
-      price,
-      newSaleNotes || undefined
-    );
-    setLoading(false);
-    if (res.success) {
-      toast.success("המכירה נרשמה");
-      setSaleOpen(false);
-      setNewSaleItemId("");
-      setNewSaleBuyerId("");
-      setNewSalePrice("");
-      setNewSaleNotes("");
-      loadData();
-    } else {
-      toast.error(res.error);
-    }
+  };
+
+  const resetSaleForm = () => {
+    setNewSaleItemId("");
+    setNewSaleBuyerId("");
+    setNewSaleSellerId("");
+    setNewSaleInvestmentId("");
+    setNewSaleItemDescription("");
+    setNewSalePrice("");
+    setNewSaleCommission("");
+    setNewSaleNotes("");
+    setInventorySearch("");
   };
 
   const handleAddExpense = async () => {
@@ -128,9 +208,7 @@ export default function SalesClient() {
       setNewExpAmount("");
       setNewExpNotes("");
       loadData();
-    } else {
-      toast.error(res.error);
-    }
+    } else toast.error(res.error);
   };
 
   const handleDeleteExpense = async (id: string) => {
@@ -139,6 +217,12 @@ export default function SalesClient() {
       toast.success("ההוצאה נמחקה");
       loadData();
     } else toast.error(res.error);
+  };
+
+  const getSaleDisplay = (s: SaleRecord) => {
+    if (s.sale_type === "תיווך") return s.item_description ?? "—";
+    if (s.sale_type === "פרויקט חדש") return s.investment_details ?? "פרויקט";
+    return s.item_category ?? "—";
   };
 
   return (
@@ -160,24 +244,36 @@ export default function SalesClient() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-semibold">מכירות</CardTitle>
-                <CardDescription>היסטוריית מכירות</CardDescription>
+                <CardDescription>היסטוריית מכירות – ממלאי, תיווך, פרויקטים</CardDescription>
               </div>
               <div className="flex gap-2">
                 <CsvActions
                   data={sales.map((s) => ({
+                    sale_type: s.sale_type ?? "ממלאי",
                     sale_date: s.sale_date,
-                    item_category: s.item_category,
+                    item: getSaleDisplay(s),
                     buyer_name: s.buyer_name,
+                    seller_name: s.seller_name,
                     sale_price: s.sale_price,
                     profit: s.profit,
+                    commission_profit: s.commission_profit,
                   }))}
-                  onImport={(rows) => toast.info(`יובאו ${rows.length} שורות. ייבוא מכירות יתווסף בעדכון.`)}
+                  onImport={async (rows) => {
+                    const res = await bulkImportSales(rows);
+                    if (res.success) {
+                      toast.success(`יובאו ${res.imported} מכירות`);
+                      if (res.errors.length > 0) toast.warning(res.errors.slice(0, 3).join("; "));
+                      loadData();
+                    } else toast.error(res.error);
+                  }}
                   filename="sales"
+                  exportLabel="ייצוא CSV"
+                  importLabel="ייבוא CSV"
                 />
                 <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
-                <PlusIcon className="size-4 ml-1" />
-                מכירה חדשה
-              </Button>
+                  <PlusIcon className="size-4 ml-1" />
+                  מכירה חדשה
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -185,6 +281,7 @@ export default function SalesClient() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">
+                      <TableHead className="font-semibold">סוג</TableHead>
                       <TableHead className="font-semibold">תאריך</TableHead>
                       <TableHead className="font-semibold">פריט</TableHead>
                       <TableHead className="font-semibold">קונה</TableHead>
@@ -195,8 +292,13 @@ export default function SalesClient() {
                   <TableBody>
                     {sales.map((s) => (
                       <TableRow key={s.id}>
+                        <TableCell>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100">
+                            {s.sale_type ?? "ממלאי"}
+                          </span>
+                        </TableCell>
                         <TableCell>{new Date(s.sale_date).toLocaleDateString("he-IL")}</TableCell>
-                        <TableCell>{s.item_category ?? "—"}</TableCell>
+                        <TableCell>{getSaleDisplay(s)}</TableCell>
                         <TableCell>{s.buyer_name ?? "—"}</TableCell>
                         <TableCell>{s.sale_price.toLocaleString("he-IL")} ₪</TableCell>
                         <TableCell className={s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
@@ -289,25 +391,132 @@ export default function SalesClient() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={saleOpen} onOpenChange={setSaleOpen}>
+      <Dialog open={saleOpen} onOpenChange={(o) => { setSaleOpen(o); if (!o) resetSaleForm(); }}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>מכירה חדשה</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold">פריט</label>
-              <select
-                value={newSaleItemId}
-                onChange={(e) => setNewSaleItemId(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2"
-              >
-                <option value="">בחר פריט</option>
-                {inventoryItems.map((i) => (
-                  <option key={i.id} value={i.id}>{i.product_category ?? i.id}</option>
+              <label className="mb-1.5 block text-sm font-semibold">סוג מכירה</label>
+              <div className="flex gap-2">
+                {SALE_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSaleType(t)}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
+                      saleType === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200"
+                    }`}
+                  >
+                    {t}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
+
+            {saleType === "ממלאי" && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">פריט ממלאי</label>
+                  <div className="relative">
+                    <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                      placeholder="חפש לפי קטגוריה..."
+                      className="rounded-xl pr-10 mb-2"
+                    />
+                  </div>
+                  <select
+                    value={newSaleItemId}
+                    onChange={(e) => setNewSaleItemId(e.target.value)}
+                    className="w-full rounded-xl border px-3 py-2"
+                  >
+                    <option value="">בחר פריט</option>
+                    {filteredInventory.map((i) => (
+                      <option key={i.id} value={i.id}>{i.product_category ?? i.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
+                  <Input
+                    type="number"
+                    value={newSalePrice}
+                    onChange={(e) => setNewSalePrice(e.target.value)}
+                    placeholder="0"
+                    className="rounded-xl"
+                  />
+                </div>
+              </>
+            )}
+
+            {saleType === "תיווך" && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">תיאור הפריט</label>
+                  <Input
+                    value={newSaleItemDescription}
+                    onChange={(e) => setNewSaleItemDescription(e.target.value)}
+                    placeholder="ספר תורה, מגילה..."
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">מוכר (אופציונלי)</label>
+                  <select
+                    value={newSaleSellerId}
+                    onChange={(e) => setNewSaleSellerId(e.target.value)}
+                    className="w-full rounded-xl border px-3 py-2"
+                  >
+                    <option value="">—</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">עמלת תיווך (₪)</label>
+                  <Input
+                    type="number"
+                    value={newSaleCommission}
+                    onChange={(e) => setNewSaleCommission(e.target.value)}
+                    placeholder="0"
+                    className="rounded-xl"
+                  />
+                </div>
+              </>
+            )}
+
+            {saleType === "פרויקט חדש" && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">השקעה (פרויקט)</label>
+                  <select
+                    value={newSaleInvestmentId}
+                    onChange={(e) => setNewSaleInvestmentId(e.target.value)}
+                    className="w-full rounded-xl border px-3 py-2"
+                  >
+                    <option value="">בחר השקעה</option>
+                    {investments.map((i) => (
+                      <option key={i.id} value={i.id}>{i.item_details ?? i.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
+                  <Input
+                    type="number"
+                    value={newSalePrice}
+                    onChange={(e) => setNewSalePrice(e.target.value)}
+                    placeholder="0"
+                    className="rounded-xl"
+                  />
+                </div>
+              </>
+            )}
+
             <div>
               <label className="mb-1.5 block text-sm font-semibold">קונה (אופציונלי)</label>
               <div className="flex gap-2">
@@ -329,20 +538,11 @@ export default function SalesClient() {
                   className="rounded-xl shrink-0"
                 >
                   <PlusIcon className="size-4 ml-1" />
-                  הוסף חדש
+                  הוסף
                 </Button>
               </div>
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">מחיר מכירה (₪)</label>
-              <Input
-                type="number"
-                value={newSalePrice}
-                onChange={(e) => setNewSalePrice(e.target.value)}
-                placeholder="0"
-                className="rounded-xl"
-              />
-            </div>
+
             <div>
               <label className="mb-1.5 block text-sm font-semibold">הערות</label>
               <Input
