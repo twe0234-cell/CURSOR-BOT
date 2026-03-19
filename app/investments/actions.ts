@@ -23,6 +23,7 @@ export type InvestmentRecord = {
   milestones: MilestoneItem[];
   documents: string[];
   public_slug: string | null;
+  is_public: boolean;
   created_at: string;
   scribe_name?: string;
 };
@@ -37,7 +38,7 @@ export async function fetchInvestments(): Promise<
 
     const { data, error } = await supabase
       .from("erp_investments")
-      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, deductions, target_date, status, notes, milestones, documents, public_slug, created_at")
+      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, deductions, target_date, status, notes, milestones, documents, public_slug, is_public, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -73,6 +74,7 @@ export async function fetchInvestments(): Promise<
         milestones,
         documents,
         public_slug: r.public_slug ?? null,
+        is_public: Boolean(r.is_public ?? false),
         created_at: r.created_at ?? "",
         scribe_name: r.scribe_id ? scribeMap.get(r.scribe_id) ?? undefined : undefined,
       };
@@ -220,7 +222,7 @@ export async function getShareLink(investmentId: string): Promise<
 
     const { data, error } = await supabase
       .from("erp_investments")
-      .select("public_slug")
+      .select("public_slug, is_public")
       .eq("id", investmentId)
       .eq("user_id", user.id)
       .single();
@@ -228,6 +230,17 @@ export async function getShareLink(investmentId: string): Promise<
     if (error || !data) return { success: false, error: "לא נמצא" };
     const slug = data.public_slug;
     if (!slug) return { success: false, error: "אין קישור שיתוף" };
+
+    if (!data.is_public) {
+      const { error: pubErr } = await supabase
+        .from("erp_investments")
+        .update({ is_public: true, updated_at: new Date().toISOString() })
+        .eq("id", investmentId)
+        .eq("user_id", user.id);
+      if (pubErr) return { success: false, error: pubErr.message };
+      revalidatePath("/investments");
+      revalidatePath(`/project/${slug}`);
+    }
     const path = `/project/${slug}`;
     const url = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}${path}` : path;
     return { success: true, url, slug: String(slug) };
@@ -252,6 +265,7 @@ export async function fetchPublicProject(slug: string): Promise<
       .from("erp_investments")
       .select("item_details, status, milestones")
       .eq("public_slug", slug)
+      .eq("is_public", true)
       .single();
 
     if (error || !data) return { success: false, error: "לא נמצא" };

@@ -58,6 +58,17 @@ type Props = {
 
 export default function InventoryClient({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [sortKey, setSortKey] = useState<"sku" | "product_category" | "script_type" | "status" | "target_price">("sku");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
   const filteredActive = items
     .filter((i) => i.status !== "sold")
     .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
@@ -82,22 +93,16 @@ export default function InventoryClient({ initialItems }: Props) {
   };
 
   const handleSort = (key: typeof sortKey) => {
-    setSortKey(key);
-    setSortDir((d) => (sortKey === key ? (d === "asc" ? "desc" : "asc") : "asc"));
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
   };
 
   const activeItems = sortItems(filteredActive);
   const archiveItems = sortItems(filteredArchive);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [sortKey, setSortKey] = useState<"sku" | "product_category" | "script_type" | "status" | "target_price">("sku");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     fetchDropdownOptions("categories")
