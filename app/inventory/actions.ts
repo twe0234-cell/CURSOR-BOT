@@ -7,8 +7,17 @@ import { logError, logInfo } from "@/lib/logger";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
+function generateSku(): string {
+  const hex = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 8);
+  return `HD-${hex}`;
+}
+
 export type InventoryItem = {
   id: string;
+  sku: string | null;
   user_id: string | null;
   product_category: string | null;
   purchase_date: string | null;
@@ -45,7 +54,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
+      .select("id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -60,6 +69,7 @@ export async function fetchInventory(): Promise<
       const total = r.total_cost != null ? Number(r.total_cost) : (cost != null ? qty * cost : null);
       return {
         id: r.id,
+        sku: r.sku ?? null,
         user_id: r.user_id,
         product_category: r.product_category ?? null,
         purchase_date: r.purchase_date ?? null,
@@ -110,7 +120,7 @@ export async function createInventoryItem(
     const totalCost = costPerUnit != null ? qty * costPerUnit : null; // total_cost = quantity * cost_price
     const amountPaid = data.amount_paid ?? 0;
     const targetPrice = data.target_price ?? null;
-    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;
+    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null; // total_target_price = quantity * target_price
 
     const imagesValue = Array.isArray(data.images)
       ? data.images
@@ -118,8 +128,10 @@ export async function createInventoryItem(
         ? []
         : [];
 
+    const sku = generateSku();
     try {
       const { error } = await supabase.from("inventory").insert({
+        sku,
         user_id: user.id,
         product_category: data.product_category ?? null,
         purchase_date: data.purchase_date ?? null,
@@ -182,7 +194,7 @@ export async function updateInventoryItem(
     const totalCost = costPerUnit != null ? qty * costPerUnit : null; // total_cost = quantity * cost_price
     const amountPaid = data.amount_paid ?? 0;
     const targetPrice = data.target_price ?? null;
-    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;
+    const totalTargetPrice = targetPrice != null ? qty * targetPrice : null; // total_target_price = quantity * target_price
 
     const imagesValue = Array.isArray(data.images)
       ? data.images

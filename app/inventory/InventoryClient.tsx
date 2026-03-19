@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,6 +52,8 @@ type Props = {
 
 export default function InventoryClient({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems);
+  const activeItems = items.filter((i) => i.status !== "sold");
+  const archiveItems = items.filter((i) => i.status === "sold");
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -230,6 +233,7 @@ export default function InventoryClient({ initialItems }: Props) {
           <CsvActions
             data={items.map((i) => ({
               id: i.id,
+              sku: i.sku ?? i.id.slice(0, 8),
               product_category: i.product_category,
               script_type: i.script_type,
               status: i.status,
@@ -248,21 +252,29 @@ export default function InventoryClient({ initialItems }: Props) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
-        <Table className="min-w-0">
-          <TableHeader>
-            <TableRow>
-              <TableHead>קטגוריה</TableHead>
-              <TableHead>כתב</TableHead>
-              <TableHead>סטטוס</TableHead>
-              <TableHead>מחיר יעד</TableHead>
-              <TableHead className="w-40">פעולות</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
+      <Tabs defaultValue="active" className="w-full">
+        <TabsList className="mb-4 rounded-xl">
+          <TabsTrigger value="active" className="rounded-lg">מלאי זמין ({activeItems.length})</TabsTrigger>
+          <TabsTrigger value="archive" className="rounded-lg">ארכיון (נמכר) ({archiveItems.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="active" className="mt-0">
+          <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+            <Table className="min-w-0">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>מק״ט</TableHead>
+                  <TableHead>קטגוריה</TableHead>
+                  <TableHead>כתב</TableHead>
+                  <TableHead>סטטוס</TableHead>
+                  <TableHead>מחיר יעד</TableHead>
+                  <TableHead className="w-40">פעולות</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activeItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono font-medium text-sky-700">{item.sku ?? item.id.slice(0, 8)}</TableCell>
+                    <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                 <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
                 <TableCell>{item.status ?? "—"}</TableCell>
                 <TableCell>
@@ -310,21 +322,69 @@ export default function InventoryClient({ initialItems }: Props) {
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {items.length === 0 && (
-        <p className="py-12 text-center text-muted-foreground">
-          אין פריטים. לחץ על &quot;הוסף פריט&quot;
-        </p>
-      )}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {activeItems.length === 0 && (
+            <p className="py-12 text-center text-muted-foreground">
+              אין פריטים. לחץ על &quot;הוסף פריט&quot;
+            </p>
+          )}
+        </TabsContent>
+        <TabsContent value="archive" className="mt-0">
+          <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+            <Table className="min-w-0">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>מק״ט</TableHead>
+                  <TableHead>קטגוריה</TableHead>
+                  <TableHead>כתב</TableHead>
+                  <TableHead>סטטוס</TableHead>
+                  <TableHead>מחיר יעד</TableHead>
+                  <TableHead className="w-40">פעולות</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {archiveItems.map((item) => (
+                  <TableRow key={item.id} className="bg-slate-50/50 opacity-90">
+                    <TableCell className="font-mono font-medium text-slate-600">{item.sku ?? item.id.slice(0, 8)}</TableCell>
+                    <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
+                    <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
+                    <TableCell className="text-slate-600">{item.status ?? "—"}</TableCell>
+                    <TableCell className="text-slate-600">
+                      {item.target_price != null ? `${item.target_price} ₪` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openEdit(item)}
+                        title="צפייה בלבד"
+                      >
+                        <PencilIcon className="size-4 text-slate-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {archiveItems.length === 0 && (
+            <p className="py-12 text-center text-muted-foreground">
+              אין פריטים בארכיון
+            </p>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-slate-50/30" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
+            {editingId && items.find((i) => i.id === editingId)?.status === "sold" && (
+              <p className="text-sm text-amber-600 font-medium">פריט בארכיון – צפייה ועריכה מוגבלת</p>
+            )}
           </DialogHeader>
           <FormProvider {...form} key={editingId ?? "create"}>
             <form onSubmit={handleSave} className="space-y-6">
@@ -467,14 +527,14 @@ export default function InventoryClient({ initialItems }: Props) {
                     const cost = form.watch("cost_price");
                     const paid = form.watch("amount_paid") ?? 0;
                     const total = cost != null && !Number.isNaN(cost) ? (qty || 1) * cost : null;
-                    const remaining = total != null ? total - paid : null;
                     if (total == null) return null;
+                    const balanceToScribe = total - paid;
                     return (
                       <div className="rounded-lg bg-amber-100/50 p-3 space-y-1 text-sm">
-                        <p className="font-medium text-slate-800">סה״כ שווי קנייה: {total.toLocaleString("he-IL")} ₪</p>
-                        <p className="font-medium">סה״כ לתשלום: {total.toLocaleString("he-IL")} ₪</p>
-                        <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
-                          יתרה לתשלום: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
+                        <p className="font-medium text-slate-800">עלות: {total.toLocaleString("he-IL")} ₪</p>
+                        <p className="font-medium">שולם: {paid.toLocaleString("he-IL")} ₪</p>
+                        <p className={balanceToScribe > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
+                          יתרה לסופר: {balanceToScribe.toLocaleString("he-IL")} ₪
                         </p>
                       </div>
                     );

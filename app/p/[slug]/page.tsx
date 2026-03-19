@@ -13,7 +13,7 @@ export default async function PublicProductPage({
 
   const { data: item, error } = await supabase
     .from("inventory")
-    .select("id, images, target_price")
+    .select("id, sku, images, target_price")
     .eq("public_slug", slug)
     .eq("is_public", true)
     .single();
@@ -32,18 +32,19 @@ export default async function PublicProductPage({
     .single();
 
   const waNumber = sysSettings?.whatsapp_number?.replace(/\D/g, "") ?? "";
+  const skuDisplay = item.sku ?? item.id;
   const waLink = waNumber
-    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`שלום, אני מעוניין בפריט מקט ${item.id} שראיתי בקטלוג`)}`
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`שלום, אני מעוניין בפריט מקט ${skuDisplay} שראיתי בקטלוג`)}`
     : null;
 
   return (
     <div className="min-h-screen bg-sky-50/30" dir="rtl">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-          {/* Makat (Product ID) */}
+          {/* Makat (SKU) */}
           <div className="px-6 pt-6 pb-2">
-            <p className="text-sm text-slate-500 font-medium">מקט</p>
-            <p className="text-lg font-bold text-slate-800 font-mono">{item.id}</p>
+            <p className="text-sm text-slate-500 font-medium">מק״ט</p>
+            <p className="text-lg font-bold text-slate-800 font-mono">{skuDisplay}</p>
           </div>
 
           {/* Image gallery */}
