@@ -11,6 +11,7 @@ export type InventoryItem = {
   id: string;
   user_id: string | null;
   product_category: string | null;
+  purchase_date: string | null;
   category_meta: Record<string, unknown> | null;
   script_type: string | null;
   status: string | null;
@@ -44,7 +45,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, user_id, product_category, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
+      .select("id, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -61,6 +62,7 @@ export async function fetchInventory(): Promise<
         id: r.id,
         user_id: r.user_id,
         product_category: r.product_category ?? null,
+        purchase_date: r.purchase_date ?? null,
         category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
         script_type: r.script_type ?? null,
         status: r.status ?? null,
@@ -120,6 +122,7 @@ export async function createInventoryItem(
       const { error } = await supabase.from("inventory").insert({
         user_id: user.id,
         product_category: data.product_category ?? null,
+        purchase_date: data.purchase_date ?? null,
         category_meta: data.category_meta ?? {},
         script_type: data.script_type ?? null,
         status: data.status ?? "available",
@@ -192,6 +195,7 @@ export async function updateInventoryItem(
         .from("inventory")
         .update({
           product_category: data.product_category ?? null,
+          purchase_date: data.purchase_date ?? null,
           category_meta: data.category_meta ?? {},
           script_type: data.script_type ?? null,
           status: data.status ?? null,

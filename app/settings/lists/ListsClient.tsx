@@ -35,6 +35,7 @@ const LIST_LABELS: Record<string, string> = {
   torah_sizes: "גדלי ספר תורה",
   neviim_names: "שמות נביאים",
   megilla_lines: "שורות מגילה",
+  mezuzah_sizes: "מידות מזוזה",
   script_types: "סוגי כתב",
   statuses: "סטטוסים",
 };
@@ -44,6 +45,7 @@ const MAIN_SECTIONS: { listKey: string; title: string; subtitle: string }[] = [
   { listKey: "torah_sizes", title: "מידות ס\"ת", subtitle: "גדלי ספר תורה (17, 24, 30 וכו')" },
   { listKey: "neviim_names", title: "שמות נביאים", subtitle: "שמות ספרי נביאים (יהושע, שופטים, שמואל וכו')" },
   { listKey: "megilla_lines", title: "שורות מגילה", subtitle: "מספר שורות במגילה (11, 21, 28 וכו')" },
+  { listKey: "mezuzah_sizes", title: "מידות מזוזה", subtitle: "מידות מזוזה (10, 12, 15, אחר)" },
 ];
 
 function extractValuesFromCsvRows(rows: Record<string, unknown>[]): string[] {

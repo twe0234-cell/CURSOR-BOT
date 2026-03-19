@@ -19,6 +19,7 @@ export function DependentCategories() {
   const [torahSizes, setTorahSizes] = useState<string[]>([]);
   const [neviimNames, setNeviimNames] = useState<string[]>([]);
   const [megillaLines, setMegillaLines] = useState<string[]>([]);
+  const [mezuzahSizes, setMezuzahSizes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -47,21 +48,28 @@ export function DependentCategories() {
         .then((r) => setMegillaLines(r.success && r.options.length > 0 ? r.options : DROPDOWN_FALLBACKS.megilla_lines))
         .catch(() => setMegillaLines(DROPDOWN_FALLBACKS.megilla_lines))
         .finally(() => setLoading(false));
+    } else if (category === "מזוזה") {
+      queueMicrotask(() => setLoading(true));
+      fetchDropdownOptions("mezuzah_sizes")
+        .then((r) => setMezuzahSizes(r.success && r.options.length > 0 ? r.options : DROPDOWN_FALLBACKS.mezuzah_sizes))
+        .catch(() => setMezuzahSizes(DROPDOWN_FALLBACKS.mezuzah_sizes))
+        .finally(() => setLoading(false));
     }
   }, [category]);
 
-  const showSize = category === "ספר תורה";
+  const showTorahSize = category === "ספר תורה";
   const showNavi = category === "נביא";
   const showLines = category === "מגילה";
+  const showMezuzahSize = category === "מזוזה";
 
-  if (!showSize && !showNavi && !showLines) return null;
+  if (!showTorahSize && !showNavi && !showLines && !showMezuzahSize) return null;
 
   const selectClass =
-    "w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
+    "w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500";
 
   return (
     <>
-      {showSize && (
+      {showTorahSize && (
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-semibold text-slate-800">גודל</label>
           {loading ? (
@@ -79,6 +87,31 @@ export function DependentCategories() {
           >
             <option value="">בחר</option>
             {torahSizes.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          )}
+        </div>
+      )}
+
+      {showMezuzahSize && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-800">מידה</label>
+          {loading ? (
+            <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+          ) : (
+          <select
+            value={String(categoryMeta.size ?? "")}
+            onChange={(e) =>
+              setValue("category_meta", {
+                ...categoryMeta,
+                size: e.target.value,
+              })
+            }
+            className={selectClass}
+          >
+            <option value="">בחר</option>
+            {mezuzahSizes.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>

@@ -72,6 +72,7 @@ export default function InventoryClient({ initialItems }: Props) {
   const form = useForm<FormValues>({
     defaultValues: {
       product_category: "",
+      purchase_date: "",
       category_meta: {},
       script_type: "" as string | null,
       status: "available",
@@ -90,6 +91,7 @@ export default function InventoryClient({ initialItems }: Props) {
     setEditingId(null);
     form.reset({
       product_category: "",
+      purchase_date: "",
       category_meta: {},
       script_type: "" as string | null,
       status: "available",
@@ -109,6 +111,7 @@ export default function InventoryClient({ initialItems }: Props) {
     setEditingId(item.id);
     form.reset({
       product_category: item.product_category ?? "",
+      purchase_date: item.purchase_date ?? "",
       category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
       script_type: item.script_type && SCRIPT_TYPES.includes(item.script_type as (typeof SCRIPT_TYPES)[number]) ? item.script_type : ("" as string | null),
       status: item.status ?? "available",
@@ -129,6 +132,7 @@ export default function InventoryClient({ initialItems }: Props) {
     try {
       const payload: Partial<InventoryItem> = {
         product_category: data.product_category || null,
+        purchase_date: data.purchase_date || null,
         category_meta: data.category_meta ?? {},
         script_type: data.script_type || null,
         status: data.status || null,
@@ -219,7 +223,7 @@ export default function InventoryClient({ initialItems }: Props) {
   };
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden bg-slate-50/50 min-h-screen" dir="rtl">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden bg-sky-50/30 min-h-screen" dir="rtl">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-teal-800">מלאי</h1>
         <div className="flex items-center gap-2">
@@ -237,7 +241,7 @@ export default function InventoryClient({ initialItems }: Props) {
             onImport={(rows) => toast.info(`יובאו ${rows.length} שורות. ייבוא מלאי יתווסף בעדכון.`)}
             filename="inventory"
           />
-          <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700">
+          <Button onClick={openCreate} className="bg-sky-600 hover:bg-sky-700">
           <PlusIcon className="size-4 ml-2" />
           הוסף פריט
         </Button>
@@ -327,21 +331,29 @@ export default function InventoryClient({ initialItems }: Props) {
               <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Package className="w-5 h-5 text-indigo-500" />
+                    <Package className="w-5 h-5 text-amber-500" />
                     <CardTitle className="text-base font-semibold text-slate-700">פרטי המוצר</CardTitle>
                   </div>
                   <CardDescription>קטגוריה ותכונות תלויות</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="font-bold text-slate-800 text-right">תאריך קנייה</label>
+                    <Input
+                      type="date"
+                      {...form.register("purchase_date")}
+                      className="rounded-xl"
+                    />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">קטגוריה</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">קטגוריה</label>
                       {categoriesLoading ? (
                         <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
                       ) : (
                       <select
                         {...form.register("product_category")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         <option value="">בחר</option>
                         {categories.map((c) => (
@@ -353,11 +365,11 @@ export default function InventoryClient({ initialItems }: Props) {
                     <DependentCategories />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">כתב</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">כתב</label>
                       <select
                         {...form.register("script_type")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         <option value="">בחר</option>
                         {SCRIPT_TYPES.map((t) => (
@@ -365,11 +377,11 @@ export default function InventoryClient({ initialItems }: Props) {
                         ))}
                       </select>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">סטטוס</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">סטטוס</label>
                       <select
                         {...form.register("status")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         {STATUSES.map((t) => (
                           <option key={t} value={t}>{t}</option>
@@ -383,14 +395,14 @@ export default function InventoryClient({ initialItems }: Props) {
               <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-emerald-500" />
+                    <Wallet className="w-5 h-5 text-amber-500" />
                     <CardTitle className="text-base font-semibold text-slate-700">ספק ותמחור</CardTitle>
                   </div>
                   <CardDescription>סופר, עלויות ומחיר יעד</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-semibold text-slate-800">שם סופר</label>
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="font-bold text-slate-800 text-right">שם סופר</label>
                     <ScribeCombobox
                       value={form.watch("scribe_id") ?? null}
                       onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
@@ -398,8 +410,8 @@ export default function InventoryClient({ initialItems }: Props) {
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">כמות</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">כמות יחידות</label>
                       <Input
                         type="number"
                         min={1}
@@ -408,8 +420,8 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="rounded-xl"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">עלות ליחידה (₪)</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">עלות ליחידה (₪)</label>
                       <Input
                         type="number"
                         min={0}
@@ -418,8 +430,8 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="rounded-xl"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">שולם עד כה (₪)</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">שולם עד כה (₪)</label>
                       <Input
                         type="number"
                         min={0}
@@ -428,8 +440,8 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="rounded-xl"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-semibold text-slate-800">מחיר יעד (ליחידה)</label>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">מחיר מומלץ למכירה (₪)</label>
                       <Input
                         type="number"
                         min={0}
@@ -458,7 +470,8 @@ export default function InventoryClient({ initialItems }: Props) {
                     const remaining = total != null ? total - paid : null;
                     if (total == null) return null;
                     return (
-                      <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-sm">
+                      <div className="rounded-lg bg-amber-100/50 p-3 space-y-1 text-sm">
+                        <p className="font-medium text-slate-800">סה״כ שווי קנייה: {total.toLocaleString("he-IL")} ₪</p>
                         <p className="font-medium">סה״כ לתשלום: {total.toLocaleString("he-IL")} ₪</p>
                         <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
                           יתרה לתשלום: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
@@ -466,8 +479,8 @@ export default function InventoryClient({ initialItems }: Props) {
                       </div>
                     );
                   })()}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-semibold text-slate-800">תיאור</label>
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="font-bold text-slate-800 text-right">תיאור</label>
                     <Input
                       {...form.register("description")}
                       placeholder="תיאור"
@@ -500,7 +513,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6"
+                  className="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-6"
                 >
                   <Check className="w-4 h-4 ml-2" />
                   {loading ? "שומר..." : "שמור"}

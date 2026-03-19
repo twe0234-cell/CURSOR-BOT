@@ -1,15 +1,14 @@
 -- Fix images schema cache error and add total_target_price
--- Run this in Supabase SQL Editor if you get "Could not find the 'images' column" error
+-- Table is 'inventory' (NOT erp_inventory). Run in Supabase SQL Editor if needed.
 
 -- Add images column if missing
-ALTER TABLE public.erp_inventory ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}'::text[];
-
--- Just in case the table is literally named 'inventory' instead of 'erp_inventory'
 ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}'::text[];
 
--- Add total_target_price for the new logic
-ALTER TABLE public.erp_inventory ADD COLUMN IF NOT EXISTS total_target_price NUMERIC DEFAULT 0;
+-- Add total_target_price for quantity * target_price logic
 ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS total_target_price NUMERIC DEFAULT 0;
+
+-- Add product_category if missing (code uses it; table may have legacy category)
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS product_category TEXT;
 
 -- Notify Supabase to reload schema cache
 NOTIFY pgrst, 'reload schema';

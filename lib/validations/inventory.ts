@@ -12,6 +12,7 @@ const numericNullable = z.preprocess(
 
 const baseSchema = z.object({
   product_category: z.string().optional().nullable(),
+  purchase_date: z.string().optional().nullable(),
   category_meta: z
     .record(z.string(), z.union([z.string(), z.number()]))
     .optional()
@@ -65,6 +66,17 @@ export const inventoryItemSchema = baseSchema.superRefine((data, ctx) => {
         code: z.ZodIssueCode.custom,
         message: "נדרש לבחור שורות עבור מגילה",
         path: ["category_meta", "lines"],
+      });
+    }
+  }
+
+  if (cat === "מזוזה") {
+    const size = meta.size;
+    if (size == null || String(size).trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "נדרש לבחור מידה עבור מזוזה",
+        path: ["category_meta", "size"],
       });
     }
   }
