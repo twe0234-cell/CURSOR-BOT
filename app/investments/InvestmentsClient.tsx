@@ -58,7 +58,14 @@ export default function InvestmentsClient() {
   const [detailDocLoading, setDetailDocLoading] = useState(false);
 
   const loadData = () => {
-    fetchInvestments().then((r) => r.success && setInvestments(r.investments));
+    fetchInvestments().then((r) => {
+      if (r.success) {
+        setInvestments(r.investments);
+      } else {
+        toast.error(r.error);
+        setInvestments([]);
+      }
+    });
   };
 
   useEffect(() => {
@@ -186,7 +193,7 @@ export default function InvestmentsClient() {
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-sm rounded-xl border-slate-200">
+      <Card className="shadow-sm rounded-xl border-border">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-semibold">תיק השקעות</CardTitle>
@@ -217,7 +224,7 @@ export default function InvestmentsClient() {
               exportLabel="ייצוא CSV"
               importLabel="ייבוא CSV"
             />
-            <Button onClick={() => setCreateOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={() => setCreateOpen(true)} className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
               <PlusIcon className="size-4 ml-1" />
               השקעה חדשה
             </Button>
@@ -227,7 +234,7 @@ export default function InvestmentsClient() {
           <div className="rounded-xl border overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/80">
+                <TableRow className="bg-muted/40">
                   <TableHead className="font-semibold">סופר</TableHead>
                   <TableHead className="font-semibold">פרטי פריט</TableHead>
                   <TableHead className="font-semibold">כמות</TableHead>
@@ -243,9 +250,11 @@ export default function InvestmentsClient() {
               </TableHeader>
               <TableBody>
                 {investments.map((inv) => {
-                  const hasMilestones = inv.milestones && inv.milestones.length > 0;
+                  const ms = Array.isArray(inv.milestones) ? inv.milestones : [];
+                  const doneCount = ms.filter((m) => m && m.done === true).length;
+                  const hasMilestones = ms.length > 0;
                   const pct = hasMilestones
-                    ? inv.milestones.filter((m) => m.done).length / inv.milestones.length * 100
+                    ? (ms.length > 0 ? (doneCount / ms.length) * 100 : 0)
                     : inv.total_agreed_price > 0
                       ? Math.min(100, (inv.amount_paid / inv.total_agreed_price) * 100)
                       : 0;
@@ -278,7 +287,7 @@ export default function InvestmentsClient() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
                             <div
-                              className="h-full bg-indigo-500 rounded-full transition-all"
+                              className="h-full bg-primary rounded-full transition-all"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
@@ -415,7 +424,7 @@ export default function InvestmentsClient() {
                 className="rounded-xl"
               />
             </div>
-            <Button onClick={handleCreate} disabled={loading} className="w-full rounded-xl">
+            <Button type="button" onClick={handleCreate} disabled={loading} className="w-full rounded-xl">
               {loading ? "שומר..." : "צור השקעה"}
             </Button>
           </div>
@@ -444,7 +453,7 @@ export default function InvestmentsClient() {
                 className="rounded-xl"
               />
             </div>
-            <Button onClick={handleAddPayment} disabled={loading} className="w-full rounded-xl">
+            <Button type="button" onClick={handleAddPayment} disabled={loading} className="w-full rounded-xl">
               {loading ? "שומר..." : "שמור תשלום"}
             </Button>
           </div>
@@ -458,7 +467,13 @@ export default function InvestmentsClient() {
           </DialogHeader>
           {detailOpen && (() => {
             const inv = investments.find((i) => i.id === detailOpen);
-            if (!inv) return null;
+            if (!inv) {
+              return (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  טוען נתונים… אם הבעיה נמשכת, סגור ופתח שוב.
+                </p>
+              );
+            }
             return (
               <div className="space-y-4">
                 <div>
@@ -494,7 +509,7 @@ export default function InvestmentsClient() {
                     <ul className="mt-2 space-y-1">
                       {inv.documents.map((url, idx) => (
                         <li key={idx}>
-                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline truncate block">
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline truncate block">
                             מסמך {idx + 1}
                           </a>
                         </li>

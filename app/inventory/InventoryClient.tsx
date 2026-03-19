@@ -366,7 +366,10 @@ export default function InventoryClient({ initialItems }: Props) {
                 {activeItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-mono font-medium text-sky-700">
-                      <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                      <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
+                      <span className="hidden md:block">
+                        <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                      </span>
                     </TableCell>
                     <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                 <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
@@ -476,7 +479,10 @@ export default function InventoryClient({ initialItems }: Props) {
                 {archiveItems.map((item) => (
                   <TableRow key={item.id} className="bg-slate-50/50 opacity-90">
                     <TableCell className="font-mono font-medium text-slate-600">
-                      <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                      <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
+                      <span className="hidden md:block">
+                        <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                      </span>
                     </TableCell>
                     <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>

@@ -47,7 +47,7 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" className="overflow-x-hidden">
       <body
-        className={`${heebo.variable} ${geistMono.variable} font-sans antialiased overflow-x-hidden min-w-0 bg-sky-50/30`}
+        className={`${heebo.variable} ${geistMono.variable} font-sans antialiased overflow-x-hidden min-w-0 bg-background`}
       >
         <NavBar />
         {children}

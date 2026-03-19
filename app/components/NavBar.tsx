@@ -42,13 +42,13 @@ export default function NavBar() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-teal-100/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 overflow-x-hidden">
+    <header className="sticky top-0 z-50 border-b border-sky-200/60 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 overflow-x-hidden">
       <div className="w-full max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4 min-w-0">
         <Link
           href="/"
-          className="flex items-center gap-2 font-bold text-teal-700 transition-colors hover:text-teal-800 shrink-0"
+          className="flex items-center gap-2 font-bold text-primary transition-colors hover:text-primary/90 shrink-0"
         >
-          <span className="flex size-8 items-center justify-center rounded-lg bg-teal-100 text-teal-600">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
             <LayoutDashboard className="size-4" />
           </span>
           Broadcast Buddy
@@ -61,8 +61,8 @@ export default function NavBar() {
               className={cn(
                 "flex items-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium transition-all duration-200 shrink-0",
                 pathname === href
-                  ? "bg-teal-50 text-teal-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-teal-600"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-primary"
               )}
             >
               <Icon className="size-4" />

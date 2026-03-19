@@ -28,6 +28,66 @@ export type InvestmentRecord = {
   scribe_name?: string;
 };
 
+const INVESTMENTS_SELECT_EXTENDED =
+  "id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, deductions, target_date, status, notes, milestones, documents, public_slug, is_public, created_at";
+const INVESTMENTS_SELECT_LEGACY =
+  "id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, target_date, status, notes, created_at";
+
+function isMissingColumnError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    m.includes("42703") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
+}
+
+function mapInvestmentRow(
+  r: Record<string, unknown>,
+  scribeMap: Map<string, string | undefined>,
+  legacy: boolean
+): InvestmentRecord {
+  const total = Number(r.total_agreed_price ?? 0);
+  const paid = Number(r.amount_paid ?? 0);
+  const ded = legacy ? 0 : Number(r.deductions ?? 0);
+  const qty = Number(r.quantity ?? 1);
+  const cpu = r.cost_per_unit != null ? Number(r.cost_per_unit) : null;
+  let milestones: MilestoneItem[] = [];
+  if (!legacy && Array.isArray(r.milestones)) {
+    milestones = (r.milestones as unknown[]).map((m, idx) => {
+      if (m && typeof m === "object" && "id" in m && "label" in m) {
+        const o = m as { id: string; label: string; done?: boolean };
+        return { id: String(o.id), label: String(o.label), done: Boolean(o.done) };
+      }
+      return { id: `m-${idx}`, label: String(m), done: false };
+    });
+  }
+  const documents = !legacy && Array.isArray(r.documents) ? (r.documents as string[]) : [];
+  const scribeId = (r.scribe_id as string | null) ?? null;
+  return {
+    id: String(r.id),
+    scribe_id: scribeId,
+    item_details: (r.item_details as string | null) ?? null,
+    quantity: qty,
+    cost_per_unit: cpu,
+    total_agreed_price: total,
+    amount_paid: paid,
+    deductions: ded,
+    remaining_balance: Math.max(0, total - paid - ded),
+    target_date: (r.target_date as string | null) ?? null,
+    status: (r.status as string) ?? "active",
+    notes: (r.notes as string | null) ?? null,
+    milestones,
+    documents,
+    public_slug: legacy ? null : ((r.public_slug as string | null) ?? null),
+    is_public: legacy ? false : Boolean(r.is_public ?? false),
+    created_at: (r.created_at as string) ?? "",
+    scribe_name: scribeId ? scribeMap.get(scribeId) ?? undefined : undefined,
+  };
+}
+
 export async function fetchInvestments(): Promise<
   { success: true; investments: InvestmentRecord[] } | { success: false; error: string }
 > {
@@ -36,49 +96,40 @@ export async function fetchInvestments(): Promise<
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data, error } = await supabase
+    let data: Record<string, unknown>[] | null = null;
+    let error = null as { message?: string; code?: string } | null;
+
+    const res1 = await supabase
       .from("erp_investments")
-      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, deductions, target_date, status, notes, milestones, documents, public_slug, is_public, created_at")
+      .select(INVESTMENTS_SELECT_EXTENDED)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) return { success: false, error: error.message };
+    data = res1.data as Record<string, unknown>[] | null;
+    error = res1.error;
 
-    const scribeIds = [...new Set((data ?? []).map((r) => r.scribe_id).filter(Boolean))];
+    let legacy = false;
+    if (error && isMissingColumnError(error.message)) {
+      const res2 = await supabase
+        .from("erp_investments")
+        .select(INVESTMENTS_SELECT_LEGACY)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      data = res2.data as Record<string, unknown>[] | null;
+      error = res2.error;
+      legacy = true;
+    }
+
+    if (error) return { success: false, error: error.message ?? "שגיאת מסד נתונים" };
+
+    const rows = data ?? [];
+    const scribeIds = [...new Set(rows.map((r) => r.scribe_id).filter(Boolean))] as string[];
     const { data: scribeData } = scribeIds.length > 0
       ? await supabase.from("crm_contacts").select("id, name").in("id", scribeIds)
       : { data: [] };
     const scribeMap = new Map((scribeData ?? []).map((s) => [s.id, s.name]));
 
-    const investments = (data ?? []).map((r) => {
-      const total = Number(r.total_agreed_price ?? 0);
-      const paid = Number(r.amount_paid ?? 0);
-      const ded = Number(r.deductions ?? 0);
-      const qty = Number(r.quantity ?? 1);
-      const cpu = r.cost_per_unit != null ? Number(r.cost_per_unit) : null;
-      const milestones = (Array.isArray(r.milestones) ? r.milestones : []) as MilestoneItem[];
-      const documents = (Array.isArray(r.documents) ? r.documents : []) as string[];
-      return {
-        id: r.id,
-        scribe_id: r.scribe_id ?? null,
-        item_details: r.item_details ?? null,
-        quantity: qty,
-        cost_per_unit: cpu,
-        total_agreed_price: total,
-        amount_paid: paid,
-        deductions: ded,
-        remaining_balance: Math.max(0, total - paid - ded),
-        target_date: r.target_date ?? null,
-        status: r.status ?? "active",
-        notes: r.notes ?? null,
-        milestones,
-        documents,
-        public_slug: r.public_slug ?? null,
-        is_public: Boolean(r.is_public ?? false),
-        created_at: r.created_at ?? "",
-        scribe_name: r.scribe_id ? scribeMap.get(r.scribe_id) ?? undefined : undefined,
-      };
-    });
+    const investments = rows.map((r) => mapInvestmentRow(r, scribeMap, legacy));
 
     return { success: true, investments };
   } catch (err) {
@@ -212,6 +263,8 @@ export async function updateInvestment(
   }
 }
 
+type ShareLinkRow = { public_slug: string | null; is_public?: boolean };
+
 export async function getShareLink(investmentId: string): Promise<
   { success: true; url: string; slug: string } | { success: false; error: string }
 > {
@@ -220,26 +273,46 @@ export async function getShareLink(investmentId: string): Promise<
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data, error } = await supabase
+    let row: ShareLinkRow | null = null;
+    let selErr = null as { message?: string } | null;
+
+    const sel1 = await supabase
       .from("erp_investments")
       .select("public_slug, is_public")
       .eq("id", investmentId)
       .eq("user_id", user.id)
       .single();
+    row = sel1.data as ShareLinkRow | null;
+    selErr = sel1.error;
 
-    if (error || !data) return { success: false, error: "לא נמצא" };
-    const slug = data.public_slug;
+    if (selErr && isMissingColumnError(selErr.message)) {
+      const sel2 = await supabase
+        .from("erp_investments")
+        .select("public_slug")
+        .eq("id", investmentId)
+        .eq("user_id", user.id)
+        .single();
+      row = sel2.data as ShareLinkRow | null;
+      selErr = sel2.error;
+    }
+
+    if (selErr || !row) return { success: false, error: "לא נמצא" };
+    const slug = row.public_slug;
     if (!slug) return { success: false, error: "אין קישור שיתוף" };
 
-    if (!data.is_public) {
+    if (row.is_public === false) {
       const { error: pubErr } = await supabase
         .from("erp_investments")
         .update({ is_public: true, updated_at: new Date().toISOString() })
         .eq("id", investmentId)
         .eq("user_id", user.id);
-      if (pubErr) return { success: false, error: pubErr.message };
-      revalidatePath("/investments");
-      revalidatePath(`/project/${slug}`);
+      if (pubErr && !isMissingColumnError(pubErr.message)) {
+        return { success: false, error: pubErr.message };
+      }
+      if (!pubErr || isMissingColumnError(pubErr.message)) {
+        revalidatePath("/investments");
+        revalidatePath(`/project/${slug}`);
+      }
     }
     const path = `/project/${slug}`;
     const url = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}${path}` : path;

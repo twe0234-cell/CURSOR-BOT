@@ -47,7 +47,7 @@ export default async function PublicProjectPage({
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-3 rounded-full bg-slate-200 overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    className="h-full bg-primary rounded-full transition-all"
                     style={{ width: `${project.progress_pct}%` }}
                   />
                 </div>
