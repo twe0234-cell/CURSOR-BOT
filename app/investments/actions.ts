@@ -2,6 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { generateInventorySku } from "@/lib/inventory/sku";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -393,6 +394,86 @@ export async function addPayment(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/investments");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** Create inventory from an active investment; mark investment delivered_to_inventory. */
+export async function moveInvestmentToInventory(investmentId: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: inv, error: fetchErr } = await supabase
+      .from("erp_investments")
+      .select(
+        "id, user_id, status, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, notes"
+      )
+      .eq("id", investmentId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchErr || !inv) return { success: false, error: "השקעה לא נמצאה" };
+    if (inv.status !== "active") return { success: false, error: "רק השקעה פעילה ניתנת להעברה למלאי" };
+
+    const qty = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
+    const totalAgreed = Number(inv.total_agreed_price ?? 0);
+    const cpu =
+      inv.cost_per_unit != null && Number(inv.cost_per_unit) >= 0
+        ? Number(inv.cost_per_unit)
+        : qty > 0
+          ? totalAgreed / qty
+          : totalAgreed;
+    const totalCost = cpu * qty;
+
+    const sku = generateInventorySku();
+    const description =
+      [inv.item_details, inv.notes ? `הערות: ${inv.notes}` : null].filter(Boolean).join("\n") || null;
+
+    const { error: insErr } = await supabase.from("inventory").insert({
+      sku,
+      user_id: user.id,
+      product_category: "מלאי מהשקעה",
+      category_meta: {},
+      script_type: null,
+      status: "available",
+      quantity: qty,
+      cost_price: cpu,
+      total_cost: totalCost,
+      amount_paid: 0,
+      target_price: null,
+      total_target_price: null,
+      scribe_id: inv.scribe_id ?? null,
+      scribe_code: null,
+      images: [],
+      description,
+      parchment_type: null,
+      computer_proofread: false,
+      human_proofread: false,
+      is_sewn: false,
+    });
+
+    if (insErr) return { success: false, error: insErr.message };
+
+    const { error: updErr } = await supabase
+      .from("erp_investments")
+      .update({
+        status: "delivered_to_inventory",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", investmentId)
+      .eq("user_id", user.id);
+
+    if (updErr) {
+      return { success: false, error: updErr.message };
+    }
+
+    revalidatePath("/investments");
+    revalidatePath("/inventory");
     revalidatePath("/");
     return { success: true };
   } catch (err) {

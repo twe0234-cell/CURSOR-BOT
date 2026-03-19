@@ -22,14 +22,33 @@ export default async function ContactDetailPage({
 
   if (!contact) notFound();
 
-  const [txRes, docsRes, logsRes, invRes, investRes, salesRes] = await Promise.all([
+  const [txRes, docsRes, logsRes, invRes, investRes] = await Promise.all([
     supabase.from("crm_transactions").select("id, amount, type, description, date").eq("contact_id", id).order("date", { ascending: false }),
     supabase.from("crm_documents").select("id, file_url, doc_type, name").eq("contact_id", id).order("created_at", { ascending: false }),
     supabase.from("crm_communication_logs").select("id, channel, content, timestamp").eq("contact_id", id).order("timestamp", { ascending: false }).limit(20),
     supabase.from("inventory").select("quantity, cost_price, total_cost, amount_paid").eq("scribe_id", id).neq("status", "sold"),
     supabase.from("erp_investments").select("total_agreed_price, amount_paid").eq("scribe_id", id).eq("status", "active"),
-    supabase.from("erp_sales").select("sale_price, quantity, total_price, amount_paid").eq("buyer_id", id),
   ]);
+
+  const salesRes = await supabase
+    .from("erp_sales")
+    .select("id, sale_price, quantity, total_price, amount_paid")
+    .eq("buyer_id", id);
+
+  const saleIds = (salesRes.data ?? []).map((s) => s.id);
+  const paymentExtraBySale = new Map<string, number>();
+  if (saleIds.length > 0) {
+    const { data: pays } = await supabase
+      .from("erp_payments")
+      .select("target_id, amount")
+      .eq("user_id", user.id)
+      .eq("target_type", "sale")
+      .in("target_id", saleIds);
+    for (const p of pays ?? []) {
+      const tid = p.target_id as string;
+      paymentExtraBySale.set(tid, (paymentExtraBySale.get(tid) ?? 0) + Number(p.amount ?? 0));
+    }
+  }
 
   const transactions = txRes.data ?? [];
 
@@ -44,8 +63,11 @@ export default async function ContactDetailPage({
 
   let debtFromContact = 0;
   for (const s of salesRes.data ?? []) {
-    const total = s.total_price != null ? Number(s.total_price) : Number(s.sale_price ?? 0);
-    debtFromContact += Math.max(0, total - Number(s.amount_paid ?? 0));
+    const qty = Math.max(1, Math.floor(Number(s.quantity ?? 1)));
+    const total =
+      s.total_price != null ? Number(s.total_price) : Number(s.sale_price ?? 0) * qty;
+    const paid = Number(s.amount_paid ?? 0) + (paymentExtraBySale.get(s.id) ?? 0);
+    debtFromContact += Math.max(0, total - paid);
   }
 
   const TYPE_LABELS: Record<string, string> = {

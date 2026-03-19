@@ -32,12 +32,13 @@ import {
   bulkImportInvestments,
   updateInvestment,
   getShareLink,
+  moveInvestmentToInventory,
   type InvestmentRecord,
 } from "./actions";
 import { fetchScribes } from "@/app/crm/actions";
 import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon } from "lucide-react";
+import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon } from "lucide-react";
 
 export default function InvestmentsClient() {
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
@@ -56,6 +57,7 @@ export default function InvestmentsClient() {
   const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [detailDeductions, setDetailDeductions] = useState("");
   const [detailDocLoading, setDetailDocLoading] = useState(false);
+  const [movingToInventoryId, setMovingToInventoryId] = useState<string | null>(null);
 
   const loadData = () => {
     fetchInvestments().then((r) => {
@@ -171,6 +173,18 @@ export default function InvestmentsClient() {
     } else toast.error(res.error);
   };
 
+  const handleMoveToInventory = async (invId: string) => {
+    setMovingToInventoryId(invId);
+    const res = await moveInvestmentToInventory(invId);
+    setMovingToInventoryId(null);
+    if (res.success) {
+      toast.success("הפריט נוצר במלאי וההשקעה סומנה כנמסרה");
+      loadData();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const handleAddPayment = async () => {
     if (!paymentOpen) return;
     const amount = parseFloat(paymentAmount);
@@ -278,9 +292,16 @@ export default function InvestmentsClient() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           inv.status === "active" ? "bg-amber-100 text-amber-800" :
                           inv.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                          inv.status === "delivered_to_inventory" ? "bg-sky-100 text-sky-800" :
                           "bg-slate-100 text-slate-600"
                         }`}>
-                          {inv.status === "active" ? "פעיל" : inv.status === "completed" ? "הושלם" : "בוטל"}
+                          {inv.status === "active"
+                            ? "פעיל"
+                            : inv.status === "completed"
+                              ? "הושלם"
+                              : inv.status === "delivered_to_inventory"
+                                ? "נמסר למלאי"
+                                : "בוטל"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -295,7 +316,18 @@ export default function InvestmentsClient() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className="flex gap-1 flex-wrap items-center">
+                          {inv.status === "active" && (
+                            <Button
+                              size="sm"
+                              className="rounded-lg h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                              disabled={movingToInventoryId === inv.id}
+                              onClick={() => handleMoveToInventory(inv.id)}
+                            >
+                              <PackageIcon className="size-4 ml-1" />
+                              {movingToInventoryId === inv.id ? "מעביר..." : "העבר למלאי"}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

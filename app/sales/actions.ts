@@ -2,6 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { buildInventorySaleLabel } from "@/lib/sales/inventoryDisplay";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -20,11 +21,80 @@ export type SaleRecord = {
   seller_id?: string | null;
   investment_id?: string | null;
   commission_profit?: number | null;
+  commission_received?: number | null;
+  quantity?: number | null;
+  total_price?: number | null;
+  amount_paid_row?: number | null;
+  total_paid?: number;
+  remaining_balance?: number | null;
   item_category?: string;
   buyer_name?: string;
   seller_name?: string;
   investment_details?: string;
 };
+
+export type InventorySaleOption = {
+  id: string;
+  sku: string | null;
+  product_category: string | null;
+  category_meta: Record<string, unknown> | null;
+  quantity: number;
+  status: string | null;
+  scribe_name: string | null;
+  display_label: string;
+};
+
+export async function fetchInventoryForSales(): Promise<
+  { success: true; items: InventorySaleOption[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("inventory")
+      .select("id, sku, product_category, category_meta, quantity, status, scribe_id")
+      .eq("user_id", user.id)
+      .neq("status", "sold")
+      .order("created_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+
+    const rows = data ?? [];
+    const scribeIds = [...new Set(rows.map((r) => r.scribe_id).filter(Boolean))] as string[];
+    const { data: scribes } = scribeIds.length > 0
+      ? await supabase.from("crm_contacts").select("id, name").in("id", scribeIds)
+      : { data: [] };
+    const scribeMap = new Map((scribes ?? []).map((s) => [s.id, s.name ?? ""]));
+
+    const items: InventorySaleOption[] = rows
+      .map((r) => {
+        const qty = Math.max(0, Math.floor(Number(r.quantity ?? 1)));
+        const scribeId = r.scribe_id as string | null;
+        const scribe_name = scribeId ? scribeMap.get(scribeId) ?? null : null;
+        return {
+          id: r.id as string,
+          sku: (r.sku as string | null) ?? null,
+          product_category: (r.product_category as string | null) ?? null,
+          category_meta: (r.category_meta as Record<string, unknown> | null) ?? null,
+          quantity: qty,
+          status: (r.status as string | null) ?? null,
+          scribe_name,
+          display_label: "",
+        };
+      })
+      .filter((i) => i.quantity > 0)
+      .map((i) => ({
+        ...i,
+        display_label: buildInventorySaleLabel(i),
+      }));
+
+    return { success: true, items };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
 
 export type ExpenseRecord = {
   id: string;
@@ -45,51 +115,88 @@ export async function fetchSales(): Promise<
 
     const { data, error } = await supabase
       .from("erp_sales")
-      .select("id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit")
+      .select(
+        "id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit, commission_received, quantity, total_price, amount_paid"
+      )
       .eq("user_id", user.id)
       .order("sale_date", { ascending: false });
 
     if (error) return { success: false, error: error.message };
 
-    const itemIds = [...new Set((data ?? []).map((r) => r.item_id).filter(Boolean))];
-    const buyerIds = [...new Set((data ?? []).map((r) => r.buyer_id).filter(Boolean))];
-    const sellerIds = [...new Set((data ?? []).map((r) => r.seller_id).filter(Boolean))];
-    const invIds = [...new Set((data ?? []).map((r) => r.investment_id).filter(Boolean))];
+    const rows = data ?? [];
+    const itemIds = [...new Set(rows.map((r) => r.item_id).filter(Boolean))];
+    const buyerIds = [...new Set(rows.map((r) => r.buyer_id).filter(Boolean))];
+    const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter(Boolean))];
+    const invIds = [...new Set(rows.map((r) => r.investment_id).filter(Boolean))];
+    const saleIds = rows.map((r) => r.id);
 
     const { data: invData } = itemIds.length > 0
-      ? await supabase.from("inventory").select("id, product_category").in("id", itemIds)
+      ? await supabase.from("inventory").select("id, product_category").in("id", itemIds as string[])
       : { data: [] };
     const { data: buyerData } = buyerIds.length > 0 || sellerIds.length > 0
-      ? await supabase.from("crm_contacts").select("id, name").in("id", [...buyerIds, ...sellerIds])
+      ? await supabase.from("crm_contacts").select("id, name").in("id", [...buyerIds, ...sellerIds] as string[])
       : { data: [] };
     const { data: investData } = invIds.length > 0
-      ? await supabase.from("erp_investments").select("id, item_details").in("id", invIds)
+      ? await supabase.from("erp_investments").select("id, item_details").in("id", invIds as string[])
       : { data: [] };
+
+    const paySumBySale = new Map<string, number>();
+    if (saleIds.length > 0) {
+      const { data: payments, error: payErr } = await supabase
+        .from("erp_payments")
+        .select("target_id, amount")
+        .eq("user_id", user.id)
+        .eq("target_type", "sale")
+        .in("target_id", saleIds);
+      if (!payErr && payments) {
+        for (const p of payments) {
+          const tid = p.target_id as string;
+          paySumBySale.set(tid, (paySumBySale.get(tid) ?? 0) + Number(p.amount ?? 0));
+        }
+      }
+    }
 
     const invMap = new Map((invData ?? []).map((i) => [i.id, i.product_category]));
     const contactMap = new Map((buyerData ?? []).map((b) => [b.id, b.name]));
     const investMap = new Map((investData ?? []).map((i) => [i.id, i.item_details]));
 
-    const sales = (data ?? []).map((r) => ({
-      id: r.id,
-      item_id: r.item_id ?? null,
-      buyer_id: r.buyer_id ?? null,
-      sale_price: Number(r.sale_price ?? 0),
-      cost_price: r.cost_price != null ? Number(r.cost_price) : null,
-      profit: r.profit != null ? Number(r.profit) : null,
-      sale_date: r.sale_date ?? "",
-      notes: r.notes ?? null,
-      created_at: r.created_at ?? "",
-      sale_type: r.sale_type ?? "ממלאי",
-      item_description: r.item_description ?? null,
-      seller_id: r.seller_id ?? null,
-      investment_id: r.investment_id ?? null,
-      commission_profit: r.commission_profit != null ? Number(r.commission_profit) : null,
-      item_category: r.item_id ? invMap.get(r.item_id) ?? undefined : undefined,
-      buyer_name: r.buyer_id ? contactMap.get(r.buyer_id) ?? undefined : undefined,
-      seller_name: r.seller_id ? contactMap.get(r.seller_id) ?? undefined : undefined,
-      investment_details: r.investment_id ? investMap.get(r.investment_id) ?? undefined : undefined,
-    }));
+    const sales: SaleRecord[] = rows.map((r) => {
+      const qty = Math.max(1, Math.floor(Number(r.quantity ?? 1)));
+      const totalPrice =
+        r.total_price != null ? Number(r.total_price) : Number(r.sale_price ?? 0) * qty;
+      const amountPaidRow = Number(r.amount_paid ?? 0);
+      const extraPaid = paySumBySale.get(r.id) ?? 0;
+      const totalPaid = amountPaidRow + extraPaid;
+      const remaining = totalPrice - totalPaid;
+
+      return {
+        id: r.id,
+        item_id: r.item_id ?? null,
+        buyer_id: r.buyer_id ?? null,
+        sale_price: Number(r.sale_price ?? 0),
+        cost_price: r.cost_price != null ? Number(r.cost_price) : null,
+        profit: r.profit != null ? Number(r.profit) : null,
+        sale_date: r.sale_date ?? "",
+        notes: r.notes ?? null,
+        created_at: r.created_at ?? "",
+        sale_type: r.sale_type ?? "ממלאי",
+        item_description: r.item_description ?? null,
+        seller_id: r.seller_id ?? null,
+        investment_id: r.investment_id ?? null,
+        commission_profit: r.commission_profit != null ? Number(r.commission_profit) : null,
+        commission_received:
+          r.commission_received != null ? Number(r.commission_received) : null,
+        quantity: qty,
+        total_price: totalPrice,
+        amount_paid_row: amountPaidRow,
+        total_paid: totalPaid,
+        remaining_balance: remaining,
+        item_category: r.item_id ? invMap.get(r.item_id) ?? undefined : undefined,
+        buyer_name: r.buyer_id ? contactMap.get(r.buyer_id) ?? undefined : undefined,
+        seller_name: r.seller_id ? contactMap.get(r.seller_id) ?? undefined : undefined,
+        investment_details: r.investment_id ? investMap.get(r.investment_id) ?? undefined : undefined,
+      };
+    });
 
     return { success: true, sales };
   } catch (err) {
@@ -99,8 +206,46 @@ export async function fetchSales(): Promise<
 
 export type CreateSaleParams =
   | { sale_type: "ממלאי"; item_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string }
-  | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; commission_profit: number; notes?: string }
+  | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; commission_received: number; notes?: string }
   | { sale_type: "פרויקט חדש"; investment_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string };
+
+export async function addSalePayment(
+  saleId: string,
+  amount: number,
+  paymentDate?: string,
+  notes?: string
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+    if (amount <= 0) return { success: false, error: "הזן סכום חיובי" };
+
+    const { data: sale } = await supabase
+      .from("erp_sales")
+      .select("id")
+      .eq("id", saleId)
+      .eq("user_id", user.id)
+      .single();
+    if (!sale) return { success: false, error: "מכירה לא נמצאה" };
+
+    const { error } = await supabase.from("erp_payments").insert({
+      user_id: user.id,
+      target_id: saleId,
+      target_type: "sale",
+      amount,
+      payment_date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
+      notes: notes?.trim() || null,
+    });
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/sales");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
 
 export async function createSale(params: CreateSaleParams): Promise<ActionResult> {
   try {
@@ -111,7 +256,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
     if (params.sale_type === "ממלאי") {
       const { data: item } = await supabase
         .from("inventory")
-        .select("id, cost_price, status")
+        .select("id, cost_price, target_price, status, quantity")
         .eq("id", params.item_id)
         .eq("user_id", user.id)
         .single();
@@ -119,10 +264,20 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
       if (!item) return { success: false, error: "פריט לא נמצא" };
       if (item.status === "sold") return { success: false, error: "הפריט כבר נמכר" };
 
-      const qty = (params.quantity ?? 1) > 0 ? (params.quantity ?? 1) : 1;
+      const invQty = Math.max(0, Math.floor(Number(item.quantity ?? 1)));
+      if (invQty <= 0) return { success: false, error: "אין כמות זמינה במלאי" };
+
+      let qty = Math.floor(Number(params.quantity ?? 1));
+      if (qty < 1) qty = 1;
+      if (qty > invQty) {
+        return { success: false, error: `הכמות המקסימלית הזמינה היא ${invQty}` };
+      }
+
       const totalPrice = qty * params.sale_price;
       const amountPaid = params.amount_paid ?? 0;
-      const costPrice = item.cost_price != null ? Number(item.cost_price) * qty : null;
+      const cpu = item.cost_price != null ? Number(item.cost_price) : null;
+      const tpu = item.target_price != null ? Number(item.target_price) : null;
+      const costPrice = cpu != null ? cpu * qty : null;
       const profit = costPrice != null ? totalPrice - costPrice : null;
 
       const { error: saleErr } = await supabase.from("erp_sales").insert({
@@ -141,14 +296,25 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
 
       if (saleErr) return { success: false, error: saleErr.message };
 
+      const newQty = invQty - qty;
+      const newTotalCost = cpu != null && newQty > 0 ? cpu * newQty : null;
+      const newTotalTarget = tpu != null && newQty > 0 ? tpu * newQty : null;
+
       const { error: invErr } = await supabase
         .from("inventory")
-        .update({ status: "sold", updated_at: new Date().toISOString() })
+        .update({
+          quantity: newQty,
+          total_cost: newTotalCost,
+          total_target_price: newTotalTarget,
+          status: newQty <= 0 ? "sold" : item.status,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", params.item_id)
         .eq("user_id", user.id);
 
       if (invErr) return { success: false, error: invErr.message };
     } else if (params.sale_type === "תיווך") {
+      const cr = params.commission_received;
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
         sale_type: "תיווך",
@@ -157,12 +323,13 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         buyer_id: params.buyer_id || null,
         seller_id: params.seller_id || null,
         quantity: 1,
-        sale_price: params.commission_profit,
-        total_price: params.commission_profit,
+        sale_price: cr,
+        total_price: cr,
         amount_paid: 0,
         cost_price: null,
-        profit: params.commission_profit,
-        commission_profit: params.commission_profit,
+        profit: cr,
+        commission_profit: cr,
+        commission_received: cr,
         notes: params.notes?.trim() || null,
       });
       if (saleErr) return { success: false, error: saleErr.message };
@@ -278,7 +445,7 @@ export async function bulkImportSales(
           item_description: itemDesc,
           buyer_id: buyerId ?? undefined,
           seller_id: sellerId ?? undefined,
-          commission_profit: commission,
+          commission_received: commission,
           notes: notes ?? undefined,
         });
         if (res.success) imported++;

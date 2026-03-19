@@ -4,16 +4,9 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { inventoryItemSchema } from "@/lib/validations/inventory";
 import { logError, logInfo } from "@/lib/logger";
+import { generateInventorySku } from "@/lib/inventory/sku";
 
 type ActionResult = { success: true } | { success: false; error: string };
-
-function generateSku(): string {
-  const hex = Array.from(crypto.getRandomValues(new Uint8Array(4)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 8);
-  return `HD-${hex}`;
-}
 
 export type InventoryItem = {
   id: string;
@@ -136,7 +129,7 @@ export async function createInventoryItem(
         ? []
         : [];
 
-    const sku = generateSku();
+    const sku = generateInventorySku();
     try {
       const { error } = await supabase.from("inventory").insert({
         sku,
