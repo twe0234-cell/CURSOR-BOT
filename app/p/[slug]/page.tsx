@@ -11,9 +11,10 @@ export default async function PublicProductPage({
   const { slug } = await params;
   const supabase = await createClient();
 
+  // SECURITY: Explicit select - cost_price, total_cost, scribe_id MUST NOT be included
   const { data: item, error } = await supabase
     .from("inventory")
-    .select("id, sku, images, target_price")
+    .select("id, sku, images, target_price, product_category, script_type, category_meta, parchment_type, computer_proofread, human_proofread, is_sewn")
     .eq("public_slug", slug)
     .eq("is_public", true)
     .single();
@@ -24,6 +25,10 @@ export default async function PublicProductPage({
 
   const images = (item.images ?? null) as string[] | null;
   const targetPrice = item.target_price != null ? Number(item.target_price) : null;
+  const meta = (item.category_meta ?? {}) as Record<string, string | number>;
+  const size = meta.size != null ? String(meta.size).trim() : null;
+  const naviName = meta.navi != null ? String(meta.navi).trim() : null;
+  const lines = meta.lines != null ? String(meta.lines).trim() : null;
 
   const { data: sysSettings } = await supabase
     .from("sys_settings")
@@ -75,6 +80,60 @@ export default async function PublicProductPage({
               <p className="text-xl font-bold text-sky-700 mb-6">
                 מחיר מומלץ: {targetPrice.toLocaleString("he-IL")} ₪
               </p>
+            )}
+
+            {/* מפרט טכני - Technical Specifications */}
+            {(item.product_category || item.script_type || size || naviName || lines || item.parchment_type || item.computer_proofread || item.human_proofread || item.is_sewn) && (
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-slate-600 mb-3">מפרט טכני</p>
+                <div className="flex flex-wrap gap-2">
+                  {item.product_category && (
+                    <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">
+                      {item.product_category}
+                    </span>
+                  )}
+                  {item.script_type && (
+                    <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">
+                      כתב {item.script_type}
+                    </span>
+                  )}
+                  {size && (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
+                      גודל {size}
+                    </span>
+                  )}
+                  {naviName && (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
+                      נביא {naviName}
+                    </span>
+                  )}
+                  {lines && (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
+                      {lines} שורות
+                    </span>
+                  )}
+                  {item.parchment_type && (
+                    <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">
+                      קלף {item.parchment_type}
+                    </span>
+                  )}
+                  {item.computer_proofread && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+                      עבר הגהת מחשב
+                    </span>
+                  )}
+                  {item.human_proofread && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+                      עבר הגהת אנוש
+                    </span>
+                  )}
+                  {item.is_sewn && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+                      תפור
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
 
             {waLink ? (
