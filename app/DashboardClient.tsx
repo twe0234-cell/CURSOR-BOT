@@ -26,7 +26,10 @@ import type {
   MonthlyDataPoint,
   InventoryDistributionItem,
   RecentInventoryItem,
+  CategoryCostRevenueItem,
 } from "@/app/actions/dashboard";
+
+const formatShekel = (n: number) => `₪ ${n.toLocaleString("he-IL")}`;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -46,6 +49,7 @@ type Props = {
   chartData: MonthlyDataPoint[];
   inventoryDistribution: InventoryDistributionItem[];
   recentInventory: RecentInventoryItem[];
+  categoryCostRevenue: CategoryCostRevenueItem[];
 };
 
 export default function DashboardClient({
@@ -53,6 +57,7 @@ export default function DashboardClient({
   chartData,
   inventoryDistribution,
   recentInventory,
+  categoryCostRevenue,
 }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ScribeSearchResult[] | null>(null);
@@ -70,53 +75,75 @@ export default function DashboardClient({
     }
   };
 
-  const kpiCards = [
+  const heroCards = [
     {
-      label: "שווי מלאי נוכחי",
-      value: kpis?.totalInventoryValue ?? 0,
-      suffix: "₪",
+      label: "עלות מלאי קיים",
+      value: kpis?.totalInvested ?? 0,
+      colorClass: "text-slate-700",
+      bgClass: "border-slate-200",
     },
     {
-      label: "צפי הכנסות",
+      label: "שווי שוק / צפי הכנסות",
       value: kpis?.expectedRevenue ?? 0,
-      suffix: "₪",
+      colorClass: "text-sky-700",
+      bgClass: "border-sky-200",
     },
     {
-      label: "השקעות פתוחות",
-      value: kpis?.activeInvestmentsBalance ?? 0,
-      suffix: "₪",
+      label: "רווח צפוי",
+      value: kpis?.potentialProfit ?? 0,
+      colorClass: kpis && kpis.potentialProfit < 0 ? "text-red-600" : "text-amber-600",
+      bgClass: "border-amber-200",
     },
-    {
-      label: "מכירות החודש",
-      value: kpis?.monthlySales ?? 0,
-      suffix: "₪",
-    },
+  ];
+
+  const secondaryCards = [
+    { label: "השקעות פתוחות", value: kpis?.activeInvestmentsBalance ?? 0 },
+    { label: "מכירות החודש", value: kpis?.monthlySales ?? 0 },
   ];
 
   return (
     <div className="space-y-8">
-      {/* KPI Cards */}
+      {/* Hero KPI Cards - Cost, Revenue, Profit */}
       <motion.div
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 sm:grid-cols-3"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        {kpiCards.map((card) => (
+        {heroCards.map((card) => (
           <motion.div key={card.label} variants={itemVariants}>
             <motion.div
               whileHover={{ y: -5, boxShadow: "0px 10px 20px rgba(0,0,0,0.05)" }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <Card className={`rounded-2xl border bg-white shadow-sm ${card.bgClass}`}>
                 <CardContent className="pt-6">
+                  <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
+                  <p className={`mt-1 text-2xl font-bold ${card.colorClass}`}>
+                    {formatShekel(card.value)}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Secondary KPIs */}
+      <motion.div
+        className="grid gap-4 sm:grid-cols-2"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {secondaryCards.map((card) => (
+          <motion.div key={card.label} variants={itemVariants}>
+            <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <CardContent className="pt-6">
                 <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-2xl font-bold text-sky-700">
-                  {card.value.toLocaleString("he-IL")} {card.suffix}
-                </p>
+                <p className="mt-1 text-xl font-bold text-sky-700">{formatShekel(card.value)}</p>
               </CardContent>
             </Card>
-            </motion.div>
           </motion.div>
         ))}
       </motion.div>
@@ -166,6 +193,41 @@ export default function DashboardClient({
             </ul>
           </CardContent>
         </Card>
+      )}
+
+      {/* Cost vs Revenue by Category */}
+      {categoryCostRevenue.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <CardContent className="pt-6">
+              <h3 className="mb-4 text-base font-semibold text-sky-700">
+                עלות מול צפי הכנסה לפי קטגוריה
+              </h3>
+              <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={categoryCostRevenue}
+                    margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="category" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v} ₪`} />
+                    <Tooltip
+                      formatter={(v) => [(v != null ? Number(v) : 0).toLocaleString("he-IL") + " ₪", ""]}
+                    />
+                    <Legend />
+                    <Bar dataKey="cost" name="עלות" fill="#64748b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" name="צפי הכנסה" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {/* Charts Row */}

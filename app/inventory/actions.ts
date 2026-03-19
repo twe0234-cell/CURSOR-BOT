@@ -107,7 +107,7 @@ export async function createInventoryItem(
 
     const qty = (data.quantity ?? 1) > 0 ? (data.quantity ?? 1) : 1;
     const costPerUnit = data.cost_price ?? null;
-    const totalCost = costPerUnit != null ? qty * costPerUnit : null;
+    const totalCost = costPerUnit != null ? qty * costPerUnit : null; // total_cost = quantity * cost_price
     const amountPaid = data.amount_paid ?? 0;
     const targetPrice = data.target_price ?? null;
     const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;
@@ -179,7 +179,7 @@ export async function updateInventoryItem(
 
     const qty = (data.quantity ?? 1) > 0 ? (data.quantity ?? 1) : 1;
     const costPerUnit = data.cost_price ?? null;
-    const totalCost = costPerUnit != null ? qty * costPerUnit : null;
+    const totalCost = costPerUnit != null ? qty * costPerUnit : null; // total_cost = quantity * cost_price
     const amountPaid = data.amount_paid ?? 0;
     const targetPrice = data.target_price ?? null;
     const totalTargetPrice = targetPrice != null ? qty * targetPrice : null;

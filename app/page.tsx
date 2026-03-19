@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
 import { Radio, Settings, Users, Package, Mail, Wallet, TrendingUp } from "lucide-react";
 import DashboardClient from "./DashboardClient";
-import { fetchDashboardKpis, fetchIncomeExpensesChart, fetchInventoryDistribution, fetchRecentInventory } from "./actions/dashboard";
+import { fetchDashboardKpis, fetchIncomeExpensesChart, fetchInventoryDistribution, fetchRecentInventory, fetchCategoryCostRevenue } from "./actions/dashboard";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -13,17 +13,19 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [kpisRes, chartRes, invDistRes, recentRes] = await Promise.all([
+  const [kpisRes, chartRes, invDistRes, recentRes, categoryCostRes] = await Promise.all([
     fetchDashboardKpis(),
     fetchIncomeExpensesChart(),
     fetchInventoryDistribution(),
     fetchRecentInventory(),
+    fetchCategoryCostRevenue(),
   ]);
 
   const kpis = kpisRes.success ? kpisRes.kpis : null;
   const chartData = chartRes.success ? chartRes.data : [];
   const inventoryDistribution = invDistRes.success ? invDistRes.data : [];
   const recentInventory = recentRes.success ? recentRes.data : [];
+  const categoryCostRevenue = categoryCostRes.success ? categoryCostRes.data : [];
 
   const quickLinks = [
     { href: "/broadcast", label: "שידור", icon: Radio, desc: "שלח הודעות WhatsApp לנמענים" },
@@ -49,6 +51,7 @@ export default async function HomePage() {
         chartData={chartData}
         inventoryDistribution={inventoryDistribution}
         recentInventory={recentInventory}
+        categoryCostRevenue={categoryCostRevenue}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 mt-10">
