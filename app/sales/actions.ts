@@ -2,7 +2,13 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { buildInventorySaleLabel } from "@/lib/sales/inventoryDisplay";
+import { buildInventorySaleLabelSkuPrecise } from "@/lib/sales/inventoryDisplay";
+import {
+  INVENTORY_ACTIVE_STATUSES,
+  INVENTORY_SOLD_STATUS_HE,
+  isInventorySoldStatus,
+} from "@/lib/inventory/status";
+import { recordLedgerPayment, type LedgerDirection } from "@/app/payments/actions";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -31,6 +37,9 @@ export type SaleRecord = {
   buyer_name?: string;
   seller_name?: string;
   investment_details?: string;
+  /** Cost-recovery: margin recognized only after payments exceed cost (capped at paper margin). */
+  realized_recovery_profit?: number | null;
+  actual_commission_received?: number | null;
 };
 
 export type InventorySaleOption = {
@@ -56,23 +65,16 @@ export async function fetchInventoryForSales(): Promise<
       .from("inventory")
       .select("id, sku, product_category, category_meta, quantity, status, scribe_id")
       .eq("user_id", user.id)
-      .neq("status", "sold")
+      .in("status", [...INVENTORY_ACTIVE_STATUSES])
       .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
 
     const rows = data ?? [];
-    const scribeIds = [...new Set(rows.map((r) => r.scribe_id).filter(Boolean))] as string[];
-    const { data: scribes } = scribeIds.length > 0
-      ? await supabase.from("crm_contacts").select("id, name").in("id", scribeIds)
-      : { data: [] };
-    const scribeMap = new Map((scribes ?? []).map((s) => [s.id, s.name ?? ""]));
 
     const items: InventorySaleOption[] = rows
       .map((r) => {
         const qty = Math.max(0, Math.floor(Number(r.quantity ?? 1)));
-        const scribeId = r.scribe_id as string | null;
-        const scribe_name = scribeId ? scribeMap.get(scribeId) ?? null : null;
         return {
           id: r.id as string,
           sku: (r.sku as string | null) ?? null,
@@ -80,14 +82,14 @@ export async function fetchInventoryForSales(): Promise<
           category_meta: (r.category_meta as Record<string, unknown> | null) ?? null,
           quantity: qty,
           status: (r.status as string | null) ?? null,
-          scribe_name,
+          scribe_name: null as string | null,
           display_label: "",
         };
       })
       .filter((i) => i.quantity > 0)
       .map((i) => ({
         ...i,
-        display_label: buildInventorySaleLabel(i),
+        display_label: buildInventorySaleLabelSkuPrecise(i),
       }));
 
     return { success: true, items };
@@ -116,7 +118,7 @@ export async function fetchSales(): Promise<
     const { data, error } = await supabase
       .from("erp_sales")
       .select(
-        "id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit, commission_received, quantity, total_price, amount_paid"
+        "id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit, commission_received, actual_commission_received, quantity, total_price, amount_paid"
       )
       .eq("user_id", user.id)
       .order("sale_date", { ascending: false });
@@ -144,14 +146,16 @@ export async function fetchSales(): Promise<
     if (saleIds.length > 0) {
       const { data: payments, error: payErr } = await supabase
         .from("erp_payments")
-        .select("target_id, amount")
+        .select("entity_id, amount, direction")
         .eq("user_id", user.id)
-        .eq("target_type", "sale")
-        .in("target_id", saleIds);
+        .eq("entity_type", "sale")
+        .in("entity_id", saleIds);
       if (!payErr && payments) {
         for (const p of payments) {
-          const tid = p.target_id as string;
-          paySumBySale.set(tid, (paySumBySale.get(tid) ?? 0) + Number(p.amount ?? 0));
+          const eid = p.entity_id as string;
+          const amt = Number(p.amount ?? 0);
+          const signed = (p as { direction?: string }).direction === "outgoing" ? -amt : amt;
+          paySumBySale.set(eid, (paySumBySale.get(eid) ?? 0) + signed);
         }
       }
     }
@@ -168,13 +172,30 @@ export async function fetchSales(): Promise<
       const extraPaid = paySumBySale.get(r.id) ?? 0;
       const totalPaid = amountPaidRow + extraPaid;
       const remaining = totalPrice - totalPaid;
+      const cost = r.cost_price != null ? Number(r.cost_price) : null;
+      const paperMargin = cost != null ? Math.max(0, totalPrice - cost) : null;
+      let realizedRecovery: number | null = null;
+      if (cost != null) {
+        if (totalPaid > cost) {
+          realizedRecovery = Math.min(totalPaid - cost, paperMargin ?? Number.POSITIVE_INFINITY);
+        } else {
+          realizedRecovery = 0;
+        }
+      }
+
+      const acr =
+        (r as { actual_commission_received?: unknown }).actual_commission_received != null
+          ? Number((r as { actual_commission_received: unknown }).actual_commission_received)
+          : r.commission_received != null
+            ? Number(r.commission_received)
+            : null;
 
       return {
         id: r.id,
         item_id: r.item_id ?? null,
         buyer_id: r.buyer_id ?? null,
         sale_price: Number(r.sale_price ?? 0),
-        cost_price: r.cost_price != null ? Number(r.cost_price) : null,
+        cost_price: cost,
         profit: r.profit != null ? Number(r.profit) : null,
         sale_date: r.sale_date ?? "",
         notes: r.notes ?? null,
@@ -186,11 +207,13 @@ export async function fetchSales(): Promise<
         commission_profit: r.commission_profit != null ? Number(r.commission_profit) : null,
         commission_received:
           r.commission_received != null ? Number(r.commission_received) : null,
+        actual_commission_received: acr,
         quantity: qty,
         total_price: totalPrice,
         amount_paid_row: amountPaidRow,
         total_paid: totalPaid,
         remaining_balance: remaining,
+        realized_recovery_profit: realizedRecovery,
         item_category: r.item_id ? invMap.get(r.item_id) ?? undefined : undefined,
         buyer_name: r.buyer_id ? contactMap.get(r.buyer_id) ?? undefined : undefined,
         seller_name: r.seller_id ? contactMap.get(r.seller_id) ?? undefined : undefined,
@@ -206,20 +229,20 @@ export async function fetchSales(): Promise<
 
 export type CreateSaleParams =
   | { sale_type: "ממלאי"; item_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string }
-  | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; commission_received: number; notes?: string }
+  | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; actual_commission_received: number; notes?: string }
   | { sale_type: "פרויקט חדש"; investment_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string };
 
 export async function addSalePayment(
   saleId: string,
   amount: number,
   paymentDate?: string,
-  notes?: string
+  notes?: string,
+  opts?: { method?: string | null; direction?: LedgerDirection }
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
-    if (amount <= 0) return { success: false, error: "הזן סכום חיובי" };
 
     const { data: sale } = await supabase
       .from("erp_sales")
@@ -229,19 +252,15 @@ export async function addSalePayment(
       .single();
     if (!sale) return { success: false, error: "מכירה לא נמצאה" };
 
-    const { error } = await supabase.from("erp_payments").insert({
-      user_id: user.id,
-      target_id: saleId,
-      target_type: "sale",
+    return recordLedgerPayment({
+      entityId: saleId,
+      entityType: "sale",
       amount,
-      payment_date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
-      notes: notes?.trim() || null,
+      paymentDate,
+      notes,
+      method: opts?.method ?? null,
+      direction: opts?.direction ?? "incoming",
     });
-    if (error) return { success: false, error: error.message };
-
-    revalidatePath("/sales");
-    revalidatePath("/");
-    return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
@@ -262,7 +281,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         .single();
 
       if (!item) return { success: false, error: "פריט לא נמצא" };
-      if (item.status === "sold") return { success: false, error: "הפריט כבר נמכר" };
+      if (isInventorySoldStatus(item.status as string)) return { success: false, error: "הפריט כבר נמכר" };
 
       const invQty = Math.max(0, Math.floor(Number(item.quantity ?? 1)));
       if (invQty <= 0) return { success: false, error: "אין כמות זמינה במלאי" };
@@ -306,7 +325,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
           quantity: newQty,
           total_cost: newTotalCost,
           total_target_price: newTotalTarget,
-          status: newQty <= 0 ? "sold" : item.status,
+          status: newQty <= 0 ? INVENTORY_SOLD_STATUS_HE : item.status,
           updated_at: new Date().toISOString(),
         })
         .eq("id", params.item_id)
@@ -314,7 +333,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
 
       if (invErr) return { success: false, error: invErr.message };
     } else if (params.sale_type === "תיווך") {
-      const cr = params.commission_received;
+      const cr = params.actual_commission_received;
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
         sale_type: "תיווך",
@@ -330,6 +349,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         profit: cr,
         commission_profit: cr,
         commission_received: cr,
+        actual_commission_received: cr,
         notes: params.notes?.trim() || null,
       });
       if (saleErr) return { success: false, error: saleErr.message };
@@ -395,9 +415,9 @@ export async function bulkImportSales(
       .from("inventory")
       .select("id, product_category, status")
       .eq("user_id", user.id)
-      .neq("status", "sold");
+      .in("status", [...INVENTORY_ACTIVE_STATUSES]);
     const invByCategory = new Map((invItems ?? []).map((i) => [i.product_category?.trim().toLowerCase() ?? "", i]));
-    const invList = (invItems ?? []).filter((i) => i.status !== "sold");
+    const invList = (invItems ?? []).filter((i) => !isInventorySoldStatus(i.status));
 
     const { data: contacts } = await supabase
       .from("crm_contacts")
@@ -445,7 +465,7 @@ export async function bulkImportSales(
           item_description: itemDesc,
           buyer_id: buyerId ?? undefined,
           seller_id: sellerId ?? undefined,
-          commission_received: commission,
+          actual_commission_received: commission,
           notes: notes ?? undefined,
         });
         if (res.success) imported++;

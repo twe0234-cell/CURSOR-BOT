@@ -36,3 +36,17 @@ export function buildInventorySaleLabel(input: {
   const sc = input.scribe_name ? `סופר: ${input.scribe_name}` : "סופר: —";
   return `[${sku}] ${cat} - ${det} (${sc}) - זמין: ${input.quantity}`;
 }
+
+/** SaaS sales combobox: SKU, category, details, available qty (no scribe). */
+export function buildInventorySaleLabelSkuPrecise(input: {
+  id: string;
+  sku: string | null;
+  product_category: string | null;
+  category_meta: Record<string, unknown> | null;
+  quantity: number;
+}): string {
+  const sku = input.sku ?? input.id.slice(0, 8);
+  const cat = input.product_category ?? "—";
+  const det = formatInventoryDetails(input.category_meta, input.product_category);
+  return `[${sku}] ${cat} - ${det} (Available: ${input.quantity})`;
+}

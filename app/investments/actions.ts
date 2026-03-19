@@ -3,6 +3,7 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { generateInventorySku } from "@/lib/inventory/sku";
+import { recordLedgerPayment, type LedgerDirection } from "@/app/payments/actions";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -362,15 +363,20 @@ export async function fetchPublicProject(slug: string): Promise<
   }
 }
 
-export async function addPayment(
+/** Updates investment balance and appends a row to `erp_payments` (ledger). */
+export async function addInvestmentLedgerPayment(
   investmentId: string,
-  amount: number
+  amount: number,
+  paymentDate?: string,
+  method?: string | null,
+  notes?: string | null,
+  direction: LedgerDirection = "incoming"
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
-    if (amount <= 0) return { success: false, error: "הזן סכום" };
+    if (amount <= 0) return { success: false, error: "הזן סכום חיובי" };
 
     const { data: inv } = await supabase
       .from("erp_investments")
@@ -381,9 +387,12 @@ export async function addPayment(
 
     if (!inv) return { success: false, error: "השקעה לא נמצאה" };
 
-    const newPaid = Number(inv.amount_paid ?? 0) + amount;
+    const paid = Number(inv.amount_paid ?? 0);
+    const delta = direction === "outgoing" ? -amount : amount;
+    const newPaid = paid + delta;
+    if (newPaid < 0) return { success: false, error: "הסכום חורג מהיתרה שנרשמה" };
 
-    const { error } = await supabase
+    const { error: upErr } = await supabase
       .from("erp_investments")
       .update({
         amount_paid: newPaid,
@@ -392,13 +401,42 @@ export async function addPayment(
       .eq("id", investmentId)
       .eq("user_id", user.id);
 
-    if (error) return { success: false, error: error.message };
+    if (upErr) return { success: false, error: upErr.message };
+
+    const ledger = await recordLedgerPayment({
+      entityId: investmentId,
+      entityType: "investment",
+      amount,
+      paymentDate,
+      method: method ?? null,
+      notes: notes ?? null,
+      direction,
+    });
+
+    if (!ledger.success) {
+      await supabase
+        .from("erp_investments")
+        .update({
+          amount_paid: paid,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", investmentId)
+        .eq("user_id", user.id);
+      return ledger;
+    }
+
     revalidatePath("/investments");
+    revalidatePath("/crm");
     revalidatePath("/");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
+}
+
+/** @deprecated Prefer PaymentModal + addInvestmentLedgerPayment (writes ledger). */
+export async function addPayment(investmentId: string, amount: number): Promise<ActionResult> {
+  return addInvestmentLedgerPayment(investmentId, amount, undefined, null, null, "incoming");
 }
 
 /** Create inventory from an active investment; mark investment delivered_to_inventory. */

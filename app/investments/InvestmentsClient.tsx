@@ -28,7 +28,6 @@ import {
 import {
   fetchInvestments,
   createInvestment,
-  addPayment,
   bulkImportInvestments,
   updateInvestment,
   getShareLink,
@@ -38,13 +37,13 @@ import {
 import { fetchScribes } from "@/app/crm/actions";
 import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
 import { CsvActions } from "@/components/shared/CsvActions";
+import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon } from "lucide-react";
 
 export default function InvestmentsClient() {
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [scribes, setScribes] = useState<{ id: string; name: string }[]>([]);
   const [addScribeOpen, setAddScribeOpen] = useState(false);
@@ -179,26 +178,6 @@ export default function InvestmentsClient() {
     setMovingToInventoryId(null);
     if (res.success) {
       toast.success("הפריט נוצר במלאי וההשקעה סומנה כנמסרה");
-      loadData();
-    } else {
-      toast.error(res.error);
-    }
-  };
-
-  const handleAddPayment = async () => {
-    if (!paymentOpen) return;
-    const amount = parseFloat(paymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("הזן סכום");
-      return;
-    }
-    setLoading(true);
-    const res = await addPayment(paymentOpen, amount);
-    setLoading(false);
-    if (res.success) {
-      toast.success("התשלום נרשם");
-      setPaymentOpen(null);
-      setPaymentAmount("");
       loadData();
     } else {
       toast.error(res.error);
@@ -469,28 +448,14 @@ export default function InvestmentsClient() {
         onSuccess={handleAddScribeSuccess}
       />
 
-      <Dialog open={!!paymentOpen} onOpenChange={(o) => !o && setPaymentOpen(null)}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>רישום תשלום</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">סכום (₪)</label>
-              <Input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="0"
-                className="rounded-xl"
-              />
-            </div>
-            <Button type="button" onClick={handleAddPayment} disabled={loading} className="w-full rounded-xl">
-              {loading ? "שומר..." : "שמור תשלום"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PaymentModal
+        open={!!paymentOpen}
+        onOpenChange={(o) => !o && setPaymentOpen(null)}
+        entityId={paymentOpen}
+        entityType="investment"
+        title="רישום תשלום — השקעה"
+        onSuccess={loadData}
+      />
 
       <Dialog open={!!detailOpen} onOpenChange={(o) => !o && setDetailOpen(null)}>
         <DialogContent className="sm:max-w-md rounded-2xl">

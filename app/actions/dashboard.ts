@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/src/lib/supabase/server";
+import { INVENTORY_ACTIVE_STATUSES } from "@/lib/inventory/status";
 
 export type DashboardKpis = {
   /** עלות מלאי קיים - SUM total_cost where status != 'sold' */
@@ -57,7 +58,7 @@ export async function fetchDashboardKpis(): Promise<
       .from("inventory")
       .select("total_cost, total_target_price, status")
       .eq("user_id", user.id)
-      .neq("status", "sold");
+      .in("status", [...INVENTORY_ACTIVE_STATUSES]);
 
     let totalInvested = 0;
     let expectedRevenue = 0;
@@ -164,7 +165,7 @@ export async function fetchCategoryCostRevenue(): Promise<
       .from("inventory")
       .select("product_category, total_cost, total_target_price")
       .eq("user_id", user.id)
-      .neq("status", "sold");
+      .in("status", [...INVENTORY_ACTIVE_STATUSES]);
 
     const byCategory: Record<string, { cost: number; revenue: number }> = {};
     for (const r of data ?? []) {
@@ -196,7 +197,7 @@ export async function fetchInventoryDistribution(): Promise<
       .from("inventory")
       .select("product_category")
       .eq("user_id", user.id)
-      .neq("status", "sold");
+      .in("status", [...INVENTORY_ACTIVE_STATUSES]);
 
     const counts: Record<string, number> = {};
     for (const r of data ?? []) {

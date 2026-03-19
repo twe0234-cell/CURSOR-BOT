@@ -34,7 +34,6 @@ import {
   deleteExpense,
   bulkImportSales,
   fetchInventoryForSales,
-  addSalePayment,
   type SaleRecord,
   type ExpenseRecord,
   type InventorySaleOption,
@@ -43,6 +42,7 @@ import { fetchInvestments } from "@/app/investments/actions";
 import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
+import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon } from "lucide-react";
 
 const SALE_TYPES = ["ממלאי", "תיווך", "פרויקט חדש"] as const;
@@ -75,8 +75,6 @@ export default function SalesClient() {
   const [newExpNotes, setNewExpNotes] = useState("");
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -163,7 +161,7 @@ export default function SalesClient() {
         item_description: newSaleItemDescription,
         buyer_id: newSaleBuyerId || null,
         seller_id: newSaleSellerId || null,
-        commission_received: commission,
+        actual_commission_received: commission,
         notes: newSaleNotes || undefined,
       });
       setLoading(false);
@@ -228,25 +226,6 @@ export default function SalesClient() {
       setNewExpCategory("");
       setNewExpAmount("");
       setNewExpNotes("");
-      loadData();
-    } else toast.error(res.error);
-  };
-
-  const handleAddSalePayment = async () => {
-    if (!paymentSaleId) return;
-    const amount = parseFloat(paymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("הזן סכום חיובי");
-      return;
-    }
-    setLoading(true);
-    const res = await addSalePayment(paymentSaleId, amount, paymentDate || undefined);
-    setLoading(false);
-    if (res.success) {
-      toast.success("התשלום נרשם");
-      setPaymentSaleId(null);
-      setPaymentAmount("");
-      setPaymentDate(new Date().toISOString().slice(0, 10));
       loadData();
     } else toast.error(res.error);
   };
@@ -328,7 +307,8 @@ export default function SalesClient() {
                       <TableHead className="font-semibold">סה״כ עסקה</TableHead>
                       <TableHead className="font-semibold">סה״כ שולם</TableHead>
                       <TableHead className="font-semibold">יתרת חוב</TableHead>
-                      <TableHead className="font-semibold">רווח</TableHead>
+                      <TableHead className="font-semibold">רווח על הנייר</TableHead>
+                      <TableHead className="font-semibold">רווח מוכר (החזר עלות)</TableHead>
                       <TableHead className="font-semibold w-28">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -355,17 +335,18 @@ export default function SalesClient() {
                           <TableCell className={s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
                             {s.profit != null ? `${s.profit.toLocaleString("he-IL")} ₪` : "—"}
                           </TableCell>
+                          <TableCell className="text-sm">
+                            {s.realized_recovery_profit != null
+                              ? `${s.realized_recovery_profit.toLocaleString("he-IL")} ₪`
+                              : "—"}
+                          </TableCell>
                           <TableCell>
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
                               className="rounded-lg h-8 text-xs"
-                              onClick={() => {
-                                setPaymentSaleId(s.id);
-                                setPaymentAmount("");
-                                setPaymentDate(new Date().toISOString().slice(0, 10));
-                              }}
+                              onClick={() => setPaymentSaleId(s.id)}
                             >
                               <BanknoteIcon className="size-3.5 ml-1" />
                               קבלת תשלום
@@ -590,7 +571,7 @@ export default function SalesClient() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold">עמלה שהתקבלה במזומן (₪)</label>
+                  <label className="mb-1.5 block text-sm font-semibold">עמלה בפועל שהתקבלה (₪)</label>
                   <Input
                     type="number"
                     min={0}
@@ -686,39 +667,14 @@ export default function SalesClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!paymentSaleId} onOpenChange={(o) => !o && setPaymentSaleId(null)}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>קבלת תשלום</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">סכום (₪)</label>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="0"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">תאריך תשלום</label>
-              <Input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="rounded-xl"
-              />
-            </div>
-            <Button type="button" onClick={handleAddSalePayment} disabled={loading} className="w-full rounded-xl">
-              {loading ? "שומר..." : "שמור תשלום"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PaymentModal
+        open={!!paymentSaleId}
+        onOpenChange={(o) => !o && setPaymentSaleId(null)}
+        entityId={paymentSaleId}
+        entityType="sale"
+        title="רישום תשלום — מכירה"
+        onSuccess={loadData}
+      />
 
       <AddClientModal
         open={addClientOpen}

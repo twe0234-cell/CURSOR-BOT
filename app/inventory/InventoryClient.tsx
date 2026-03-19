@@ -49,8 +49,9 @@ import {
 } from "@/components/ui/collapsible";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon, ChevronDown, ChevronUp } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
+import { isInventorySoldStatus } from "@/lib/inventory/status";
 
-const STATUSES = ["available", "in_use", "sold", "reserved"];
+const STATUSES = ["available", "in_use", "sold", "reserved", "נמכר"];
 
 type Props = {
   initialItems: InventoryItem[];
@@ -70,10 +71,10 @@ export default function InventoryClient({ initialItems }: Props) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredActive = items
-    .filter((i) => i.status !== "sold")
+    .filter((i) => !isInventorySoldStatus(i.status))
     .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
   const filteredArchive = items
-    .filter((i) => i.status === "sold")
+    .filter((i) => isInventorySoldStatus(i.status))
     .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
 
   const sortItems = <T extends { sku?: string | null; product_category?: string | null; script_type?: string | null; status?: string | null; target_price?: number | null }>(arr: T[]) => {
@@ -517,7 +518,7 @@ export default function InventoryClient({ initialItems }: Props) {
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-slate-50/30" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
-            {editingId && items.find((i) => i.id === editingId)?.status === "sold" && (
+            {editingId && isInventorySoldStatus(items.find((i) => i.id === editingId)?.status) && (
               <p className="text-sm text-amber-600 font-medium">פריט בארכיון – צפייה ועריכה מוגבלת</p>
             )}
           </DialogHeader>
