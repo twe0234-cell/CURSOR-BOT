@@ -41,7 +41,13 @@ import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon } from "lucide-react";
+import { BarcodePrint } from "@/components/inventory/BarcodePrint";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon, ChevronDown, ChevronUp } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 
 const STATUSES = ["available", "in_use", "sold", "reserved"];
@@ -52,14 +58,46 @@ type Props = {
 
 export default function InventoryClient({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems);
-  const activeItems = items.filter((i) => i.status !== "sold");
-  const archiveItems = items.filter((i) => i.status === "sold");
+  const filteredActive = items
+    .filter((i) => i.status !== "sold")
+    .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
+  const filteredArchive = items
+    .filter((i) => i.status === "sold")
+    .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
+
+  const sortItems = <T extends { sku?: string | null; product_category?: string | null; script_type?: string | null; status?: string | null; target_price?: number | null }>(arr: T[]) => {
+    return [...arr].sort((a, b) => {
+      let va: string | number = "";
+      let vb: string | number = "";
+      if (sortKey === "target_price") {
+        va = a.target_price ?? 0;
+        vb = b.target_price ?? 0;
+      } else {
+        va = String(a[sortKey as keyof T] ?? "");
+        vb = String(b[sortKey as keyof T] ?? "");
+      }
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  };
+
+  const handleSort = (key: typeof sortKey) => {
+    setSortKey(key);
+    setSortDir((d) => (sortKey === key ? (d === "asc" ? "desc" : "asc") : "asc"));
+  };
+
+  const activeItems = sortItems(filteredActive);
+  const archiveItems = sortItems(filteredArchive);
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [categories, setCategories] = useState<string[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [sortKey, setSortKey] = useState<"sku" | "product_category" | "script_type" | "status" | "target_price">("sku");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     fetchDropdownOptions("categories")
@@ -87,6 +125,10 @@ export default function InventoryClient({ initialItems }: Props) {
       scribe_code: null,
       images: [],
       description: "",
+      parchment_type: null,
+      computer_proofread: false,
+      human_proofread: false,
+      is_sewn: false,
     },
   });
 
@@ -106,6 +148,10 @@ export default function InventoryClient({ initialItems }: Props) {
       scribe_code: null,
       images: [],
       description: "",
+      parchment_type: null,
+      computer_proofread: false,
+      human_proofread: false,
+      is_sewn: false,
     });
     setEditOpen(true);
   };
@@ -126,6 +172,10 @@ export default function InventoryClient({ initialItems }: Props) {
       scribe_code: item.scribe_code ?? null,
       images: item.images ?? [],
       description: item.description ?? "",
+      parchment_type: item.parchment_type ?? null,
+      computer_proofread: item.computer_proofread ?? false,
+      human_proofread: item.human_proofread ?? false,
+      is_sewn: item.is_sewn ?? false,
     });
     setEditOpen(true);
   };
@@ -147,6 +197,10 @@ export default function InventoryClient({ initialItems }: Props) {
         scribe_code: data.scribe_code ?? null,
         images: data.images ?? [],
         description: data.description || null,
+        parchment_type: data.parchment_type || null,
+        computer_proofread: data.computer_proofread ?? false,
+        human_proofread: data.human_proofread ?? false,
+        is_sewn: data.is_sewn ?? false,
       };
 
       const res = editingId
@@ -258,22 +312,57 @@ export default function InventoryClient({ initialItems }: Props) {
           <TabsTrigger value="archive" className="rounded-lg">ארכיון (נמכר) ({archiveItems.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="active" className="mt-0">
+          <div className="mb-3 flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-600">סינון קטגוריה:</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">הכל</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
           <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead>מק״ט</TableHead>
-                  <TableHead>קטגוריה</TableHead>
-                  <TableHead>כתב</TableHead>
-                  <TableHead>סטטוס</TableHead>
-                  <TableHead>מחיר יעד</TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
+                      מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
                   <TableHead className="w-40">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {activeItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-mono font-medium text-sky-700">{item.sku ?? item.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono font-medium text-sky-700">
+                      <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                    </TableCell>
                     <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                 <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
                 <TableCell>{item.status ?? "—"}</TableCell>
@@ -333,22 +422,57 @@ export default function InventoryClient({ initialItems }: Props) {
           )}
         </TabsContent>
         <TabsContent value="archive" className="mt-0">
+          <div className="mb-3 flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-600">סינון קטגוריה:</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">הכל</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
           <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead>מק״ט</TableHead>
-                  <TableHead>קטגוריה</TableHead>
-                  <TableHead>כתב</TableHead>
-                  <TableHead>סטטוס</TableHead>
-                  <TableHead>מחיר יעד</TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
+                      מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
                   <TableHead className="w-40">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {archiveItems.map((item) => (
                   <TableRow key={item.id} className="bg-slate-50/50 opacity-90">
-                    <TableCell className="font-mono font-medium text-slate-600">{item.sku ?? item.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono font-medium text-slate-600">
+                      <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
+                    </TableCell>
                     <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.status ?? "—"}</TableCell>
@@ -565,6 +689,54 @@ export default function InventoryClient({ initialItems }: Props) {
                   />
                 </CardContent>
               </Card>
+
+              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-right hover:bg-slate-50 transition-colors">
+                  <span className="font-semibold text-slate-700">הגדרות מתקדמות</span>
+                  {advancedOpen ? <ChevronUp className="size-4 text-slate-500" /> : <ChevronDown className="size-4 text-slate-500" />}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-4 pb-4 pt-2 space-y-4 border-t border-slate-100">
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="font-bold text-slate-800 text-right">סוג קלף</label>
+                      <Input
+                        {...form.register("parchment_type")}
+                        placeholder="גולדמאן, נפרשטק..."
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="computer_proofread"
+                          {...form.register("computer_proofread")}
+                          className="rounded border-slate-300"
+                        />
+                        <label htmlFor="computer_proofread" className="text-sm font-medium">בדיקת מחשב</label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="human_proofread"
+                          {...form.register("human_proofread")}
+                          className="rounded border-slate-300"
+                        />
+                        <label htmlFor="human_proofread" className="text-sm font-medium">בדיקה אנושית</label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="is_sewn"
+                          {...form.register("is_sewn")}
+                          className="rounded border-slate-300"
+                        />
+                        <label htmlFor="is_sewn" className="text-sm font-medium">תפור</label>
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="flex gap-3 justify-end pt-2">
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)} className="rounded-xl">

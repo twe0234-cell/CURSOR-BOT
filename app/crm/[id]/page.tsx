@@ -15,7 +15,7 @@ export default async function ContactDetailPage({
 
   const { data: contact } = await supabase
     .from("crm_contacts")
-    .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, created_at")
+    .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -67,6 +67,8 @@ export default async function ContactDetailPage({
         phone: contact.phone ?? null,
         tags: (contact.tags ?? []) as string[],
         notes: contact.notes ?? null,
+        certification: contact.certification ?? null,
+        phone_type: contact.phone_type ?? null,
         created_at: contact.created_at ?? "",
       }}
       debtToContact={debtToContact}

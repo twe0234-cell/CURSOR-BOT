@@ -14,7 +14,14 @@ import {
   FileTextIcon,
   DollarSignIcon,
   PencilIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   updateCrmContact,
   addTransaction,
@@ -31,6 +38,8 @@ type Contact = {
   phone: string | null;
   tags: string[];
   notes: string | null;
+  certification: string | null;
+  phone_type: string | null;
   created_at: string;
 };
 
@@ -64,6 +73,10 @@ export default function ContactDetailClient({
   const [editEmail, setEditEmail] = useState(contact.email ?? "");
   const [editPhone, setEditPhone] = useState(contact.phone ?? "");
   const [editTags, setEditTags] = useState(initialContact.tags.join(", "));
+  const [editNotes, setEditNotes] = useState(contact.notes ?? "");
+  const [editCertification, setEditCertification] = useState(contact.certification ?? "");
+  const [editPhoneType, setEditPhoneType] = useState(contact.phone_type ?? "");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [newTxAmount, setNewTxAmount] = useState("");
   const [newTxType, setNewTxType] = useState<"Debt" | "Credit">("Debt");
   const [newTxDesc, setNewTxDesc] = useState("");
@@ -76,6 +89,9 @@ export default function ContactDetailClient({
       email: editEmail.trim() || undefined,
       phone: editPhone.trim() || undefined,
       tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
+      notes: editNotes.trim() || undefined,
+      certification: editCertification.trim() || undefined,
+      phone_type: editPhoneType.trim() || undefined,
     });
     if (res.success) {
       setContact((prev) => ({
@@ -84,6 +100,9 @@ export default function ContactDetailClient({
         email: editEmail.trim() || null,
         phone: editPhone.trim() || null,
         tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
+        notes: editNotes.trim() || null,
+        certification: editCertification.trim() || null,
+        phone_type: editPhoneType.trim() || null,
       }));
       setEditMode(false);
       toast.success("נשמר");
@@ -216,6 +235,41 @@ export default function ContactDetailClient({
                       className="rounded-lg mt-1"
                     />
                   </div>
+                  <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="mt-3">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-slate-600 hover:text-slate-800">
+                      הגדרות מתקדמות
+                      {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-3 space-y-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground">תעודה (תעודת משמרת סתם וכו׳)</label>
+                        <Input
+                          value={editCertification}
+                          onChange={(e) => setEditCertification(e.target.value)}
+                          placeholder="תעודת משמרת סתם"
+                          className="rounded-lg mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">סוג טלפון (כשר, סמארטפון)</label>
+                        <Input
+                          value={editPhoneType}
+                          onChange={(e) => setEditPhoneType(e.target.value)}
+                          placeholder="כשר, סמארטפון"
+                          className="rounded-lg mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">הערות</label>
+                        <Input
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="הערות"
+                          className="rounded-lg mt-1"
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </>
               ) : (
                 <div className="space-y-1">
@@ -246,6 +300,18 @@ export default function ContactDetailClient({
                       ))}
                     </div>
                   )}
+                  <Collapsible className="mt-3">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-slate-600 hover:text-slate-800">
+                      הגדרות מתקדמות
+                      <ChevronDown className="size-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 space-y-1 text-sm">
+                      {contact.certification && <p><span className="text-muted-foreground">תעודה:</span> {contact.certification}</p>}
+                      {contact.phone_type && <p><span className="text-muted-foreground">סוג טלפון:</span> {contact.phone_type}</p>}
+                      {contact.notes && <p><span className="text-muted-foreground">הערות:</span> {contact.notes}</p>}
+                      {!contact.certification && !contact.phone_type && !contact.notes && <p className="text-muted-foreground">אין הגדרות מתקדמות</p>}
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
               )}
             </div>

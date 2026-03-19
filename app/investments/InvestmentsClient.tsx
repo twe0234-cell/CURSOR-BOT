@@ -30,12 +30,14 @@ import {
   createInvestment,
   addPayment,
   bulkImportInvestments,
+  updateInvestment,
+  getShareLink,
   type InvestmentRecord,
 } from "./actions";
 import { fetchScribes } from "@/app/crm/actions";
 import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { PlusIcon, WalletIcon } from "lucide-react";
+import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon } from "lucide-react";
 
 export default function InvestmentsClient() {
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
@@ -51,6 +53,9 @@ export default function InvestmentsClient() {
   const [newCostPerUnit, setNewCostPerUnit] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [detailOpen, setDetailOpen] = useState<string | null>(null);
+  const [detailDeductions, setDetailDeductions] = useState("");
+  const [detailDocLoading, setDetailDocLoading] = useState(false);
 
   const loadData = () => {
     fetchInvestments().then((r) => r.success && setInvestments(r.investments));
@@ -103,6 +108,60 @@ export default function InvestmentsClient() {
     } else {
       toast.error(res.error);
     }
+  };
+
+  const openDetail = (inv: InvestmentRecord) => {
+    setDetailOpen(inv.id);
+    setDetailDeductions(String(inv.deductions ?? 0));
+  };
+
+  const handleSaveDeductions = async () => {
+    if (!detailOpen) return;
+    const val = parseFloat(detailDeductions);
+    if (isNaN(val) || val < 0) {
+      toast.error("הזן ערך תקין");
+      return;
+    }
+    setLoading(true);
+    const res = await updateInvestment(detailOpen, { deductions: val });
+    setLoading(false);
+    if (res.success) {
+      toast.success("נשמר");
+      loadData();
+    } else toast.error(res.error);
+  };
+
+  const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>, inv: InvestmentRecord) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDetailDocLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/investments/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("העלאה נכשלה");
+      const { url } = await res.json();
+      const docs = [...(inv.documents ?? []), url];
+      const updateRes = await updateInvestment(inv.id, { documents: docs });
+      if (updateRes.success) {
+        toast.success("המסמך הועלה");
+        loadData();
+      } else toast.error(updateRes.error);
+    } catch {
+      toast.error("שגיאה בהעלאה");
+    } finally {
+      setDetailDocLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleShare = async (inv: InvestmentRecord) => {
+    const res = await getShareLink(inv.id);
+    if (res.success) {
+      const fullUrl = res.url.startsWith("http") ? res.url : `${window.location.origin}${res.url}`;
+      await navigator.clipboard.writeText(fullUrl);
+      toast.success("הקישור הועתק ללוח");
+    } else toast.error(res.error);
   };
 
   const handleAddPayment = async () => {
@@ -184,9 +243,12 @@ export default function InvestmentsClient() {
               </TableHeader>
               <TableBody>
                 {investments.map((inv) => {
-                  const pct = inv.total_agreed_price > 0
-                    ? Math.min(100, (inv.amount_paid / inv.total_agreed_price) * 100)
-                    : 0;
+                  const hasMilestones = inv.milestones && inv.milestones.length > 0;
+                  const pct = hasMilestones
+                    ? inv.milestones.filter((m) => m.done).length / inv.milestones.length * 100
+                    : inv.total_agreed_price > 0
+                      ? Math.min(100, (inv.amount_paid / inv.total_agreed_price) * 100)
+                      : 0;
                   return (
                     <TableRow key={inv.id}>
                       <TableCell>{inv.scribe_name ?? "—"}</TableCell>
@@ -224,17 +286,28 @@ export default function InvestmentsClient() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {inv.status === "active" && inv.remaining_balance > 0 && (
+                        <div className="flex gap-1 flex-wrap">
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => setPaymentOpen(inv.id)}
+                            variant="ghost"
+                            onClick={() => openDetail(inv)}
                             className="rounded-lg h-8"
+                            title="פרטי פרויקט"
                           >
-                            <WalletIcon className="size-4 ml-1" />
-                            תשלום
+                            <SettingsIcon className="size-4" />
                           </Button>
-                        )}
+                          {inv.status === "active" && inv.remaining_balance > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setPaymentOpen(inv.id)}
+                              className="rounded-lg h-8"
+                            >
+                              <WalletIcon className="size-4 ml-1" />
+                              תשלום
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -375,6 +448,73 @@ export default function InvestmentsClient() {
               {loading ? "שומר..." : "שמור תשלום"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detailOpen} onOpenChange={(o) => !o && setDetailOpen(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>פרטי פרויקט</DialogTitle>
+          </DialogHeader>
+          {detailOpen && (() => {
+            const inv = investments.find((i) => i.id === detailOpen);
+            if (!inv) return null;
+            return (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">ניכויים (₪) – מפחיתים מתשלום הסופר</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={detailDeductions}
+                      onChange={(e) => setDetailDeductions(e.target.value)}
+                      placeholder="0"
+                      className="rounded-xl"
+                    />
+                    <Button onClick={handleSaveDeductions} disabled={loading} className="rounded-xl">
+                      שמור
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">מסמכים / חוזים</label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-dashed px-4 py-3 cursor-pointer hover:bg-slate-50">
+                    <FileUpIcon className="size-4" />
+                    העלה קובץ
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={(e) => handleUploadDoc(e, inv)}
+                      disabled={detailDocLoading}
+                    />
+                  </label>
+                  {inv.documents && inv.documents.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {inv.documents.map((url, idx) => (
+                        <li key={idx}>
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline truncate block">
+                            מסמך {idx + 1}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleShare(inv)}
+                    className="w-full rounded-xl"
+                  >
+                    <Share2Icon className="size-4 ml-1" />
+                    העתק קישור פורטל לקוח
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

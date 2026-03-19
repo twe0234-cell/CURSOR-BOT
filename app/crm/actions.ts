@@ -17,6 +17,8 @@ export type CrmContact = {
   phone: string | null;
   tags: string[];
   notes: string | null;
+  certification: string | null;
+  phone_type: string | null;
   created_at: string;
 };
 
@@ -30,7 +32,7 @@ export async function fetchCrmContacts(): Promise<
 
     const { data, error } = await supabase
       .from("crm_contacts")
-      .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, created_at")
+      .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at")
       .eq("user_id", user.id)
       .order("name");
 
@@ -45,6 +47,8 @@ export async function fetchCrmContacts(): Promise<
       phone: r.phone ?? null,
       tags: (r.tags ?? []) as string[],
       notes: r.notes ?? null,
+      certification: r.certification ?? null,
+      phone_type: r.phone_type ?? null,
       created_at: r.created_at ?? "",
     }));
     return { success: true, contacts };
@@ -306,7 +310,7 @@ export async function createCrmContact(data: {
 
 export async function updateCrmContact(
   id: string,
-  data: Partial<{ name: string; type: string; preferred_contact: string; wa_chat_id: string; email: string; phone: string; tags: string[]; notes: string }>
+  data: Partial<{ name: string; type: string; preferred_contact: string; wa_chat_id: string; email: string; phone: string; tags: string[]; notes: string; certification: string; phone_type: string }>
 ): Promise<ActionResult> {
   try {
     const supabase = await createClient();
@@ -322,6 +326,8 @@ export async function updateCrmContact(
     if (data.phone !== undefined) payload.phone = data.phone?.trim() || null;
     if (data.tags !== undefined) payload.tags = data.tags;
     if (data.notes !== undefined) payload.notes = data.notes;
+    if (data.certification !== undefined) payload.certification = data.certification?.trim() || null;
+    if (data.phone_type !== undefined) payload.phone_type = data.phone_type?.trim() || null;
 
     const { error } = await supabase
       .from("crm_contacts")
@@ -409,7 +415,7 @@ export async function fetchContactDetail(id: string): Promise<
 
     const { data: contact, error: contactErr } = await supabase
       .from("crm_contacts")
-      .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, created_at")
+      .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at")
       .eq("id", id)
       .eq("user_id", user.id)
       .single();
@@ -438,6 +444,8 @@ export async function fetchContactDetail(id: string): Promise<
         phone: contact.phone ?? null,
         tags: (contact.tags ?? []) as string[],
         notes: contact.notes ?? null,
+        certification: contact.certification ?? null,
+        phone_type: contact.phone_type ?? null,
         created_at: contact.created_at ?? "",
       },
       transactions: transactions.map((t) => ({

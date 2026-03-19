@@ -31,8 +31,9 @@ export function AddScribeModal({ open, onOpenChange, onSuccess }: Props) {
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     const trimmedName = name.trim();
     if (!trimmedName) return;
     setLoading(true);
@@ -65,7 +66,7 @@ export function AddScribeModal({ open, onOpenChange, onSuccess }: Props) {
         <DialogHeader>
           <DialogTitle>הוסף סופר חדש</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-slate-800">שם</label>
             <Input
@@ -95,7 +96,15 @@ export function AddScribeModal({ open, onOpenChange, onSuccess }: Props) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               ביטול
             </Button>
-            <Button type="submit" disabled={!name.trim() || loading}>
+            <Button
+              type="button"
+              disabled={!name.trim() || loading}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleSubmit();
+              }}
+            >
               {loading ? "שומר..." : "הוסף"}
             </Button>
           </div>

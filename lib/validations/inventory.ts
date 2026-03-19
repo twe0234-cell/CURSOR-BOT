@@ -30,6 +30,10 @@ const baseSchema = z.object({
   scribe_code: z.string().optional().nullable(),
   images: z.array(z.string()).optional().nullable().default([]),
   description: z.string().optional().nullable(),
+  parchment_type: z.string().optional().nullable(),
+  computer_proofread: z.boolean().optional().default(false),
+  human_proofread: z.boolean().optional().default(false),
+  is_sewn: z.boolean().optional().default(false),
 });
 
 /** Dynamic validation: size/navi/lines required only when product_category matches */

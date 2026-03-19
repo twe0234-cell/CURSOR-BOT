@@ -10,7 +10,7 @@ export default async function CrmPage() {
 
   const { data: contacts } = await supabase
     .from("crm_contacts")
-    .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, created_at")
+    .select("id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at")
     .eq("user_id", user.id)
     .order("name");
 
@@ -30,6 +30,8 @@ export default async function CrmPage() {
     phone: c.phone ?? null,
     tags: (c.tags ?? []) as string[],
     notes: c.notes ?? null,
+    certification: c.certification ?? null,
+    phone_type: c.phone_type ?? null,
     created_at: c.created_at ?? "",
   }));
 

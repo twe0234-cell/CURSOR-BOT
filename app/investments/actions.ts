@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
+export type MilestoneItem = { id: string; label: string; done: boolean };
+
 export type InvestmentRecord = {
   id: string;
   scribe_id: string | null;
@@ -13,10 +15,14 @@ export type InvestmentRecord = {
   cost_per_unit: number | null;
   total_agreed_price: number;
   amount_paid: number;
+  deductions: number;
   remaining_balance: number;
   target_date: string | null;
   status: string;
   notes: string | null;
+  milestones: MilestoneItem[];
+  documents: string[];
+  public_slug: string | null;
   created_at: string;
   scribe_name?: string;
 };
@@ -31,7 +37,7 @@ export async function fetchInvestments(): Promise<
 
     const { data, error } = await supabase
       .from("erp_investments")
-      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, target_date, status, notes, created_at")
+      .select("id, scribe_id, item_details, quantity, cost_per_unit, total_agreed_price, amount_paid, deductions, target_date, status, notes, milestones, documents, public_slug, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -46,8 +52,11 @@ export async function fetchInvestments(): Promise<
     const investments = (data ?? []).map((r) => {
       const total = Number(r.total_agreed_price ?? 0);
       const paid = Number(r.amount_paid ?? 0);
+      const ded = Number(r.deductions ?? 0);
       const qty = Number(r.quantity ?? 1);
       const cpu = r.cost_per_unit != null ? Number(r.cost_per_unit) : null;
+      const milestones = (Array.isArray(r.milestones) ? r.milestones : []) as MilestoneItem[];
+      const documents = (Array.isArray(r.documents) ? r.documents : []) as string[];
       return {
         id: r.id,
         scribe_id: r.scribe_id ?? null,
@@ -56,10 +65,14 @@ export async function fetchInvestments(): Promise<
         cost_per_unit: cpu,
         total_agreed_price: total,
         amount_paid: paid,
-        remaining_balance: total - paid,
+        deductions: ded,
+        remaining_balance: Math.max(0, total - paid - ded),
         target_date: r.target_date ?? null,
         status: r.status ?? "active",
         notes: r.notes ?? null,
+        milestones,
+        documents,
+        public_slug: r.public_slug ?? null,
         created_at: r.created_at ?? "",
         scribe_name: r.scribe_id ? scribeMap.get(r.scribe_id) ?? undefined : undefined,
       };
@@ -163,6 +176,99 @@ export async function bulkImportInvestments(
     revalidatePath("/investments");
     revalidatePath("/");
     return { success: true, imported, errors };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function updateInvestment(
+  investmentId: string,
+  data: Partial<{ deductions: number; documents: string[]; milestones: MilestoneItem[] }>
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.deductions !== undefined) payload.deductions = data.deductions;
+    if (data.documents !== undefined) payload.documents = data.documents;
+    if (data.milestones !== undefined) payload.milestones = data.milestones;
+
+    const { error } = await supabase
+      .from("erp_investments")
+      .update(payload)
+      .eq("id", investmentId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/investments");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function getShareLink(investmentId: string): Promise<
+  { success: true; url: string; slug: string } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("erp_investments")
+      .select("public_slug")
+      .eq("id", investmentId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !data) return { success: false, error: "לא נמצא" };
+    const slug = data.public_slug;
+    if (!slug) return { success: false, error: "אין קישור שיתוף" };
+    const path = `/project/${slug}`;
+    const url = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}${path}` : path;
+    return { success: true, url, slug: String(slug) };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export type PublicProjectView = {
+  item_details: string | null;
+  status: string;
+  milestones: MilestoneItem[];
+  progress_pct: number;
+};
+
+export async function fetchPublicProject(slug: string): Promise<
+  { success: true; project: PublicProjectView } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("erp_investments")
+      .select("item_details, status, milestones")
+      .eq("public_slug", slug)
+      .single();
+
+    if (error || !data) return { success: false, error: "לא נמצא" };
+
+    const milestones = (Array.isArray(data.milestones) ? data.milestones : []) as MilestoneItem[];
+    const done = milestones.filter((m) => m.done).length;
+    const progress_pct = milestones.length > 0 ? Math.round((done / milestones.length) * 100) : 0;
+
+    return {
+      success: true,
+      project: {
+        item_details: data.item_details ?? null,
+        status: data.status ?? "active",
+        milestones,
+        progress_pct,
+      },
+    };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
