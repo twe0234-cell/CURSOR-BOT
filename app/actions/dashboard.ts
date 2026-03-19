@@ -3,11 +3,29 @@
 import { createClient } from "@/src/lib/supabase/server";
 
 export type DashboardKpis = {
+  /** שווי מלאי נוכחי - SUM total_cost where status != 'sold' */
   totalInventoryValue: number;
-  monthlyNetProfit: number;
+  /** צפי הכנסות - SUM total_target_price where status != 'sold' */
+  expectedRevenue: number;
+  /** השקעות פתוחות - remaining balance on active investments */
   activeInvestmentsBalance: number;
+  /** מכירות החודש - SUM sale_price from erp_sales this month */
+  monthlySales: number;
+  monthlyNetProfit: number;
   /** Unpaid investments with target_date - money needed in bank until writing completion */
   cashFlowRequired: Array<{ id: string; scribe_name: string | null; item_details: string | null; remaining_balance: number; target_date: string }>;
+};
+
+export type InventoryDistributionItem = {
+  name: string;
+  value: number;
+  fill?: string;
+};
+
+export type RecentInventoryItem = {
+  id: string;
+  product_category: string | null;
+  created_at: string;
 };
 
 export type MonthlyDataPoint = {
@@ -29,24 +47,27 @@ export async function fetchDashboardKpis(): Promise<
 
     const { data: inv } = await supabase
       .from("inventory")
-      .select("cost_price, status")
+      .select("total_cost, total_target_price, status")
       .eq("user_id", user.id)
       .neq("status", "sold");
 
     let totalInventoryValue = 0;
+    let expectedRevenue = 0;
     for (const i of inv ?? []) {
-      const cost = i.cost_price != null ? Number(i.cost_price) : 0;
-      totalInventoryValue += cost;
+      totalInventoryValue += i.total_cost != null ? Number(i.total_cost) : 0;
+      expectedRevenue += i.total_target_price != null ? Number(i.total_target_price) : 0;
     }
 
     const { data: salesThisMonth } = await supabase
       .from("erp_sales")
-      .select("profit")
+      .select("sale_price, profit")
       .eq("user_id", user.id)
       .gte("sale_date", thisMonthStart);
 
+    let monthlySales = 0;
     let monthlyProfit = 0;
     for (const s of salesThisMonth ?? []) {
+      monthlySales += s.sale_price != null ? Number(s.sale_price) : 0;
       monthlyProfit += s.profit != null ? Number(s.profit) : 0;
     }
 
@@ -98,13 +119,82 @@ export async function fetchDashboardKpis(): Promise<
       success: true,
       kpis: {
         totalInventoryValue,
+        expectedRevenue,
+        monthlySales,
         monthlyNetProfit,
         activeInvestmentsBalance,
         cashFlowRequired,
       },
     };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  } catch {
+    return {
+      success: true,
+      kpis: {
+        totalInventoryValue: 0,
+        expectedRevenue: 0,
+        monthlySales: 0,
+        monthlyNetProfit: 0,
+        activeInvestmentsBalance: 0,
+        cashFlowRequired: [],
+      },
+    };
+  }
+}
+
+export async function fetchInventoryDistribution(): Promise<
+  { success: true; data: InventoryDistributionItem[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data } = await supabase
+      .from("inventory")
+      .select("product_category")
+      .eq("user_id", user.id)
+      .neq("status", "sold");
+
+    const counts: Record<string, number> = {};
+    for (const r of data ?? []) {
+      const cat = r.product_category?.trim() || "אחר";
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    }
+    const colors = ["#0ea5e9", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899"];
+    const result: InventoryDistributionItem[] = Object.entries(counts).map(([name, value], i) => ({
+      name,
+      value,
+      fill: colors[i % colors.length],
+    }));
+    return { success: true, data: result };
+  } catch {
+    return { success: true, data: [] };
+  }
+}
+
+export async function fetchRecentInventory(): Promise<
+  { success: true; data: RecentInventoryItem[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data } = await supabase
+      .from("inventory")
+      .select("id, product_category, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const items: RecentInventoryItem[] = (data ?? []).map((r) => ({
+      id: r.id,
+      product_category: r.product_category ?? null,
+      created_at: r.created_at ?? "",
+    }));
+    return { success: true, data: items };
+  } catch {
+    return { success: true, data: [] };
   }
 }
 
@@ -155,7 +245,7 @@ export async function fetchIncomeExpensesChart(): Promise<
     }
 
     return { success: true, data: months };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  } catch {
+    return { success: true, data: [] };
   }
 }

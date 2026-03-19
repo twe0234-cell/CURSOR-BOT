@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
 import { Radio, Settings, Users, Package, Mail, Wallet, TrendingUp } from "lucide-react";
 import DashboardClient from "./DashboardClient";
-import { fetchDashboardKpis, fetchIncomeExpensesChart } from "./actions/dashboard";
+import { fetchDashboardKpis, fetchIncomeExpensesChart, fetchInventoryDistribution, fetchRecentInventory } from "./actions/dashboard";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -13,13 +13,17 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [kpisRes, chartRes] = await Promise.all([
+  const [kpisRes, chartRes, invDistRes, recentRes] = await Promise.all([
     fetchDashboardKpis(),
     fetchIncomeExpensesChart(),
+    fetchInventoryDistribution(),
+    fetchRecentInventory(),
   ]);
 
   const kpis = kpisRes.success ? kpisRes.kpis : null;
   const chartData = chartRes.success ? chartRes.data : [];
+  const inventoryDistribution = invDistRes.success ? invDistRes.data : [];
+  const recentInventory = recentRes.success ? recentRes.data : [];
 
   const quickLinks = [
     { href: "/broadcast", label: "שידור", icon: Radio, desc: "שלח הודעות WhatsApp לנמענים" },
@@ -32,28 +36,33 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-12">
+    <div className="container mx-auto max-w-5xl px-4 py-12 bg-sky-50/30 min-h-screen">
       <div className="mb-10">
-        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">ברוכים הבאים!</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-sky-700 mb-2">ברוכים הבאים!</h1>
         <p className="text-muted-foreground">
-          מחובר כ־<span className="font-semibold text-teal-600">{user.email}</span>
+          מחובר כ־<span className="font-semibold text-sky-600">{user.email}</span>
         </p>
       </div>
 
-      <DashboardClient kpis={kpis} chartData={chartData} />
+      <DashboardClient
+        kpis={kpis}
+        chartData={chartData}
+        inventoryDistribution={inventoryDistribution}
+        recentInventory={recentInventory}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 mt-10">
         {quickLinks.map(({ href, label, icon: Icon, desc }) => (
           <Link
             key={href}
             href={href}
-            className="group flex items-center gap-4 rounded-2xl border border-teal-100 bg-white p-6 shadow-sm transition-all duration-200 hover:border-teal-200 hover:shadow-md hover:-translate-y-0.5"
+            className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-200 hover:border-sky-200 hover:shadow-md hover:-translate-y-0.5"
           >
-            <div className="flex size-14 items-center justify-center rounded-xl bg-teal-100 text-teal-600 transition-colors group-hover:bg-teal-200">
+            <div className="flex size-14 items-center justify-center rounded-xl bg-amber-100 text-amber-500 transition-colors group-hover:bg-amber-200">
               <Icon className="size-7" />
             </div>
             <div>
-              <h2 className="font-semibold text-teal-800 group-hover:text-teal-700">{label}</h2>
+              <h2 className="font-semibold text-sky-700 group-hover:text-sky-600">{label}</h2>
               <p className="text-sm text-muted-foreground">{desc}</p>
             </div>
           </Link>
