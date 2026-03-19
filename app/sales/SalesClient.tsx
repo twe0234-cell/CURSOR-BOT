@@ -280,7 +280,7 @@ export default function SalesClient() {
                   exportLabel="ייצוא CSV"
                   importLabel="ייבוא CSV"
                 />
-                <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
+                <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
                   <PlusIcon className="size-4 ml-1" />
                   מכירה חדשה
                 </Button>
@@ -416,7 +416,7 @@ export default function SalesClient() {
                     type="button"
                     onClick={() => setSaleType(t)}
                     className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
-                      saleType === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200"
+                      saleType === t ? "border-primary bg-primary/10 text-primary" : "border-border"
                     }`}
                   >
                     {t}
