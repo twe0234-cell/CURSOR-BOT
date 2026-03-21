@@ -291,7 +291,11 @@ export async function uploadInventoryImage(formData: FormData): Promise<UploadIm
 
     if (error) {
       console.error("[uploadInventoryImage] storage.upload:", error.message, error);
-      return { success: false, error: error.message };
+      logError("Inventory", "uploadInventoryImage storage.upload", {
+        message: error.message,
+        name: error.name,
+      });
+      throw new Error(error.message);
     }
 
     const { data: { publicUrl } } = supabase.storage

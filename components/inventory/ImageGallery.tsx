@@ -40,7 +40,9 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
         } catch (uploadErr) {
           console.error("[ImageGallery] uploadInventoryImage נכשל:", uploadErr);
           if (uploadErr instanceof Error) console.error(uploadErr.stack);
-          toast.error("שגיאה בהעלאה");
+          toast.error(
+            uploadErr instanceof Error ? uploadErr.message : "שגיאה בהעלאה"
+          );
           continue;
         }
 
