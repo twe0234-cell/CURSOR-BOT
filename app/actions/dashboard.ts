@@ -43,6 +43,14 @@ export type MonthlyDataPoint = {
   expenses: number;
 };
 
+/** Cash-basis P&L from DB view `monthly_realized_profit_view` */
+export type MonthlyRealizedProfitRow = {
+  profit_month: string;
+  total_profit: number;
+  total_cost_recovery: number;
+  total_cash_flow: number;
+};
+
 export async function fetchDashboardKpis(): Promise<
   { success: true; kpis: DashboardKpis } | { success: false; error: string }
 > {
@@ -289,6 +297,40 @@ export async function fetchIncomeExpensesChart(): Promise<
     }
 
     return { success: true, data: months };
+  } catch {
+    return { success: true, data: [] };
+  }
+}
+
+export async function fetchMonthlyRealizedProfit(): Promise<
+  { success: true; data: MonthlyRealizedProfitRow[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("monthly_realized_profit_view")
+      .select("profit_month, total_profit, total_cost_recovery, total_cash_flow")
+      .eq("user_id", user.id)
+      .order("profit_month", { ascending: false })
+      .limit(36);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const rows: MonthlyRealizedProfitRow[] = (data ?? []).map((r) => ({
+      profit_month: String(r.profit_month),
+      total_profit: Number(r.total_profit ?? 0),
+      total_cost_recovery: Number(r.total_cost_recovery ?? 0),
+      total_cash_flow: Number(r.total_cash_flow ?? 0),
+    }));
+
+    return { success: true, data: rows };
   } catch {
     return { success: true, data: [] };
   }

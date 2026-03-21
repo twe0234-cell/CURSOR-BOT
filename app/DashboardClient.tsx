@@ -27,9 +27,16 @@ import type {
   InventoryDistributionItem,
   RecentInventoryItem,
   CategoryCostRevenueItem,
+  MonthlyRealizedProfitRow,
 } from "@/app/actions/dashboard";
 
 const formatShekel = (n: number) => `₪ ${n.toLocaleString("he-IL")}`;
+
+function formatProfitMonthHe(profitMonth: string): string {
+  const d = new Date(profitMonth);
+  if (Number.isNaN(d.getTime())) return profitMonth;
+  return d.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+}
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -50,6 +57,7 @@ type Props = {
   inventoryDistribution: InventoryDistributionItem[];
   recentInventory: RecentInventoryItem[];
   categoryCostRevenue: CategoryCostRevenueItem[];
+  monthlyRealizedProfit: MonthlyRealizedProfitRow[];
 };
 
 export default function DashboardClient({
@@ -58,6 +66,7 @@ export default function DashboardClient({
   inventoryDistribution,
   recentInventory,
   categoryCostRevenue,
+  monthlyRealizedProfit,
 }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ScribeSearchResult[] | null>(null);
@@ -165,6 +174,94 @@ export default function DashboardClient({
           </Card>
         </motion.div>
       )}
+
+      {/* Cash-basis P&L (DB ledger) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="space-y-4"
+      >
+        <Card className="rounded-2xl border border-emerald-100 bg-white shadow-sm">
+          <CardContent className="pt-6">
+            <h3 className="mb-1 text-lg font-semibold text-sky-800">
+              דוח רווח והפסד תזרימי
+            </h3>
+            <p className="mb-4 text-xs text-muted-foreground">
+              מבוסס ספר רישום בבסיס הנתונים (מזומן ממומש לפי תשלומים)
+            </p>
+            {monthlyRealizedProfit.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                אין עדיין נתוני רווח ממומש. לאחר תשלומי מכירות יופיעו כאן סיכומים חודשיים.
+              </p>
+            ) : (
+              <>
+              <div className="mb-6 h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[...monthlyRealizedProfit]
+                      .sort((a, b) => a.profit_month.localeCompare(b.profit_month))
+                      .map((r) => ({
+                        monthLabel: formatProfitMonthHe(r.profit_month),
+                        תזרים: r.total_cash_flow,
+                        החזר: r.total_cost_recovery,
+                        רווח: r.total_profit,
+                      }))}
+                    margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} interval={0} angle={-28} textAnchor="end" height={64} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v} ₪`} />
+                    <Tooltip
+                      formatter={(v) => [
+                        (v != null ? Number(v) : 0).toLocaleString("he-IL") + " ₪",
+                        "",
+                      ]}
+                    />
+                    <Legend />
+                    <Bar dataKey="תזרים" name="תזרים נכנס" fill="#64748b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="החזר" name="החזר השקעה" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="רווח" name="רווח נקי ממומש" fill="#059669" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-slate-100">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80 text-right">
+                      <th className="px-3 py-2 font-semibold text-sky-800">חודש</th>
+                      <th className="px-3 py-2 font-semibold text-slate-700">תזרים נכנס</th>
+                      <th className="px-3 py-2 font-semibold text-slate-700">החזר השקעה</th>
+                      <th className="px-3 py-2 font-semibold text-emerald-700">רווח נקי ממומש</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...monthlyRealizedProfit]
+                      .sort((a, b) => b.profit_month.localeCompare(a.profit_month))
+                      .map((row) => (
+                        <tr key={row.profit_month} className="border-b border-slate-50">
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {formatProfitMonthHe(row.profit_month)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {row.total_cash_flow.toLocaleString("he-IL")} ₪
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-slate-600">
+                            {row.total_cost_recovery.toLocaleString("he-IL")} ₪
+                          </td>
+                          <td className="px-3 py-2 font-medium tabular-nums text-emerald-700">
+                            {row.total_profit.toLocaleString("he-IL")} ₪
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {kpis && kpis.cashFlowRequired.length > 0 && (
         <Card className="rounded-2xl border-amber-100 bg-white shadow-sm">
