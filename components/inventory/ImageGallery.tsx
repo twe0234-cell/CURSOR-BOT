@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import Image from "next/image";
 import { uploadInventoryImage } from "@/app/inventory/actions";
 import { PlusIcon, XIcon } from "lucide-react";
@@ -14,24 +14,56 @@ type Props = {
 
 export function ImageGallery({ images, onChange, disabled }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  /** מניעת סגירה מיושנת כשמעלים כמה קבצים ברצף (אחרי await) */
+  const imagesRef = useRef<string[]>(Array.isArray(images) ? images : []);
+
+  useEffect(() => {
+    imagesRef.current = Array.isArray(images) ? images : [];
+  }, [images]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+    const target = e.target;
+    const files = target?.files;
     if (!files?.length) return;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith("image/")) continue;
-      const formData = new FormData();
-      formData.set("file", file);
-      const res = await uploadInventoryImage(formData);
-      if (res.success) {
-        onChange([...images, res.url]);
-        toast.success("התמונה הועלתה");
-      } else {
-        toast.error(res.error);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file || !file.type.startsWith("image/")) continue;
+
+        const formData = new FormData();
+        formData.set("file", file);
+
+        let res: Awaited<ReturnType<typeof uploadInventoryImage>>;
+        try {
+          res = await uploadInventoryImage(formData);
+        } catch (uploadErr) {
+          console.error("[ImageGallery] uploadInventoryImage נכשל:", uploadErr);
+          if (uploadErr instanceof Error) console.error(uploadErr.stack);
+          toast.error("שגיאה בהעלאה");
+          continue;
+        }
+
+        if (res.success) {
+          const next = [...imagesRef.current, res.url];
+          imagesRef.current = next;
+          onChange(next);
+          toast.success("התמונה הועלתה");
+        } else {
+          toast.error(res.error);
+        }
+      }
+    } catch (err) {
+      console.error("[ImageGallery] handleUpload:", err);
+      if (err instanceof Error) console.error(err.stack);
+      toast.error("שגיאה בעיבוד הקובץ");
+    } finally {
+      try {
+        if (target) target.value = "";
+      } catch (resetErr) {
+        console.error("[ImageGallery] איפוס input:", resetErr);
       }
     }
-    e.target.value = "";
   };
 
   const remove = (idx: number) => {

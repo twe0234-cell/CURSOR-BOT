@@ -19,10 +19,8 @@ const METHOD_OPTIONS = ["מזומן", "העברה בנקאית", "שיק", "כר
 export type PaymentModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Sale or investment row id */
   entityId: string | null;
   entityType: LedgerEntityType;
-  /** Default flow: incoming = we receive money */
   defaultDirection?: LedgerDirection;
   title?: string;
   onSuccess?: () => void;

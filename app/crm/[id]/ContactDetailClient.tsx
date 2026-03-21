@@ -98,6 +98,12 @@ type Props = {
   }>;
 };
 
+function ledgerEntityTypeHe(t: string): string {
+  if (t === "sale") return "מכירה";
+  if (t === "investment") return "השקעה";
+  return t;
+}
+
 function roleBadges(type: string) {
   const badges: { key: string; label: string; className: string }[] = [];
   if (type === "End_Customer") badges.push({ key: "c", label: "לקוח", className: "bg-emerald-100 text-emerald-900" });
@@ -402,10 +408,10 @@ export default function ContactDetailClient({
                     <TableHeader>
                       <TableRow className="bg-muted/40">
                         <TableHead>תאריך</TableHead>
-                        <TableHead>סוג</TableHead>
+                        <TableHead>סוג ישות</TableHead>
                         <TableHead>כיוון</TableHead>
                         <TableHead>סכום</TableHead>
-                        <TableHead>אמצעי</TableHead>
+                        <TableHead>אמצעי תשלום</TableHead>
                         <TableHead>הערות</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -416,7 +422,7 @@ export default function ContactDetailClient({
                             {p.payment_date ? new Date(p.payment_date).toLocaleString("he-IL") : "—"}
                           </TableCell>
                           <TableCell className="text-sm max-w-[200px]">
-                            <span className="text-xs text-muted-foreground">{p.entity_type}</span>
+                            <span className="text-xs text-muted-foreground">{ledgerEntityTypeHe(p.entity_type)}</span>
                             <br />
                             {p.summary}
                           </TableCell>

@@ -48,5 +48,5 @@ export function buildInventorySaleLabelSkuPrecise(input: {
   const sku = input.sku ?? input.id.slice(0, 8);
   const cat = input.product_category ?? "—";
   const det = formatInventoryDetails(input.category_meta, input.product_category);
-  return `[${sku}] ${cat} - ${det} (Available: ${input.quantity})`;
+  return `[${sku}] ${cat} - ${det} (זמין: ${input.quantity})`;
 }

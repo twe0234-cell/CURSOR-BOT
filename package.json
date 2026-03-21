@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:apply-view": "node scripts/apply-sale-profit-view.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -38,6 +39,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "dotenv": "^16.4.7",
+    "pg": "^8.14.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",

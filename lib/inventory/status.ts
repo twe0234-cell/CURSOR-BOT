@@ -9,3 +9,17 @@ export function isInventorySoldStatus(status: string | null | undefined): boolea
 
 /** Status stored when quantity hits zero after a sale (Hebrew label per product spec). */
 export const INVENTORY_SOLD_STATUS_HE = "נמכר" as const;
+
+/** תוויות עברית לתצוגה בלבד — הערכים במסד נשארים באנגלית. */
+export const INVENTORY_STATUS_LABEL_HE: Record<string, string> = {
+  available: "זמין",
+  in_use: "בשימוש",
+  sold: "נמכר",
+  reserved: "שמור",
+  נמכר: "נמכר",
+};
+
+export function inventoryStatusLabelHe(status: string | null | undefined): string {
+  if (status == null || status === "") return "—";
+  return INVENTORY_STATUS_LABEL_HE[status] ?? status;
+}

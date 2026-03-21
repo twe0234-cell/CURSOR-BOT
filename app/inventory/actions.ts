@@ -262,11 +262,15 @@ export type UploadImageResult =
 
 export async function uploadInventoryImage(formData: FormData): Promise<UploadImageResult> {
   try {
-    const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File)) {
+    const raw = formData.get("file");
+    if (raw == null || typeof raw !== "object") {
       return { success: false, error: "לא נבחר קובץ" };
     }
-    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
+    if (!(raw instanceof Blob)) {
+      return { success: false, error: "קובץ לא תקין" };
+    }
+    const blob = raw as Blob;
+    if (blob.size > IMAGE_SIZE_LIMIT_BYTES) {
       return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
     }
 
@@ -274,17 +278,21 @@ export async function uploadInventoryImage(formData: FormData): Promise<UploadIm
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const ext = file.name.split(".").pop() || "jpg";
+    const name = raw instanceof File && raw.name ? raw.name : "image.jpg";
+    const ext = name.split(".").pop() || "jpg";
     const path = `inventory/${user.id}/${Date.now()}.${ext}`;
 
     const { error } = await supabase.storage
       .from(MEDIA_BUCKET)
-      .upload(path, file, {
-        contentType: file.type || "image/jpeg",
+      .upload(path, blob, {
+        contentType: (raw instanceof File && raw.type) ? raw.type : "image/jpeg",
         upsert: true,
       });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error("[uploadInventoryImage] storage.upload:", error.message, error);
+      return { success: false, error: error.message };
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from(MEDIA_BUCKET)
@@ -292,6 +300,8 @@ export async function uploadInventoryImage(formData: FormData): Promise<UploadIm
 
     return { success: true, url: publicUrl };
   } catch (err) {
+    console.error("[uploadInventoryImage]", err);
+    if (err instanceof Error) console.error(err.stack);
     logError("Inventory", "uploadInventoryImage failed", { error: String(err) });
     return { success: false, error: err instanceof Error ? err.message : "שגיאה בהעלאה" };
   }

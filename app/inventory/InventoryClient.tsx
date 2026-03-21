@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/collapsible";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon, ChevronDown, ChevronUp } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
-import { isInventorySoldStatus } from "@/lib/inventory/status";
+import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
 
 const STATUSES = ["available", "in_use", "sold", "reserved", "נמכר"];
 
@@ -374,7 +374,7 @@ export default function InventoryClient({ initialItems }: Props) {
                     </TableCell>
                     <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                 <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
-                <TableCell>{item.status ?? "—"}</TableCell>
+                <TableCell>{inventoryStatusLabelHe(item.status)}</TableCell>
                 <TableCell>
                   {item.target_price != null ? `${item.target_price} ₪` : "—"}
                 </TableCell>
@@ -487,7 +487,7 @@ export default function InventoryClient({ initialItems }: Props) {
                     </TableCell>
                     <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
-                    <TableCell className="text-slate-600">{item.status ?? "—"}</TableCell>
+                    <TableCell className="text-slate-600">{inventoryStatusLabelHe(item.status)}</TableCell>
                     <TableCell className="text-slate-600">
                       {item.target_price != null ? `${item.target_price} ₪` : "—"}
                     </TableCell>
@@ -580,7 +580,7 @@ export default function InventoryClient({ initialItems }: Props) {
                         className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         {STATUSES.map((t) => (
-                          <option key={t} value={t}>{t}</option>
+                          <option key={t} value={t}>{inventoryStatusLabelHe(t)}</option>
                         ))}
                       </select>
                     </div>
