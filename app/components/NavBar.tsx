@@ -15,6 +15,8 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  PenLine,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +39,8 @@ export default function NavBar() {
     { href: "/crm", label: "CRM", icon: HandshakeIcon },
     { href: "/sales", label: "מכירות ותזרים", icon: Wallet },
     { href: "/investments", label: "תיק השקעות", icon: TrendingUp },
+    { href: "/soferim", label: "מאגר סופרים", icon: PenLine },
+    { href: "/market", label: "שוק ספרי תורה", icon: ScrollText },
     { href: "/inventory", label: "ניהול מלאי סת״ם", icon: Package },
     { href: "/settings", label: "הגדרות", icon: Settings },
   ];
@@ -60,7 +64,7 @@ export default function NavBar() {
               href={href}
               className={cn(
                 "flex items-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium transition-all duration-200 shrink-0",
-                pathname === href
+                pathname === href || (href !== "/" && pathname.startsWith(href + "/"))
                   ? "bg-primary/10 text-primary font-semibold"
                   : "text-muted-foreground hover:bg-muted hover:text-primary"
               )}
