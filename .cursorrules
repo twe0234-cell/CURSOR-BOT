@@ -1,26 +1,27 @@
-# Hidur-OS – Cursor Rules
+# STaM ERP - MASTER SYSTEM RULES
+You are an expert SaaS Architect and Next.js/Supabase Developer building a highly scalable ERP for a Judaica (STaM) business.
 
-## Tech Stack
-- **Framework:** Next.js 15 (App Router)
-- **Database:** Supabase (Postgres, RLS, Storage)
-- **Styling:** Tailwind CSS, Shadcn UI
-- **TypeScript:** Strict mode enabled
+## 1. TECH STACK & PATTERNS
+- Framework: Next.js 14+ (App Router), React, TypeScript.
+- Backend/DB: Supabase (PostgreSQL), Supabase Auth, Row Level Security (RLS).
+- Styling: Tailwind CSS, Shadcn UI, Framer Motion.
+- Data Mutation: Strictly React Server Actions (`/actions` folder). No direct DB calls from Client Components.
+- Validation: Zod schemas for all form inputs and action parameters.
 
-## Zero-Crash Policy
-- **ALL** Server Actions MUST be wrapped in `try/catch`
-- **ALL** external API calls (Green API, Gmail, etc.) MUST be wrapped in `try/catch`
-- Return standardized objects: `{ success: boolean, data?: T, error?: string }`
-- Never throw uncaught errors to the client
+## 2. BRANDING & UI CONSTRAINTS
+- STRICT HEBREW: Every UI element, label, placeholder, and toast message MUST be in Hebrew.
+- BRAND COLORS: Primary is Sky Blue (`sky-600`), Accent is Amber/Gold (`amber-500`), Background is light Slate/Sky (`bg-slate-50`). Do not use Indigo or Zinc.
+- MOBILE FIRST: All Data Tables and Grids must be responsive (e.g., hiding complex barcodes on mobile).
 
-## UI/UX
-- **Language:** Hebrew only for all user-facing text (labels, toasts, messages)
-- **Direction:** RTL (`dir="rtl"`, `lang="he"`)
-- **Toasts:** Use `sonner` for all notifications (success, error, info)
+## 3. CORE DOMAIN LOGIC
+- INVENTORY: `inventory` table. Items are distinct units (SKU-based). Statuses: 'זמין', 'בהגהה', 'נמכר'.
+- SALES: `erp_sales` table. Partial sales reduce `inventory.quantity` and only mark as 'נמכר' when quantity is 0.
+- PROFIT ENGINE (CRITICAL): Profit is NEVER calculated in the application layer. It is calculated via the PostgreSQL `erp_profit_ledger` table and `sale_profit_view`. Profit exists ONLY after the cost basis is fully covered by actual payments.
+- PAYMENTS: `erp_payments` table. All cash flow is logged here.
+- CRM: `crm_contacts` table. 360-degree profiles tracking mutual balances, history, and notes. Roles: 'customer', 'sofer', 'trader'.
+- TORAH PROJECTS: `erp_torah_projects` (Parent) and exactly 62 `erp_torah_sheets` (Child). Tracked via a 62-square visual grid.
 
-## Database Security
-- **RLS:** All Supabase queries MUST include `.eq('user_id', user.id)` (or equivalent FK check) for row-level security
-- Never expose data across users
-
-## Code Style
-- Variables and code in English
-- UI strings, toasts, and frontend copy in Hebrew
+## 4. AGENT BEHAVIOR & RULES OF ENGAGEMENT
+- ZERO REGRESSION: Never delete or overwrite working logic unless explicitly commanded.
+- DIAGNOSE FIRST: If a bug occurs (e.g., upload fails), isolate and diagnose the root cause (e.g., missing RLS policies) instead of reverting to older code versions.
+- AUTONOMOUS DB: If an SQL migration is needed, write a temporary Node.js script to execute it via the Supabase Service Role, run it, and delete it. Do not ask the user to run SQL manually unless strictly necessary.
