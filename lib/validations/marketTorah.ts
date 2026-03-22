@@ -18,6 +18,8 @@ export const marketTorahBookSchema = z.object({
   influencer_style: z.string().max(200).optional().nullable(),
   current_progress: z.string().max(500).optional().nullable(),
   asking_price: optPositiveNum,
+  /** מחיר יעד לתיווך — what you plan to broker/offer at */
+  target_brokerage_price: optPositiveNum,
   currency: z.string().max(10).default("ILS"),
   expected_completion_date: z
     .union([z.string(), z.literal(""), z.null(), z.undefined()])

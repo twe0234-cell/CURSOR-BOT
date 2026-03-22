@@ -37,7 +37,7 @@ import {
 import { toggleInventoryShare } from "./actions-share";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { SCRIPT_TYPES } from "@/lib/constants";
-import { ScribeCombobox } from "@/components/inventory/ScribeCombobox";
+import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
 import { CsvActions } from "@/components/shared/CsvActions";
@@ -56,9 +56,11 @@ const STATUSES = ["available", "in_use", "sold", "reserved", "נמכר"];
 
 type Props = {
   initialItems: InventoryItem[];
+  /** Server-side fetch failed (e.g. schema mismatch); list may be empty. */
+  loadError?: string | null;
 };
 
-export default function InventoryClient({ initialItems }: Props) {
+export default function InventoryClient({ initialItems, loadError }: Props) {
   const [items, setItems] = useState(initialItems);
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -105,6 +107,12 @@ export default function InventoryClient({ initialItems }: Props) {
 
   const activeItems = sortItems(filteredActive);
   const archiveItems = sortItems(filteredArchive);
+
+  useEffect(() => {
+    if (loadError) {
+      toast.error(`טעינת מלאי: ${loadError}`);
+    }
+  }, [loadError]);
 
   useEffect(() => {
     fetchDropdownOptions("categories")
@@ -608,7 +616,7 @@ export default function InventoryClient({ initialItems }: Props) {
                 <CardContent className="space-y-4">
                   <div className="flex flex-col gap-1.5 w-full">
                     <label className="font-bold text-slate-800 text-right">שם סופר</label>
-                    <ScribeCombobox
+                    <UnifiedScribeSelect
                       value={form.watch("scribe_id") ?? null}
                       onChange={(s) => form.setValue("scribe_id", s?.id ?? null)}
                       placeholder="בחר סופר"

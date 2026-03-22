@@ -4,6 +4,23 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 
+const MARKET_SELECT_FULL =
+  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, target_brokerage_price, potential_profit, currency, expected_completion_date, notes, created_at";
+
+const MARKET_SELECT_LEGACY =
+  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, currency, expected_completion_date, notes, created_at";
+
+function isMissingColumnError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    m.includes("42703") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
+}
+
 export type MarketTorahBookRow = {
   id: string;
   sofer_id: string | null;
@@ -14,6 +31,9 @@ export type MarketTorahBookRow = {
   influencer_style: string | null;
   current_progress: string | null;
   asking_price: number | null;
+  /** DB-generated: target_brokerage_price − asking_price */
+  target_brokerage_price: number | null;
+  potential_profit: number | null;
   currency: string | null;
   expected_completion_date: string | null;
   notes: string | null;
@@ -31,15 +51,44 @@ export async function fetchMarketTorahBooks(): Promise<
     } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data: books, error } = await supabase
+    let books: Record<string, unknown>[] | null = null;
+    let selErr = null as { message?: string; code?: string; details?: string; hint?: string } | null;
+    let hasBrokerageCols = true;
+
+    const res1 = await supabase
       .from("market_torah_books")
-      .select(
-        "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, currency, expected_completion_date, notes, created_at"
-      )
+      .select(MARKET_SELECT_FULL)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) return { success: false, error: error.message };
+    books = res1.data as Record<string, unknown>[] | null;
+    selErr = res1.error;
+
+    if (selErr) {
+      console.error("[fetchMarketTorahBooks] select error (full):", JSON.stringify(selErr, null, 2));
+    }
+
+    if (selErr && isMissingColumnError(selErr.message)) {
+      const res2 = await supabase
+        .from("market_torah_books")
+        .select(MARKET_SELECT_LEGACY)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      books = res2.data as Record<string, unknown>[] | null;
+      selErr = res2.error;
+      hasBrokerageCols = false;
+      if (selErr) {
+        console.error("[fetchMarketTorahBooks] legacy select error (full):", JSON.stringify(selErr, null, 2));
+      } else {
+        console.warn(
+          "[fetchMarketTorahBooks] Using legacy columns (run migration 037 / fix-schema-crash for brokerage fields)."
+        );
+      }
+    }
+
+    if (selErr) {
+      return { success: false, error: selErr.message ?? "שגיאת מסד נתונים" };
+    }
 
     const soferIds = [...new Set((books ?? []).map((b) => b.sofer_id).filter(Boolean))] as string[];
     let nameMap = new Map<string, string>();
@@ -52,22 +101,36 @@ export async function fetchMarketTorahBooks(): Promise<
       nameMap = new Map((contacts ?? []).map((c) => [c.id, c.name ?? ""]));
     }
 
-    const rows: MarketTorahBookRow[] = (books ?? []).map((b) => ({
-      id: b.id,
-      sofer_id: b.sofer_id ?? null,
-      external_sofer_name: b.external_sofer_name ?? null,
-      style: b.style ?? null,
-      size_cm: b.size_cm != null ? Number(b.size_cm) : null,
-      parchment_type: b.parchment_type ?? null,
-      influencer_style: b.influencer_style ?? null,
-      current_progress: b.current_progress ?? null,
-      asking_price: b.asking_price != null ? Number(b.asking_price) : null,
-      currency: b.currency ?? "ILS",
-      expected_completion_date: b.expected_completion_date ?? null,
-      notes: b.notes ?? null,
-      created_at: b.created_at ?? "",
-      sofer_name: b.sofer_id ? nameMap.get(b.sofer_id) ?? null : null,
-    }));
+    const rows: MarketTorahBookRow[] = (books ?? []).map((b) => {
+      const ask = b.asking_price != null ? Number(b.asking_price) : null;
+      const target = hasBrokerageCols && b.target_brokerage_price != null
+        ? Number(b.target_brokerage_price)
+        : null;
+      const pot =
+        hasBrokerageCols && b.potential_profit != null
+          ? Number(b.potential_profit)
+          : ask != null && target != null
+            ? target - ask
+            : null;
+      return {
+        id: b.id as string,
+        sofer_id: (b.sofer_id as string | null) ?? null,
+        external_sofer_name: (b.external_sofer_name as string | null) ?? null,
+        style: (b.style as string | null) ?? null,
+        size_cm: b.size_cm != null ? Number(b.size_cm) : null,
+        parchment_type: (b.parchment_type as string | null) ?? null,
+        influencer_style: (b.influencer_style as string | null) ?? null,
+        current_progress: (b.current_progress as string | null) ?? null,
+        asking_price: ask,
+        target_brokerage_price: target,
+        potential_profit: pot,
+        currency: (b.currency as string | null) ?? "ILS",
+        expected_completion_date: (b.expected_completion_date as string | null) ?? null,
+        notes: (b.notes as string | null) ?? null,
+        created_at: (b.created_at as string) ?? "",
+        sofer_name: b.sofer_id ? nameMap.get(b.sofer_id as string) ?? null : null,
+      };
+    });
 
     return { success: true, rows };
   } catch (e) {
@@ -138,12 +201,16 @@ export async function createMarketTorahBook(
       influencer_style: v.influencer_style ?? null,
       current_progress: v.current_progress ?? null,
       asking_price: v.asking_price ?? null,
+      target_brokerage_price: v.target_brokerage_price ?? null,
       currency: v.currency ?? "ILS",
       expected_completion_date: v.expected_completion_date || null,
       notes: v.notes ?? null,
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error("[createMarketTorahBook] insert error (full):", JSON.stringify(error, null, 2));
+      return { success: false, error: error.message };
+    }
 
     revalidatePath("/market");
     return { success: true };

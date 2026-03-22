@@ -41,6 +41,59 @@ export type InventoryItem = {
 const MEDIA_BUCKET = "media";
 const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5MB
 
+const INVENTORY_SELECT_FULL =
+  "id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, has_lamnatzeach, size, is_public, public_slug";
+
+/** Legacy select when pitum columns are missing from DB (schema cache / migration not applied). */
+const INVENTORY_SELECT_LEGACY =
+  "id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, is_public, public_slug";
+
+function isMissingColumnError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    m.includes("42703") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
+}
+
+function mapInventoryRow(r: Record<string, unknown>, pitumCols: boolean): InventoryItem {
+  const qty = Number(r.quantity ?? 1);
+  const cost = r.cost_price != null ? Number(r.cost_price) : null;
+  const paid = Number(r.amount_paid ?? 0);
+  const total = r.total_cost != null ? Number(r.total_cost) : cost != null ? qty * cost : null;
+  return {
+    id: String(r.id),
+    sku: (r.sku as string | null) ?? null,
+    user_id: (r.user_id as string | null) ?? null,
+    product_category: (r.product_category as string | null) ?? null,
+    purchase_date: (r.purchase_date as string | null) ?? null,
+    category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
+    script_type: (r.script_type as string | null) ?? null,
+    status: (r.status as string | null) ?? null,
+    quantity: qty,
+    cost_price: cost,
+    total_cost: total,
+    amount_paid: paid,
+    target_price: r.target_price != null ? Number(r.target_price) : null,
+    total_target_price: r.total_target_price != null ? Number(r.total_target_price) : null,
+    scribe_id: (r.scribe_id as string | null) ?? null,
+    scribe_code: (r.scribe_code as string | null) ?? null,
+    images: (r.images ?? null) as string[] | null,
+    description: (r.description as string | null) ?? null,
+    parchment_type: (r.parchment_type as string | null) ?? null,
+    computer_proofread: Boolean(r.computer_proofread ?? false),
+    human_proofread: Boolean(r.human_proofread ?? false),
+    is_sewn: Boolean(r.is_sewn ?? false),
+    has_lamnatzeach: pitumCols ? Boolean(r.has_lamnatzeach ?? false) : false,
+    size: pitumCols && r.size != null ? String(r.size) : null,
+    is_public: Boolean(r.is_public ?? false),
+    public_slug: (r.public_slug as string | null) ?? null,
+  };
+}
+
 export async function fetchInventory(): Promise<
   { success: true; items: InventoryItem[] } | { success: false; error: string }
 > {
@@ -52,50 +105,57 @@ export async function fetchInventory(): Promise<
       return { success: false, error: "יש להתחבר" };
     }
 
-    const { data, error } = await supabase
-      .from("inventory")
-      .select("id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, has_lamnatzeach, size, is_public, public_slug")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    let data: Record<string, unknown>[] | null = null;
+    let error: { message?: string; code?: string; details?: string; hint?: string } | null = null;
+    let pitumCols = true;
 
-    if (error) {
-      return { success: false, error: error.message };
+    try {
+      const res = await supabase
+        .from("inventory")
+        .select(INVENTORY_SELECT_FULL)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      data = res.data as Record<string, unknown>[] | null;
+      error = res.error;
+    } catch (e) {
+      console.error("[fetchInventory] Supabase select threw:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      return { success: false, error: msg };
     }
 
-    const items = (data ?? []).map((r) => {
-      const qty = Number(r.quantity ?? 1);
-      const cost = r.cost_price != null ? Number(r.cost_price) : null;
-      const paid = Number(r.amount_paid ?? 0);
-      const total = r.total_cost != null ? Number(r.total_cost) : (cost != null ? qty * cost : null);
-      return {
-        id: r.id,
-        sku: r.sku ?? null,
-        user_id: r.user_id,
-        product_category: r.product_category ?? null,
-        purchase_date: r.purchase_date ?? null,
-        category_meta: (r.category_meta ?? null) as Record<string, unknown> | null,
-        script_type: r.script_type ?? null,
-        status: r.status ?? null,
-        quantity: qty,
-        cost_price: cost,
-        total_cost: total,
-        amount_paid: paid,
-        target_price: r.target_price != null ? Number(r.target_price) : null,
-        total_target_price: r.total_target_price != null ? Number(r.total_target_price) : null,
-        scribe_id: r.scribe_id ?? null,
-        scribe_code: r.scribe_code ?? null,
-        images: (r.images ?? null) as string[] | null,
-        description: r.description ?? null,
-        parchment_type: r.parchment_type ?? null,
-        computer_proofread: Boolean(r.computer_proofread ?? false),
-        human_proofread: Boolean(r.human_proofread ?? false),
-        is_sewn: Boolean(r.is_sewn ?? false),
-        has_lamnatzeach: Boolean(r.has_lamnatzeach ?? false),
-        size: r.size != null ? String(r.size) : null,
-        is_public: r.is_public ?? false,
-        public_slug: r.public_slug ?? null,
-      };
-    });
+    if (error) {
+      console.error("[fetchInventory] Supabase select error (full):", JSON.stringify(error, null, 2));
+    }
+
+    if (error && isMissingColumnError(error.message)) {
+      try {
+        const res2 = await supabase
+          .from("inventory")
+          .select(INVENTORY_SELECT_LEGACY)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        data = res2.data as Record<string, unknown>[] | null;
+        error = res2.error;
+        pitumCols = false;
+        if (error) {
+          console.error("[fetchInventory] Legacy select error (full):", JSON.stringify(error, null, 2));
+        } else {
+          console.warn(
+            "[fetchInventory] Using legacy inventory columns (missing has_lamnatzeach/size). Run fix-schema-crash.mjs or migration."
+          );
+        }
+      } catch (e) {
+        console.error("[fetchInventory] Legacy select threw:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        return { success: false, error: msg };
+      }
+    }
+
+    if (error) {
+      return { success: false, error: error.message ?? "שגיאת מסד נתונים" };
+    }
+
+    const items = (data ?? []).map((r) => mapInventoryRow(r, pitumCols));
 
     return { success: true, items };
   } catch (err) {

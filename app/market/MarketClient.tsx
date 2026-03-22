@@ -18,13 +18,13 @@ import {
 } from "@/components/ui/table";
 import type { MarketTorahBookRow } from "./actions";
 import { createMarketTorahBook, deleteMarketTorahBook } from "./actions";
+import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 
 type Props = {
   initialRows: MarketTorahBookRow[];
-  scribes: { id: string; name: string }[];
 };
 
-export default function MarketClient({ initialRows, scribes }: Props) {
+export default function MarketClient({ initialRows }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   useEffect(() => {
@@ -41,6 +41,7 @@ export default function MarketClient({ initialRows, scribes }: Props) {
     influencer_style: "",
     current_progress: "",
     asking_price: "",
+    target_brokerage_price: "",
     expected_completion_date: "",
     notes: "",
   });
@@ -58,6 +59,7 @@ export default function MarketClient({ initialRows, scribes }: Props) {
         influencer_style: form.influencer_style.trim() || null,
         current_progress: form.current_progress.trim() || null,
         asking_price: form.asking_price,
+        target_brokerage_price: form.target_brokerage_price,
         currency: "ILS",
         expected_completion_date: form.expected_completion_date || null,
         notes: form.notes.trim() || null,
@@ -76,6 +78,7 @@ export default function MarketClient({ initialRows, scribes }: Props) {
         influencer_style: "",
         current_progress: "",
         asking_price: "",
+        target_brokerage_price: "",
         expected_completion_date: "",
         notes: "",
       });
@@ -106,31 +109,25 @@ export default function MarketClient({ initialRows, scribes }: Props) {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
           <ScrollText className="size-7 text-amber-500" />
-          לוח שוק ספרי תורה
+          רדאר שוק לתיווך
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          מעקב אחר ספרי תורה בשוק — לפני רכישה למלאי
+          מעקב אחר הזדמנויות תיווך (ספרי תורה בשוק) — מחיר דורש מול מחיר יעד לתיווך, לא רכישה למלאי
         </p>
       </div>
 
       <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">
         <CardContent className="pt-6">
-          <h2 className="text-lg font-semibold text-sky-800 mb-4">הוסף ספר למעקב</h2>
+          <h2 className="text-lg font-semibold text-sky-800 mb-4">הוסף הזדמנות תיווך</h2>
           <form onSubmit={handleAdd} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-muted-foreground mb-1">סופר מקושר (CRM)</p>
-              <select
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={form.sofer_id}
-                onChange={(e) => setForm((f) => ({ ...f, sofer_id: e.target.value }))}
-              >
-                <option value="">— ללא / חיצוני —</option>
-                {scribes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <UnifiedScribeSelect
+                value={form.sofer_id || null}
+                onChange={(s) => setForm((f) => ({ ...f, sofer_id: s?.id ?? "" }))}
+                placeholder="— ללא / חיצוני —"
+                className="w-full [&>div]:min-h-10 [&>div]:rounded-md"
+              />
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1">שם סופר חיצוני</p>
@@ -191,13 +188,25 @@ export default function MarketClient({ initialRows, scribes }: Props) {
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">מחיר מבוקש (₪)</p>
+              <p className="text-xs text-muted-foreground mb-1">מחיר דורש — מה שהסופר/המוכר מבקש (₪)</p>
               <Input
                 type="number"
                 min={0}
                 step={1}
                 value={form.asking_price}
                 onChange={(e) => setForm((f) => ({ ...f, asking_price: e.target.value }))}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">מחיר יעד לתיווך — למה מתכוונים להציע (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={form.target_brokerage_price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, target_brokerage_price: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -225,7 +234,7 @@ export default function MarketClient({ initialRows, scribes }: Props) {
                 className="bg-sky-600 hover:bg-sky-700"
               >
                 <Plus className="size-4 ml-1" />
-                {loading ? "שומר..." : "הוסף למעקב"}
+                {loading ? "שומר..." : "הוסף לרדאר"}
               </Button>
             </div>
           </form>
@@ -244,15 +253,17 @@ export default function MarketClient({ initialRows, scribes }: Props) {
                   <TableHead className="text-right">סגנון</TableHead>
                   <TableHead className="text-right hidden lg:table-cell">השפעה</TableHead>
                   <TableHead className="text-right">התקדמות</TableHead>
-                  <TableHead className="text-right">מחיר</TableHead>
+                  <TableHead className="text-right">מחיר דורש</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">יעד תיווך</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">רווח צפוי</TableHead>
                   <TableHead className="text-right w-[72px]">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
-                      אין רשומות במעקב. הוסף ספר מהטופס למעלה.
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
+                      אין רשומות ברדאר. הוסף הזדמנות תיווך מהטופס למעלה.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -275,6 +286,16 @@ export default function MarketClient({ initialRows, scribes }: Props) {
                       <TableCell className="tabular-nums whitespace-nowrap">
                         {row.asking_price != null
                           ? `${row.asking_price.toLocaleString("he-IL")} ₪`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="tabular-nums whitespace-nowrap hidden sm:table-cell">
+                        {row.target_brokerage_price != null
+                          ? `${row.target_brokerage_price.toLocaleString("he-IL")} ₪`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="tabular-nums whitespace-nowrap hidden md:table-cell text-emerald-700 font-medium">
+                        {row.potential_profit != null
+                          ? `${row.potential_profit.toLocaleString("he-IL")} ₪`
                           : "—"}
                       </TableCell>
                       <TableCell>

@@ -59,6 +59,8 @@ export async function createScribeAction(data: {
 
     revalidatePath("/crm");
     revalidatePath("/inventory");
+    revalidatePath("/investments");
+    revalidatePath("/market");
 
     const cityVal = inserted.notes?.startsWith("עיר: ")
       ? inserted.notes.slice(5).trim() || null

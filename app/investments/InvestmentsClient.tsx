@@ -34,8 +34,7 @@ import {
   moveInvestmentToInventory,
   type InvestmentRecord,
 } from "./actions";
-import { fetchScribes } from "@/app/crm/actions";
-import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
+import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon } from "lucide-react";
@@ -45,8 +44,6 @@ export default function InvestmentsClient() {
   const [createOpen, setCreateOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [scribes, setScribes] = useState<{ id: string; name: string }[]>([]);
-  const [addScribeOpen, setAddScribeOpen] = useState(false);
   const [newScribeId, setNewScribeId] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newQuantity, setNewQuantity] = useState("1");
@@ -64,7 +61,7 @@ export default function InvestmentsClient() {
         setInvestments(r.investments);
       } else {
         toast.error(r.error);
-        setInvestments([]);
+        // Do not clear list on SQL/schema errors — avoids looking like "data disappeared".
       }
     });
   };
@@ -72,19 +69,6 @@ export default function InvestmentsClient() {
   useEffect(() => {
     loadData();
   }, []);
-
-  useEffect(() => {
-    if (createOpen) {
-      fetchScribes().then((r) => {
-        if (r.success) setScribes(r.scribes);
-      });
-    }
-  }, [createOpen]);
-
-  const handleAddScribeSuccess = (scribe: NewScribe) => {
-    setScribes((prev) => [...prev, { id: scribe.id, name: scribe.name }]);
-    setNewScribeId(scribe.id);
-  };
 
   const handleCreate = async () => {
     const qty = parseFloat(newQuantity);
@@ -349,28 +333,12 @@ export default function InvestmentsClient() {
           <div className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-semibold">סופר</label>
-              <div className="flex gap-2">
-                <select
-                  value={newScribeId}
-                  onChange={(e) => setNewScribeId(e.target.value)}
-                  className="flex-1 rounded-xl border px-3 py-2"
-                >
-                  <option value="">—</option>
-                  {scribes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAddScribeOpen(true)}
-                  className="rounded-xl shrink-0"
-                >
-                  <PlusIcon className="size-4 ml-1" />
-                  הוסף חדש
-                </Button>
-              </div>
+              <UnifiedScribeSelect
+                value={newScribeId || null}
+                onChange={(s) => setNewScribeId(s?.id ?? "")}
+                placeholder="בחר סופר"
+                className="w-full [&>div]:h-10 [&>div]:rounded-xl"
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">פרטי פריט</label>
@@ -441,12 +409,6 @@ export default function InvestmentsClient() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <AddScribeModal
-        open={addScribeOpen}
-        onOpenChange={setAddScribeOpen}
-        onSuccess={handleAddScribeSuccess}
-      />
 
       <PaymentModal
         open={!!paymentOpen}

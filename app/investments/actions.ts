@@ -101,25 +101,43 @@ export async function fetchInvestments(): Promise<
     let data: Record<string, unknown>[] | null = null;
     let error = null as { message?: string; code?: string } | null;
 
-    const res1 = await supabase
-      .from("erp_investments")
-      .select(INVESTMENTS_SELECT_EXTENDED)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    let res1;
+    try {
+      res1 = await supabase
+        .from("erp_investments")
+        .select(INVESTMENTS_SELECT_EXTENDED)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+    } catch (e) {
+      console.error("[fetchInvestments] Supabase select threw:", e);
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
 
     data = res1.data as Record<string, unknown>[] | null;
     error = res1.error;
 
     let legacy = false;
+    if (error) {
+      console.error("[fetchInvestments] Supabase select error (full):", JSON.stringify(error, null, 2));
+    }
+
     if (error && isMissingColumnError(error.message)) {
-      const res2 = await supabase
-        .from("erp_investments")
-        .select(INVESTMENTS_SELECT_LEGACY)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      data = res2.data as Record<string, unknown>[] | null;
-      error = res2.error;
-      legacy = true;
+      try {
+        const res2 = await supabase
+          .from("erp_investments")
+          .select(INVESTMENTS_SELECT_LEGACY)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        data = res2.data as Record<string, unknown>[] | null;
+        error = res2.error;
+        legacy = true;
+        if (error) {
+          console.error("[fetchInvestments] Legacy select error (full):", JSON.stringify(error, null, 2));
+        }
+      } catch (e) {
+        console.error("[fetchInvestments] Legacy select threw:", e);
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
     }
 
     if (error) return { success: false, error: error.message ?? "שגיאת מסד נתונים" };
