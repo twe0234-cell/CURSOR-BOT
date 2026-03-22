@@ -198,6 +198,64 @@ export async function createClientContact(name: string, phone?: string): Promise
   }
 }
 
+export async function fetchDealers(): Promise<
+  { success: true; dealers: { id: string; name: string }[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .eq("type", "Merchant")
+      .order("name");
+
+    if (error) return { success: false, error: error.message };
+    return {
+      success: true,
+      dealers: (data ?? []).map((r) => ({ id: r.id, name: r.name ?? "" })),
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function createMerchantContact(name: string): Promise<
+  { success: true; dealer: { id: string; name: string } } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .insert({
+        user_id: user.id,
+        name: name.trim(),
+        type: "Merchant",
+        preferred_contact: "WhatsApp",
+      })
+      .select("id, name")
+      .single();
+
+    if (error) {
+      logError("CRM", "createMerchantContact DB error", { error: error.message, name: name.trim() });
+      return { success: false, error: error.message };
+    }
+    revalidatePath("/crm");
+    revalidatePath("/market");
+    logInfo("CRM", "createMerchantContact completed", { dealerId: data.id, name: data.name, userId: user.id });
+    return { success: true, dealer: { id: data.id, name: data.name ?? "" } };
+  } catch (err) {
+    logError("CRM", "createMerchantContact failed", { error: String(err), name });
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function createScribeContact(name: string): Promise<
   { success: true; scribe: { id: string; name: string } } | { success: false; error: string }
 > {

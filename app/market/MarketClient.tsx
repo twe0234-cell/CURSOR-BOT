@@ -19,10 +19,23 @@ import {
 import type { MarketTorahBookRow } from "./actions";
 import { createMarketTorahBook, deleteMarketTorahBook } from "./actions";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
+import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
+import { formatMarketPriceK } from "@/lib/market/kPricing";
+
+function todayISODate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type Props = {
   initialRows: MarketTorahBookRow[];
 };
+
+function displayOwner(row: MarketTorahBookRow): string {
+  if (row.dealer_id && row.dealer_name) return row.dealer_name;
+  if (row.sofer_name) return row.sofer_name;
+  if (row.external_sofer_name) return row.external_sofer_name;
+  return "—";
+}
 
 export default function MarketClient({ initialRows }: Props) {
   const router = useRouter();
@@ -34,7 +47,7 @@ export default function MarketClient({ initialRows }: Props) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     sofer_id: "",
-    external_sofer_name: "",
+    dealer_id: null as string | null,
     style: "",
     size_cm: "",
     parchment_type: "",
@@ -42,8 +55,10 @@ export default function MarketClient({ initialRows }: Props) {
     current_progress: "",
     asking_price: "",
     target_brokerage_price: "",
+    last_contact_date: todayISODate(),
     expected_completion_date: "",
     notes: "",
+    negotiation_notes: "",
   });
 
   async function handleAdd(e: React.FormEvent) {
@@ -52,7 +67,7 @@ export default function MarketClient({ initialRows }: Props) {
     try {
       const res = await createMarketTorahBook({
         sofer_id: form.sofer_id || null,
-        external_sofer_name: form.external_sofer_name.trim() || null,
+        dealer_id: form.dealer_id || null,
         style: form.style.trim() || null,
         size_cm: form.size_cm,
         parchment_type: form.parchment_type.trim() || null,
@@ -61,17 +76,19 @@ export default function MarketClient({ initialRows }: Props) {
         asking_price: form.asking_price,
         target_brokerage_price: form.target_brokerage_price,
         currency: "ILS",
+        last_contact_date: form.last_contact_date || null,
         expected_completion_date: form.expected_completion_date || null,
         notes: form.notes.trim() || null,
+        negotiation_notes: form.negotiation_notes.trim() || null,
       });
       if (!res.success) {
         toast.error(res.error);
         return;
       }
-      toast.success("הספר נוסף למעקב");
+      toast.success("הרשומה נוספה למאגר");
       setForm({
         sofer_id: "",
-        external_sofer_name: "",
+        dealer_id: null,
         style: "",
         size_cm: "",
         parchment_type: "",
@@ -79,8 +96,10 @@ export default function MarketClient({ initialRows }: Props) {
         current_progress: "",
         asking_price: "",
         target_brokerage_price: "",
+        last_contact_date: todayISODate(),
         expected_completion_date: "",
         notes: "",
+        negotiation_notes: "",
       });
       router.refresh();
     } finally {
@@ -89,54 +108,52 @@ export default function MarketClient({ initialRows }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("להסיר את הרשומה מהמעקב?")) return;
+    if (!confirm("להסיר את הרשומה מהמאגר?")) return;
     const res = await deleteMarketTorahBook(id);
     if (!res.success) toast.error(res.error);
     else {
-      toast.success("הוסר מהמעקב");
+      toast.success("הוסר מהמאגר");
       router.refresh();
     }
   }
 
-  function displaySofer(row: MarketTorahBookRow) {
-    if (row.sofer_name) return row.sofer_name;
-    if (row.external_sofer_name) return row.external_sofer_name;
-    return "—";
-  }
+  const priceInputWrap = "flex items-center gap-2 rounded-md border border-input bg-background px-2";
+  const priceSuffix = (
+    <span className="shrink-0 text-xs font-medium text-muted-foreground whitespace-nowrap">אל״ש</span>
+  );
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
           <ScrollText className="size-7 text-amber-500" />
-          רדאר שוק לתיווך
+          מאגר ספרי תורה
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          מעקב אחר הזדמנויות תיווך (ספרי תורה בשוק) — מחיר דורש מול מחיר יעד לתיווך, לא רכישה למלאי
+          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). אם נבחר סוחר הוא הבעלים; אחרת הבעלים הוא הסופר.
         </p>
       </div>
 
       <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">
         <CardContent className="pt-6">
-          <h2 className="text-lg font-semibold text-sky-800 mb-4">הוסף הזדמנות תיווך</h2>
+          <h2 className="text-lg font-semibold text-sky-800 mb-4">הוספה למאגר</h2>
           <form onSubmit={handleAdd} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="sm:col-span-2 lg:col-span-3">
-              <p className="text-xs text-muted-foreground mb-1">סופר מקושר (CRM)</p>
+              <p className="text-xs text-muted-foreground mb-1">סופר (CRM)</p>
               <UnifiedScribeSelect
                 value={form.sofer_id || null}
                 onChange={(s) => setForm((f) => ({ ...f, sofer_id: s?.id ?? "" }))}
-                placeholder="— ללא / חיצוני —"
+                placeholder="בחר סופר"
                 className="w-full [&>div]:min-h-10 [&>div]:rounded-md"
               />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">שם סופר חיצוני</p>
-              <Input
-                value={form.external_sofer_name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, external_sofer_name: e.target.value }))
-                }
-                placeholder="אם אין ב-CRM"
+            <div className="sm:col-span-2 lg:col-span-3">
+              <p className="text-xs text-muted-foreground mb-1">סוחר (CRM) — אם נבחר, הוא הבעלים</p>
+              <UnifiedDealerSelect
+                value={form.dealer_id}
+                onChange={(d) => setForm((f) => ({ ...f, dealer_id: d?.id ?? null }))}
+                placeholder="— ללא (הבעלים = הסופר) —"
+                className="w-full [&>div]:min-h-10 [&>div]:rounded-md"
               />
             </div>
             <div>
@@ -188,24 +205,42 @@ export default function MarketClient({ initialRows }: Props) {
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">מחיר דורש — מה שהסופר/המוכר מבקש (₪)</p>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                value={form.asking_price}
-                onChange={(e) => setForm((f) => ({ ...f, asking_price: e.target.value }))}
-              />
+              <p className="text-xs text-muted-foreground mb-1">מחיר דורש (באלפי ₪)</p>
+              <div className={priceInputWrap}>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className="border-0 shadow-none focus-visible:ring-0 px-0"
+                  value={form.asking_price}
+                  onChange={(e) => setForm((f) => ({ ...f, asking_price: e.target.value }))}
+                />
+                {priceSuffix}
+              </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">מחיר יעד לתיווך — למה מתכוונים להציע (₪)</p>
+              <p className="text-xs text-muted-foreground mb-1">מחיר יעד לתיווך (באלפי ₪)</p>
+              <div className={priceInputWrap}>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className="border-0 shadow-none focus-visible:ring-0 px-0"
+                  value={form.target_brokerage_price}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, target_brokerage_price: e.target.value }))
+                  }
+                />
+                {priceSuffix}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">תאריך קשר אחרון</p>
               <Input
-                type="number"
-                min={0}
-                step={1}
-                value={form.target_brokerage_price}
+                type="date"
+                value={form.last_contact_date}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, target_brokerage_price: e.target.value }))
+                  setForm((f) => ({ ...f, last_contact_date: e.target.value }))
                 }
               />
             </div>
@@ -228,13 +263,26 @@ export default function MarketClient({ initialRows }: Props) {
               />
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
+              <p className="text-xs text-muted-foreground mb-1">
+                הערות / יומן משא ומתן (גמישות מחיר וכו׳)
+              </p>
+              <Textarea
+                value={form.negotiation_notes}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, negotiation_notes: e.target.value }))
+                }
+                rows={3}
+                placeholder="תיעוד שיחות, תנאים, גמישות..."
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-3">
               <Button
                 type="submit"
                 disabled={loading}
                 className="bg-sky-600 hover:bg-sky-700"
               >
                 <Plus className="size-4 ml-1" />
-                {loading ? "שומר..." : "הוסף לרדאר"}
+                {loading ? "שומר..." : "הוסף למאגר"}
               </Button>
             </div>
           </form>
@@ -247,12 +295,14 @@ export default function MarketClient({ initialRows }: Props) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50/90">
-                  <TableHead className="text-right">סופר</TableHead>
+                  <TableHead className="text-right">בעלים</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">סופר</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">סוחר</TableHead>
+                  <TableHead className="text-right hidden lg:table-cell">קשר אחרון</TableHead>
                   <TableHead className="text-right hidden md:table-cell">גודל</TableHead>
-                  <TableHead className="text-right hidden md:table-cell">סוג קלף</TableHead>
+                  <TableHead className="text-right hidden lg:table-cell">סוג קלף</TableHead>
                   <TableHead className="text-right">סגנון</TableHead>
-                  <TableHead className="text-right hidden lg:table-cell">השפעה</TableHead>
-                  <TableHead className="text-right">התקדמות</TableHead>
+                  <TableHead className="text-right hidden xl:table-cell">התקדמות</TableHead>
                   <TableHead className="text-right">מחיר דורש</TableHead>
                   <TableHead className="text-right hidden sm:table-cell">יעד תיווך</TableHead>
                   <TableHead className="text-right hidden md:table-cell">רווח צפוי</TableHead>
@@ -262,41 +312,45 @@ export default function MarketClient({ initialRows }: Props) {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
-                      אין רשומות ברדאר. הוסף הזדמנות תיווך מהטופס למעלה.
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-12">
+                      אין רשומות במאגר. הוסף רשומה מהטופס למעלה.
                     </TableCell>
                   </TableRow>
                 ) : (
                   rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-medium">{displaySofer(row)}</TableCell>
+                      <TableCell className="font-medium max-w-[120px] truncate">
+                        {displayOwner(row)}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell max-w-[100px] truncate">
+                        {row.sofer_name ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell max-w-[100px] truncate">
+                        {row.dealer_name ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground whitespace-nowrap">
+                        {row.last_contact_date
+                          ? new Date(row.last_contact_date).toLocaleDateString("he-IL")
+                          : "—"}
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {row.size_cm != null ? `${row.size_cm} ס״מ` : "—"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                      <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[100px] truncate">
                         {row.parchment_type ?? "—"}
                       </TableCell>
-                      <TableCell className="max-w-[140px] truncate">{row.style ?? "—"}</TableCell>
-                      <TableCell className="hidden lg:table-cell max-w-[160px] truncate">
-                        {row.influencer_style ?? "—"}
-                      </TableCell>
-                      <TableCell className="max-w-[180px] text-sm">
+                      <TableCell className="max-w-[120px] truncate">{row.style ?? "—"}</TableCell>
+                      <TableCell className="hidden xl:table-cell max-w-[140px] truncate text-sm">
                         {row.current_progress ?? "—"}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap">
-                        {row.asking_price != null
-                          ? `${row.asking_price.toLocaleString("he-IL")} ₪`
-                          : "—"}
+                      <TableCell className="tabular-nums whitespace-nowrap text-sm">
+                        {formatMarketPriceK(row.asking_price)}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap hidden sm:table-cell">
-                        {row.target_brokerage_price != null
-                          ? `${row.target_brokerage_price.toLocaleString("he-IL")} ₪`
-                          : "—"}
+                      <TableCell className="tabular-nums whitespace-nowrap hidden sm:table-cell text-sm">
+                        {formatMarketPriceK(row.target_brokerage_price)}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap hidden md:table-cell text-emerald-700 font-medium">
-                        {row.potential_profit != null
-                          ? `${row.potential_profit.toLocaleString("he-IL")} ₪`
-                          : "—"}
+                      <TableCell className="tabular-nums whitespace-nowrap hidden md:table-cell text-sm text-emerald-700 font-medium">
+                        {formatMarketPriceK(row.potential_profit)}
                       </TableCell>
                       <TableCell>
                         <Button

@@ -35,6 +35,38 @@ if (!conn) {
   process.exit(1);
 }
 
+/** Parse host from postgres URI (fails if password has unescaped @). */
+function pgHost(connStr) {
+  try {
+    const normalized = String(connStr).trim().replace(/^postgres:\/\//i, "postgresql://");
+    return new URL(normalized).hostname || "";
+  } catch {
+    return null;
+  }
+}
+
+const host = pgHost(conn);
+const parseFailed = host === null;
+const badHost =
+  !host ||
+  host === "base" ||
+  (host.length > 0 && host.length < 6 && !host.includes("."));
+
+if (parseFailed || badHost) {
+  console.error(
+    "שגיאה: DATABASE_URL לא תקין — שם מארח (host) חסר או שבור.\n" +
+      "  צפוי משהו כמו: db.<project-ref>.supabase.co או ...pooler.supabase.com\n" +
+      "  העתק את Connection string (URI) מ-Supabase → Database → Connection string.\n" +
+      "  אם יש בסיסמה תו @ — קודד אותה (URL-encode) או השתמש ב-Connection pooling."
+  );
+  if (parseFailed) {
+    console.error("  (לא ניתן לפרש את המחרוזת כ-URL — לעיתים סיסמה עם תווים מיוחדים שוברת את הפורמט.)");
+  } else if (host) {
+    console.error("  host שזוהה כרגע:", host);
+  }
+  process.exit(1);
+}
+
 const sql = `
 -- 1. Ensure market_torah_books exists (minimal; skipped if already created by migrations)
 CREATE TABLE IF NOT EXISTS public.market_torah_books (

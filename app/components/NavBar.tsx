@@ -40,7 +40,7 @@ export default function NavBar() {
     { href: "/sales", label: "מכירות ותזרים", icon: Wallet },
     { href: "/investments", label: "תיק השקעות", icon: TrendingUp },
     { href: "/soferim", label: "מאגר סופרים", icon: PenLine },
-    { href: "/market", label: "שוק ספרי תורה", icon: ScrollText },
+    { href: "/market", label: "מאגר ספרי תורה", icon: ScrollText },
     { href: "/inventory", label: "ניהול מלאי סת״ם", icon: Package },
     { href: "/settings", label: "הגדרות", icon: Settings },
   ];
