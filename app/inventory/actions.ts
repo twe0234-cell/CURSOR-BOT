@@ -34,6 +34,8 @@ export type InventoryItem = {
   has_lamnatzeach: boolean;
   /** גודל (ס״מ) — בעיקר לקטגוריית פיטום הקטורת */
   size: string | null;
+  /** סוג מגילה — רלוונטי לקטגוריית מגילה */
+  megillah_type: string | null;
   is_public?: boolean;
   public_slug?: string | null;
 };
@@ -42,9 +44,9 @@ const MEDIA_BUCKET = "media";
 const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5MB
 
 const INVENTORY_SELECT_FULL =
-  "id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, has_lamnatzeach, size, is_public, public_slug";
+  "id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, has_lamnatzeach, size, megillah_type, is_public, public_slug";
 
-/** Legacy select when pitum columns are missing from DB (schema cache / migration not applied). */
+/** Legacy select when pitum / megillah columns are missing from DB (schema cache / migration not applied). */
 const INVENTORY_SELECT_LEGACY =
   "id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, is_public, public_slug";
 
@@ -59,7 +61,11 @@ function isMissingColumnError(msg: string | undefined): boolean {
   );
 }
 
-function mapInventoryRow(r: Record<string, unknown>, pitumCols: boolean): InventoryItem {
+function mapInventoryRow(
+  r: Record<string, unknown>,
+  pitumCols: boolean,
+  megillahCol: boolean
+): InventoryItem {
   const qty = Number(r.quantity ?? 1);
   const cost = r.cost_price != null ? Number(r.cost_price) : null;
   const paid = Number(r.amount_paid ?? 0);
@@ -89,6 +95,7 @@ function mapInventoryRow(r: Record<string, unknown>, pitumCols: boolean): Invent
     is_sewn: Boolean(r.is_sewn ?? false),
     has_lamnatzeach: pitumCols ? Boolean(r.has_lamnatzeach ?? false) : false,
     size: pitumCols && r.size != null ? String(r.size) : null,
+    megillah_type: megillahCol && r.megillah_type != null ? String(r.megillah_type) : null,
     is_public: Boolean(r.is_public ?? false),
     public_slug: (r.public_slug as string | null) ?? null,
   };
@@ -108,6 +115,7 @@ export async function fetchInventory(): Promise<
     let data: Record<string, unknown>[] | null = null;
     let error: { message?: string; code?: string; details?: string; hint?: string } | null = null;
     let pitumCols = true;
+    let megillahCol = true;
 
     try {
       const res = await supabase
@@ -137,11 +145,12 @@ export async function fetchInventory(): Promise<
         data = res2.data as Record<string, unknown>[] | null;
         error = res2.error;
         pitumCols = false;
+        megillahCol = false;
         if (error) {
           console.error("[fetchInventory] Legacy select error (full):", JSON.stringify(error, null, 2));
         } else {
           console.warn(
-            "[fetchInventory] Using legacy inventory columns (missing has_lamnatzeach/size). Run fix-schema-crash.mjs or migration."
+            "[fetchInventory] Using legacy inventory columns (missing pitum/megillah columns). Run migrations or fix-schema scripts."
           );
         }
       } catch (e) {
@@ -155,7 +164,7 @@ export async function fetchInventory(): Promise<
       return { success: false, error: error.message ?? "שגיאת מסד נתונים" };
     }
 
-    const items = (data ?? []).map((r) => mapInventoryRow(r, pitumCols));
+    const items = (data ?? []).map((r) => mapInventoryRow(r, pitumCols, megillahCol));
 
     return { success: true, items };
   } catch (err) {
@@ -170,7 +179,11 @@ export async function createInventoryItem(
   try {
     const parsed = inventoryItemSchema.safeParse(item);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים" };
+      const first = parsed.error.issues[0];
+      return {
+        success: false,
+        error: first?.message ?? parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים",
+      };
     }
     const data = parsed.data;
 
@@ -196,6 +209,7 @@ export async function createInventoryItem(
 
     const sku = generateInventorySku();
     const isPitum = data.product_category === PITUM_HAKETORET_CATEGORY;
+    const isMegillah = data.product_category === "מגילה";
     try {
       const { error } = await supabase.from("inventory").insert({
         sku,
@@ -221,6 +235,7 @@ export async function createInventoryItem(
         is_sewn: data.is_sewn ?? false,
         has_lamnatzeach: isPitum ? Boolean(data.has_lamnatzeach) : false,
         size: isPitum ? (data.size?.trim() || null) : null,
+        megillah_type: isMegillah ? (data.megillah_type?.trim() || "אסתר") : null,
       });
 
       if (error) {
@@ -251,7 +266,11 @@ export async function updateInventoryItem(
   try {
     const parsed = inventoryItemSchema.safeParse(item);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים" };
+      const first = parsed.error.issues[0];
+      return {
+        success: false,
+        error: first?.message ?? parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים",
+      };
     }
     const data = parsed.data;
 
@@ -276,6 +295,7 @@ export async function updateInventoryItem(
         : [];
 
     const isPitum = data.product_category === PITUM_HAKETORET_CATEGORY;
+    const isMegillah = data.product_category === "מגילה";
     try {
       const { error } = await supabase
         .from("inventory")
@@ -301,6 +321,7 @@ export async function updateInventoryItem(
           is_sewn: data.is_sewn ?? false,
           has_lamnatzeach: isPitum ? Boolean(data.has_lamnatzeach) : false,
           size: isPitum ? (data.size?.trim() || null) : null,
+          megillah_type: isMegillah ? (data.megillah_type?.trim() || "אסתר") : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)

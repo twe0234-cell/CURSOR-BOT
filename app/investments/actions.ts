@@ -513,6 +513,7 @@ export async function moveInvestmentToInventory(investmentId: string): Promise<A
       is_sewn: false,
       has_lamnatzeach: false,
       size: null,
+      megillah_type: null,
     });
 
     if (insErr) return { success: false, error: insErr.message };

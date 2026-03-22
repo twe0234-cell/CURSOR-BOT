@@ -1,5 +1,10 @@
 /** Statuses that still count as available stock (not fully sold). */
-export const INVENTORY_ACTIVE_STATUSES = ["available", "in_use", "reserved"] as const;
+export const INVENTORY_ACTIVE_STATUSES = [
+  "available",
+  "proofreading",
+  "reserved",
+  "in_use", // legacy — treated as active / same label as proofreading
+] as const;
 
 export type InventoryActiveStatus = (typeof INVENTORY_ACTIVE_STATUSES)[number];
 
@@ -10,13 +15,14 @@ export function isInventorySoldStatus(status: string | null | undefined): boolea
 /** Status stored when quantity hits zero after a sale (Hebrew label per product spec). */
 export const INVENTORY_SOLD_STATUS_HE = "נמכר" as const;
 
-/** תוויות עברית לתצוגה בלבד — הערכים במסד נשארים באנגלית. */
+/** תוויות עברית לתצוגה — ערכים במסד: available | proofreading | reserved | sold (וגם legacy). */
 export const INVENTORY_STATUS_LABEL_HE: Record<string, string> = {
   available: "זמין",
-  in_use: "בשימוש",
-  sold: "נמכר",
+  proofreading: "בהגהה",
+  in_use: "בהגהה", // legacy — same as proofreading
   reserved: "שמור",
-  נמכר: "נמכר",
+  sold: "נמכר",
+  נמכר: "נמכר", // legacy duplicate value
 };
 
 export function inventoryStatusLabelHe(status: string | null | undefined): string {

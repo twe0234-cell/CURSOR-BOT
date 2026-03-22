@@ -52,7 +52,7 @@ import type { InventoryItemInput } from "@/lib/validations/inventory";
 import { INVENTORY_CATEGORY_OPTIONS } from "@/lib/validations/inventory";
 import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
 
-const STATUSES = ["available", "in_use", "sold", "reserved", "נמכר"];
+const STATUSES = ["available", "proofreading", "reserved", "sold"] as const;
 
 type Props = {
   initialItems: InventoryItem[];
@@ -171,6 +171,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       is_sewn: false,
       has_lamnatzeach: false,
       size: "",
+      megillah_type: "אסתר",
     });
     setEditOpen(true);
   };
@@ -197,6 +198,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       is_sewn: item.is_sewn ?? false,
       has_lamnatzeach: item.has_lamnatzeach ?? false,
       size: item.size ?? "",
+      megillah_type: item.megillah_type ?? "אסתר",
     });
     setEditOpen(true);
   };
@@ -224,6 +226,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
         is_sewn: data.is_sewn ?? false,
         has_lamnatzeach: data.has_lamnatzeach ?? false,
         size: data.size?.trim() || null,
+        megillah_type: data.megillah_type ?? null,
       };
 
       const res = editingId

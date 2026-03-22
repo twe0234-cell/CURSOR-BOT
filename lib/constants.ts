@@ -8,5 +8,5 @@ export const DROPDOWN_FALLBACKS: Record<string, string[]> = {
   torah_sizes: ["17", "24", "30", "36", "42", "45", "48", "56", "אחר"],
   neviim_names: ["יהושע", "שופטים", "שמואל", "מלכים", "ישעיה", "ירמיה", "יחזקאל", "תרי עשר"],
   megilla_lines: ["11", "21", "28", "42"],
-  mezuzah_sizes: ["10", "12", "15", "אחר"],
+  mezuzah_sizes: ["10", "12", "15", "20", "אחר"],
 };

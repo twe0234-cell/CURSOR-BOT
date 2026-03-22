@@ -10,6 +10,22 @@ const numericNullable = z.preprocess(
   z.number().nullable().optional()
 );
 
+/** Empty string → null so optional scribe never fails UUID parse */
+const optionalUuid = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? null : v),
+  z.union([z.string().uuid(), z.null()]).optional()
+);
+
+/** category_meta may contain mixed JSON from DB — never block save on shape */
+const categoryMetaSchema = z
+  .preprocess(
+    (v) => (v == null || typeof v !== "object" ? {} : v),
+    z.record(z.string(), z.unknown())
+  )
+  .optional()
+  .default({})
+  .catch({});
+
 /** קטגוריות מוכרות (כולל פיטום הקטורת) — רשימת עזר לטפסים */
 export const INVENTORY_CATEGORY_OPTIONS = [
   "ספר תורה",
@@ -22,23 +38,28 @@ export const INVENTORY_CATEGORY_OPTIONS = [
 
 export const PITUM_HAKETORET_CATEGORY = "פיטום הקטורת";
 
+export const MEGILLAH_TYPE_OPTIONS = [
+  "אסתר",
+  "רות",
+  "שיר השירים",
+  "איכה",
+  "קהלת",
+] as const;
+
 const baseSchema = z.object({
   product_category: z.string().optional().nullable(),
   purchase_date: z.string().optional().nullable(),
-  category_meta: z
-    .record(z.string(), z.union([z.string(), z.number()]))
-    .optional()
-    .default({}),
+  category_meta: categoryMetaSchema,
   script_type: z.preprocess(
     (v) => (v === "" || v == null ? null : v),
-    z.enum(['אר"י', 'בית יוסף', 'ספרדי']).nullable().optional()
+    z.enum(['אר"י', 'בית יוסף', "ספרדי"]).nullable().optional()
   ),
   status: z.string().optional().nullable(),
   quantity: coerceNumDefault0,
   cost_price: numericNullable,
   target_price: numericNullable,
   amount_paid: coerceNumDefault0,
-  scribe_id: z.string().uuid().optional().nullable(),
+  scribe_id: optionalUuid,
   scribe_code: z.string().optional().nullable(),
   images: z.array(z.string()).optional().nullable().default([]),
   description: z.string().optional().nullable(),
@@ -46,69 +67,24 @@ const baseSchema = z.object({
   computer_proofread: z.boolean().optional().default(false),
   human_proofread: z.boolean().optional().default(false),
   is_sewn: z.boolean().optional().default(false),
-  has_lamnatzeach: z.boolean().optional().default(false),
-  size: z.string().optional(),
+  has_lamnatzeach: z.preprocess(
+    (v) => (v === undefined || v === null ? false : Boolean(v)),
+    z.boolean().optional().default(false)
+  ),
+  size: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? null : String(v)),
+    z.string().nullable().optional()
+  ),
+  /** רלוונטי לקטגוריית מגילה */
+  megillah_type: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? null : String(v)),
+    z.string().nullable().optional()
+  ),
 });
 
-/** Dynamic validation: size/navi/lines required only when product_category matches */
-export const inventoryItemSchema = baseSchema.superRefine((data, ctx) => {
-  const cat = data.product_category ?? "";
-  const meta = data.category_meta ?? {};
-
-  if (cat === "ספר תורה") {
-    const size = meta.size;
-    if (size == null || String(size).trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "נדרש לבחור גודל עבור ספר תורה",
-        path: ["category_meta", "size"],
-      });
-    }
-  }
-
-  if (cat === "נביא") {
-    const navi = meta.navi;
-    if (navi == null || String(navi).trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "נדרש לבחור נביא",
-        path: ["category_meta", "navi"],
-      });
-    }
-  }
-
-  if (cat === "מגילה") {
-    const lines = meta.lines;
-    if (lines == null || String(lines).trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "נדרש לבחור שורות עבור מגילה",
-        path: ["category_meta", "lines"],
-      });
-    }
-  }
-
-  if (cat === "מזוזה") {
-    const size = meta.size;
-    if (size == null || String(size).trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "נדרש לבחור מידה עבור מזוזה",
-        path: ["category_meta", "size"],
-      });
-    }
-  }
-
-  if (cat === PITUM_HAKETORET_CATEGORY) {
-    const sz = (data.size ?? "").trim();
-    if (!sz) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "נדרש לבחור או להזין גודל (ס״מ)",
-        path: ["size"],
-      });
-    }
-  }
-});
+/**
+ * No superRefine category gates — conditional fields are UI-only hints; empty scribe/meta must not block save.
+ */
+export const inventoryItemSchema = baseSchema;
 
 export type InventoryItemInput = z.infer<typeof baseSchema>;
