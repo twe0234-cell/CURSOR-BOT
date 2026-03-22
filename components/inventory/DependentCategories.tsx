@@ -4,14 +4,17 @@ import { useEffect, useState, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { DROPDOWN_FALLBACKS } from "@/lib/constants";
+import { PITUM_HAKETORET_CATEGORY } from "@/lib/validations/inventory";
 
 type FormValues = {
   product_category?: string | null;
   category_meta?: Record<string, string | number>;
+  has_lamnatzeach?: boolean;
+  size?: string | null;
 };
 
 export function DependentCategories() {
-  const { watch, setValue } = useFormContext<FormValues>();
+  const { watch, setValue, register } = useFormContext<FormValues>();
   const category = watch("product_category");
   const categoryMeta = watch("category_meta") ?? {};
   const prevCategoryRef = useRef<string | null | undefined>(undefined);
@@ -61,8 +64,29 @@ export function DependentCategories() {
   const showNavi = category === "נביא";
   const showLines = category === "מגילה";
   const showMezuzahSize = category === "מזוזה";
+  const showPitum = category === PITUM_HAKETORET_CATEGORY;
+  const pitumSizeVal = watch("size") ?? "";
+  const pitumIsPreset = ["15", "20", "25"].includes(String(pitumSizeVal).trim());
+  const [pitumOtherOpen, setPitumOtherOpen] = useState(false);
 
-  if (!showTorahSize && !showNavi && !showLines && !showMezuzahSize) return null;
+  useEffect(() => {
+    if (!showPitum) {
+      setPitumOtherOpen(false);
+      return;
+    }
+    const s = String(pitumSizeVal ?? "").trim();
+    if (s && !["15", "20", "25"].includes(s)) {
+      setPitumOtherOpen(true);
+    }
+  }, [showPitum, pitumSizeVal]);
+
+  const pitumSelectValue = pitumIsPreset
+    ? String(pitumSizeVal).trim()
+    : pitumOtherOpen || String(pitumSizeVal ?? "").trim()
+      ? "אחר"
+      : "";
+
+  if (!showTorahSize && !showNavi && !showLines && !showMezuzahSize && !showPitum) return null;
 
   const selectClass =
     "w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500";
@@ -166,6 +190,54 @@ export function DependentCategories() {
             ))}
           </select>
           )}
+        </div>
+      )}
+
+      {showPitum && (
+        <div className="flex flex-col gap-4 md:col-span-2">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <input
+              type="checkbox"
+              id="has_lamnatzeach"
+              className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              {...register("has_lamnatzeach")}
+            />
+            <label htmlFor="has_lamnatzeach" className="text-sm font-semibold text-slate-800 cursor-pointer">
+              כולל למנצח
+            </label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-800">גודל (ס״מ)</label>
+            <select
+              value={pitumSelectValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "אחר") {
+                  setPitumOtherOpen(true);
+                  setValue("size", "");
+                } else {
+                  setPitumOtherOpen(false);
+                  setValue("size", v);
+                }
+              }}
+              className={selectClass}
+            >
+              <option value="">בחר</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+              <option value="25">25</option>
+              <option value="אחר">אחר</option>
+            </select>
+            {pitumOtherOpen && (
+              <input
+                type="text"
+                placeholder="הזן גודל (ס״מ) או פירוט"
+                value={pitumIsPreset ? "" : String(pitumSizeVal)}
+                onChange={(e) => setValue("size", e.target.value)}
+                className={selectClass}
+              />
+            )}
+          </div>
         </div>
       )}
     </>

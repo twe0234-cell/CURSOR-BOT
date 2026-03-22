@@ -2,7 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { inventoryItemSchema } from "@/lib/validations/inventory";
+import { inventoryItemSchema, PITUM_HAKETORET_CATEGORY } from "@/lib/validations/inventory";
 import { logError, logInfo } from "@/lib/logger";
 import { generateInventorySku } from "@/lib/inventory/sku";
 
@@ -31,6 +31,9 @@ export type InventoryItem = {
   computer_proofread: boolean;
   human_proofread: boolean;
   is_sewn: boolean;
+  has_lamnatzeach: boolean;
+  /** גודל (ס״מ) — בעיקר לקטגוריית פיטום הקטורת */
+  size: string | null;
   is_public?: boolean;
   public_slug?: string | null;
 };
@@ -51,7 +54,7 @@ export async function fetchInventory(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, is_public, public_slug")
+      .select("id, sku, user_id, product_category, purchase_date, category_meta, script_type, status, quantity, cost_price, total_cost, amount_paid, target_price, total_target_price, scribe_id, scribe_code, images, description, parchment_type, computer_proofread, human_proofread, is_sewn, has_lamnatzeach, size, is_public, public_slug")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -87,6 +90,8 @@ export async function fetchInventory(): Promise<
         computer_proofread: Boolean(r.computer_proofread ?? false),
         human_proofread: Boolean(r.human_proofread ?? false),
         is_sewn: Boolean(r.is_sewn ?? false),
+        has_lamnatzeach: Boolean(r.has_lamnatzeach ?? false),
+        size: r.size != null ? String(r.size) : null,
         is_public: r.is_public ?? false,
         public_slug: r.public_slug ?? null,
       };
@@ -130,6 +135,7 @@ export async function createInventoryItem(
         : [];
 
     const sku = generateInventorySku();
+    const isPitum = data.product_category === PITUM_HAKETORET_CATEGORY;
     try {
       const { error } = await supabase.from("inventory").insert({
         sku,
@@ -153,6 +159,8 @@ export async function createInventoryItem(
         computer_proofread: data.computer_proofread ?? false,
         human_proofread: data.human_proofread ?? false,
         is_sewn: data.is_sewn ?? false,
+        has_lamnatzeach: isPitum ? Boolean(data.has_lamnatzeach) : false,
+        size: isPitum ? (data.size?.trim() || null) : null,
       });
 
       if (error) {
@@ -207,6 +215,7 @@ export async function updateInventoryItem(
         ? []
         : [];
 
+    const isPitum = data.product_category === PITUM_HAKETORET_CATEGORY;
     try {
       const { error } = await supabase
         .from("inventory")
@@ -230,6 +239,8 @@ export async function updateInventoryItem(
           computer_proofread: data.computer_proofread ?? false,
           human_proofread: data.human_proofread ?? false,
           is_sewn: data.is_sewn ?? false,
+          has_lamnatzeach: isPitum ? Boolean(data.has_lamnatzeach) : false,
+          size: isPitum ? (data.size?.trim() || null) : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)

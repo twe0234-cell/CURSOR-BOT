@@ -10,6 +10,18 @@ const numericNullable = z.preprocess(
   z.number().nullable().optional()
 );
 
+/** קטגוריות מוכרות (כולל פיטום הקטורת) — רשימת עזר לטפסים */
+export const INVENTORY_CATEGORY_OPTIONS = [
+  "ספר תורה",
+  "נביא",
+  "מגילה",
+  "מזוזה",
+  "פרשיות",
+  "פיטום הקטורת",
+] as const;
+
+export const PITUM_HAKETORET_CATEGORY = "פיטום הקטורת";
+
 const baseSchema = z.object({
   product_category: z.string().optional().nullable(),
   purchase_date: z.string().optional().nullable(),
@@ -34,6 +46,8 @@ const baseSchema = z.object({
   computer_proofread: z.boolean().optional().default(false),
   human_proofread: z.boolean().optional().default(false),
   is_sewn: z.boolean().optional().default(false),
+  has_lamnatzeach: z.boolean().optional().default(false),
+  size: z.string().optional(),
 });
 
 /** Dynamic validation: size/navi/lines required only when product_category matches */
@@ -81,6 +95,17 @@ export const inventoryItemSchema = baseSchema.superRefine((data, ctx) => {
         code: z.ZodIssueCode.custom,
         message: "נדרש לבחור מידה עבור מזוזה",
         path: ["category_meta", "size"],
+      });
+    }
+  }
+
+  if (cat === PITUM_HAKETORET_CATEGORY) {
+    const sz = (data.size ?? "").trim();
+    if (!sz) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "נדרש לבחור או להזין גודל (ס״מ)",
+        path: ["size"],
       });
     }
   }

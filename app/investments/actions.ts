@@ -493,6 +493,8 @@ export async function moveInvestmentToInventory(investmentId: string): Promise<A
       computer_proofread: false,
       human_proofread: false,
       is_sewn: false,
+      has_lamnatzeach: false,
+      size: null,
     });
 
     if (insErr) return { success: false, error: insErr.message };

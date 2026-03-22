@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/collapsible";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon, ChevronDown, ChevronUp } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
+import { INVENTORY_CATEGORY_OPTIONS } from "@/lib/validations/inventory";
 import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
 
 const STATUSES = ["available", "in_use", "sold", "reserved", "נמכר"];
@@ -109,9 +110,9 @@ export default function InventoryClient({ initialItems }: Props) {
     fetchDropdownOptions("categories")
       .then((r) => {
         if (r.success && r.options.length > 0) setCategories(r.options);
-        else setCategories(["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"]);
+        else setCategories([...INVENTORY_CATEGORY_OPTIONS]);
       })
-      .catch(() => setCategories(["ספר תורה", "נביא", "מגילה", "מזוזה", "פרשיות"]))
+      .catch(() => setCategories([...INVENTORY_CATEGORY_OPTIONS]))
       .finally(() => setCategoriesLoading(false));
   }, []);
 
@@ -135,6 +136,8 @@ export default function InventoryClient({ initialItems }: Props) {
       computer_proofread: false,
       human_proofread: false,
       is_sewn: false,
+      has_lamnatzeach: false,
+      size: "",
     },
   });
 
@@ -158,6 +161,8 @@ export default function InventoryClient({ initialItems }: Props) {
       computer_proofread: false,
       human_proofread: false,
       is_sewn: false,
+      has_lamnatzeach: false,
+      size: "",
     });
     setEditOpen(true);
   };
@@ -182,6 +187,8 @@ export default function InventoryClient({ initialItems }: Props) {
       computer_proofread: item.computer_proofread ?? false,
       human_proofread: item.human_proofread ?? false,
       is_sewn: item.is_sewn ?? false,
+      has_lamnatzeach: item.has_lamnatzeach ?? false,
+      size: item.size ?? "",
     });
     setEditOpen(true);
   };
@@ -207,6 +214,8 @@ export default function InventoryClient({ initialItems }: Props) {
         computer_proofread: data.computer_proofread ?? false,
         human_proofread: data.human_proofread ?? false,
         is_sewn: data.is_sewn ?? false,
+        has_lamnatzeach: data.has_lamnatzeach ?? false,
+        size: data.size?.trim() || null,
       };
 
       const res = editingId
