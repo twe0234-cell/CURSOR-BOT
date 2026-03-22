@@ -173,10 +173,13 @@ export default function BroadcastTab({
         setImageUrl(res.url);
         toast.success("התמונה הועלתה");
       } else {
-        toast.error(res.error);
+        console.error("[BroadcastTab] uploadMedia failed:", res.error);
+        toast.error(res.error || "העלאה נכשלה");
         setImageFile(null);
+        setImageUrl("");
       }
-    } catch {
+    } catch (err) {
+      console.error("[BroadcastTab] uploadMedia exception:", err);
       toast.error("שגיאה בהעלאת התמונה");
       setImageFile(null);
     } finally {
@@ -540,7 +543,21 @@ export default function BroadcastTab({
               />
               {uploading && <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>}
               {imageUrl && !uploading && (
-                <p className="mt-2 text-sm text-indigo-600 truncate">{imageFile?.name || "תמונה הועלתה"}</p>
+                <div className="mt-3 space-y-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl}
+                    alt="תצוגה מקדימה"
+                    className="max-h-48 w-auto max-w-full rounded-lg border border-slate-200 object-contain bg-white"
+                    onError={() => {
+                      toast.error("לא ניתן לטעון תצוגה מקדימה — בדוק את קישור האחסון");
+                    }}
+                  />
+                  <p className="text-sm text-indigo-600 truncate" title={imageUrl}>
+                    {imageFile?.name || "תמונה הועלתה"}
+                  </p>
+                  <p className="text-xs text-muted-foreground break-all">{imageUrl}</p>
+                </div>
               )}
             </div>
           </CardContent>

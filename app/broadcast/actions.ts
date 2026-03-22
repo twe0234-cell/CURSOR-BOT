@@ -39,6 +39,12 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
       });
 
     if (error) {
+      logError("Broadcast", "uploadMedia storage error", {
+        bucket: MEDIA_BUCKET,
+        path,
+        message: error.message,
+        name: error.name,
+      });
       return { success: false, error: error.message };
     }
 
