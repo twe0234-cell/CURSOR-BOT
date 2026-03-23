@@ -34,6 +34,7 @@ import {
   RadioIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isImageFile } from "@/lib/upload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 
@@ -154,7 +155,7 @@ export default function BroadcastTab({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!isImageFile(file)) {
       toast.error("נא לבחור קובץ תמונה");
       return;
     }

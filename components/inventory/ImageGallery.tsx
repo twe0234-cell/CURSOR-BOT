@@ -5,6 +5,7 @@ import Image from "next/image";
 import { uploadInventoryImage } from "@/app/inventory/actions";
 import { PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
+import { isImageFile } from "@/lib/upload";
 
 type Props = {
   images: string[];
@@ -29,7 +30,7 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (!file || !file.type.startsWith("image/")) continue;
+        if (!file || !isImageFile(file)) continue;
 
         const formData = new FormData();
         formData.set("file", file);
@@ -88,7 +89,7 @@ export function ImageGallery({ images, onChange, disabled }: Props) {
               <button
                 type="button"
                 onClick={() => remove(idx)}
-                className="absolute -top-1 -right-1 size-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1 -right-1 size-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
                 <XIcon className="size-3" />
               </button>

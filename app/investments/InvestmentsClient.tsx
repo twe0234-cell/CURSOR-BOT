@@ -126,14 +126,22 @@ export default function InvestmentsClient() {
   const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>, inv: InvestmentRecord) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("הקובץ חורג ממגבלת 10MB");
+      e.target.value = "";
+      return;
+    }
     setDetailDocLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/investments/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("העלאה נכשלה");
-      const { url } = await res.json();
-      const docs = [...(inv.documents ?? []), url];
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || "העלאה נכשלה");
+        return;
+      }
+      const docs = [...(inv.documents ?? []), data.url];
       const updateRes = await updateInvestment(inv.id, { documents: docs });
       if (updateRes.success) {
         toast.success("המסמך הועלה");

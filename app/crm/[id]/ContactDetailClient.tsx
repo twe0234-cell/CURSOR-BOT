@@ -206,6 +206,11 @@ export default function ContactDetailClient({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("הקובץ חורג ממגבלת 10MB");
+      e.target.value = "";
+      return;
+    }
     setDocLoading(true);
     try {
       const formData = new FormData();
@@ -214,11 +219,14 @@ export default function ContactDetailClient({
         method: "POST",
         body: formData,
       });
-      if (!uploadRes.ok) throw new Error("העלאה נכשלה");
-      const { url } = await uploadRes.json();
-      const res = await addDocument(contact.id, url, "Script_Sample", file.name);
+      const data = await uploadRes.json();
+      if (!uploadRes.ok) {
+        toast.error(data?.error || "העלאה נכשלה");
+        return;
+      }
+      const res = await addDocument(contact.id, data.url, "Script_Sample", file.name);
       if (res.success) {
-        setDocuments((prev) => [...prev, { id: crypto.randomUUID(), file_url: url, doc_type: "Script_Sample", name: file.name }]);
+        setDocuments((prev) => [...prev, { id: crypto.randomUUID(), file_url: data.url, doc_type: "Script_Sample", name: file.name }]);
         toast.success("המסמך הועלה");
       } else toast.error(res.error);
     } catch {

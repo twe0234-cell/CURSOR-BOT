@@ -3,6 +3,7 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logError, logInfo } from "@/lib/logger";
+import { resolveContentType } from "@/lib/upload";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -14,11 +15,15 @@ export type UploadResult =
 /** העלאת קובץ ל-Supabase Storage (bucket: media) */
 export async function uploadMedia(formData: FormData): Promise<UploadResult> {
   try {
-    const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File)) {
+    const raw = formData.get("file");
+    if (raw == null || typeof raw !== "object") {
       return { success: false, error: "לא נבחר קובץ" };
     }
-    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
+    if (!(raw instanceof Blob)) {
+      return { success: false, error: "קובץ לא תקין" };
+    }
+    const blob = raw as Blob;
+    if (blob.size > IMAGE_SIZE_LIMIT_BYTES) {
       return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
     }
 
@@ -28,13 +33,14 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
       return { success: false, error: "יש להתחבר" };
     }
 
-    const ext = file.name.split(".").pop() || "jpg";
+    const name = raw instanceof File && raw.name ? raw.name : "image.jpg";
+    const ext = name.split(".").pop() || "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
 
     const { error } = await supabase.storage
       .from(MEDIA_BUCKET)
-      .upload(path, file, {
-        contentType: file.type || "image/jpeg",
+      .upload(path, blob, {
+        contentType: resolveContentType(raw as File | Blob),
         upsert: true,
       });
 
