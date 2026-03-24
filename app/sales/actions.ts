@@ -9,6 +9,7 @@ import {
   isInventorySoldStatus,
 } from "@/lib/inventory/status";
 import { recordLedgerPayment, type LedgerDirection } from "@/app/payments/actions";
+import { computeSaleProfit } from "@/src/services/crm.logic";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -40,6 +41,7 @@ export type SaleRecord = {
   /** Cost-recovery: margin recognized only after payments exceed cost (capped at paper margin). */
   realized_recovery_profit?: number | null;
   actual_commission_received?: number | null;
+  status?: string | null;
 };
 
 export type InventorySaleOption = {
@@ -47,6 +49,7 @@ export type InventorySaleOption = {
   sku: string | null;
   product_category: string | null;
   category_meta: Record<string, unknown> | null;
+  size: string | null;
   quantity: number;
   status: string | null;
   scribe_name: string | null;
@@ -63,7 +66,7 @@ export async function fetchInventoryForSales(): Promise<
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, sku, product_category, category_meta, quantity, status, scribe_id")
+      .select("id, sku, product_category, category_meta, size, quantity, status, scribe_id")
       .eq("user_id", user.id)
       .in("status", [...INVENTORY_ACTIVE_STATUSES])
       .order("created_at", { ascending: false });
@@ -80,6 +83,7 @@ export async function fetchInventoryForSales(): Promise<
           sku: (r.sku as string | null) ?? null,
           product_category: (r.product_category as string | null) ?? null,
           category_meta: (r.category_meta as Record<string, unknown> | null) ?? null,
+          size: (r.size as string | null) ?? null,
           quantity: qty,
           status: (r.status as string | null) ?? null,
           scribe_name: null as string | null,
@@ -118,7 +122,7 @@ export async function fetchSales(): Promise<
     const { data, error } = await supabase
       .from("erp_sales")
       .select(
-        "id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit, commission_received, actual_commission_received, quantity, total_price, amount_paid"
+        "id, item_id, buyer_id, sale_price, cost_price, profit, sale_date, notes, created_at, sale_type, item_description, seller_id, investment_id, commission_profit, commission_received, actual_commission_received, quantity, total_price, amount_paid, status"
       )
       .eq("user_id", user.id)
       .order("sale_date", { ascending: false });
@@ -172,16 +176,12 @@ export async function fetchSales(): Promise<
       const extraPaid = paySumBySale.get(r.id) ?? 0;
       const totalPaid = amountPaidRow + extraPaid;
       const remaining = totalPrice - totalPaid;
-      const cost = r.cost_price != null ? Number(r.cost_price) : null;
-      const paperMargin = cost != null ? Math.max(0, totalPrice - cost) : null;
-      let realizedRecovery: number | null = null;
-      if (cost != null) {
-        if (totalPaid > cost) {
-          realizedRecovery = Math.min(totalPaid - cost, paperMargin ?? Number.POSITIVE_INFINITY);
-        } else {
-          realizedRecovery = 0;
-        }
-      }
+      const { realizedRecovery } = computeSaleProfit({
+        sale_type: r.sale_type,
+        cost_price: r.cost_price,
+        total_price: totalPrice,
+        total_paid: totalPaid,
+      });
 
       const acr =
         (r as { actual_commission_received?: unknown }).actual_commission_received != null
@@ -195,7 +195,7 @@ export async function fetchSales(): Promise<
         item_id: r.item_id ?? null,
         buyer_id: r.buyer_id ?? null,
         sale_price: Number(r.sale_price ?? 0),
-        cost_price: cost,
+        cost_price: r.cost_price != null ? Number(r.cost_price) : null,
         profit: r.profit != null ? Number(r.profit) : null,
         sale_date: r.sale_date ?? "",
         notes: r.notes ?? null,
@@ -218,6 +218,7 @@ export async function fetchSales(): Promise<
         buyer_name: r.buyer_id ? contactMap.get(r.buyer_id) ?? undefined : undefined,
         seller_name: r.seller_id ? contactMap.get(r.seller_id) ?? undefined : undefined,
         investment_details: r.investment_id ? investMap.get(r.investment_id) ?? undefined : undefined,
+        status: (r as { status?: string | null }).status ?? null,
       };
     });
 
@@ -231,6 +232,198 @@ export type CreateSaleParams =
   | { sale_type: "ממלאי"; item_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string }
   | { sale_type: "תיווך"; item_description: string; buyer_id?: string | null; seller_id?: string | null; actual_commission_received: number; notes?: string }
   | { sale_type: "פרויקט חדש"; investment_id: string; buyer_id?: string | null; quantity?: number; sale_price: number; amount_paid?: number; notes?: string };
+
+export type UpdateSaleDetailsPayload = {
+  buyer_id?: string | null;
+  seller_id?: string | null;
+  sale_date?: string;
+  total_price?: number;
+  status?: string | null;
+  notes?: string | null;
+  item_description?: string | null;
+};
+
+async function assertContactOwned(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  contactId: string | null | undefined
+): Promise<boolean> {
+  if (contactId == null || contactId === "") return true;
+  const { data } = await supabase
+    .from("crm_contacts")
+    .select("id")
+    .eq("id", contactId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * עדכון פרטי מכירה (ללא שינוי תשלומים בנפרד — נשארים ב-updateSalePayment / PaymentModal).
+ * תיווך: שינוי total_price מסנכרן שדות עמלה (commission_*).
+ */
+export async function updateSaleDetails(
+  saleId: string,
+  payload: UpdateSaleDetailsPayload
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: sale, error: fetchErr } = await supabase
+      .from("erp_sales")
+      .select(
+        "id, user_id, sale_type, sale_price, quantity, total_price, cost_price, profit, buyer_id, seller_id, sale_date, notes, item_description, commission_profit, commission_received, actual_commission_received, status"
+      )
+      .eq("id", saleId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchErr || !sale) return { success: false, error: "מכירה לא נמצאה" };
+
+    const buyerId =
+      payload.buyer_id !== undefined ? payload.buyer_id || null : (sale.buyer_id as string | null);
+    const sellerId =
+      payload.seller_id !== undefined ? payload.seller_id || null : (sale.seller_id as string | null);
+
+    if (!(await assertContactOwned(supabase, user.id, buyerId))) {
+      return { success: false, error: "קונה לא תקין" };
+    }
+    if (!(await assertContactOwned(supabase, user.id, sellerId))) {
+      return { success: false, error: "מוכר/בעלים לא תקין" };
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (payload.buyer_id !== undefined) patch.buyer_id = payload.buyer_id || null;
+    if (payload.seller_id !== undefined) patch.seller_id = payload.seller_id || null;
+    if (payload.sale_date !== undefined) patch.sale_date = payload.sale_date;
+    if (payload.notes !== undefined) patch.notes = payload.notes?.trim() || null;
+    if (payload.status !== undefined) patch.status = payload.status?.trim() || null;
+    if (payload.item_description !== undefined) {
+      patch.item_description = payload.item_description?.trim() || null;
+    }
+
+    const saleType = (sale.sale_type as string) ?? "ממלאי";
+    const qty = Math.max(1, Math.floor(Number(sale.quantity ?? 1)));
+
+    if (payload.total_price !== undefined) {
+      const newTotal = Number(payload.total_price);
+      if (Number.isNaN(newTotal) || newTotal < 0) {
+        return { success: false, error: "מחיר כולל לא תקין" };
+      }
+
+      if (saleType === "תיווך") {
+        patch.total_price = newTotal;
+        patch.sale_price = newTotal;
+        patch.profit = newTotal;
+        patch.commission_profit = newTotal;
+        patch.commission_received = newTotal;
+        patch.actual_commission_received = newTotal;
+      } else if (saleType === "פרויקט חדש") {
+        patch.total_price = newTotal;
+        patch.sale_price = newTotal;
+        const cost = sale.cost_price != null ? Number(sale.cost_price) : 0;
+        patch.profit = newTotal - cost;
+      } else {
+        patch.total_price = newTotal;
+        const unit = qty > 0 ? newTotal / qty : newTotal;
+        patch.sale_price = unit;
+        const cost = sale.cost_price != null ? Number(sale.cost_price) : null;
+        patch.profit = cost != null ? newTotal - cost : null;
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { success: false, error: "אין שדות לעדכון" };
+    }
+
+    const { error: upErr } = await supabase.from("erp_sales").update(patch).eq("id", saleId).eq("user_id", user.id);
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    revalidatePath("/sales");
+    revalidatePath("/inventory");
+    revalidatePath("/investments");
+    revalidatePath("/crm");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function updateSaleCoreDetails(
+  saleId: string,
+  updates: { sale_price?: number; quantity?: number; notes?: string; sale_date?: string }
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: sale, error: fetchErr } = await supabase
+      .from("erp_sales")
+      .select("id, sale_type, sale_price, quantity, total_price, cost_price")
+      .eq("id", saleId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchErr || !sale) return { success: false, error: "מכירה לא נמצאה" };
+
+    const patch: Record<string, unknown> = {};
+    if (updates.notes !== undefined) patch.notes = updates.notes.trim() || null;
+    if (updates.sale_date !== undefined) patch.sale_date = updates.sale_date;
+
+    const newPrice = updates.sale_price !== undefined ? Number(updates.sale_price) : null;
+    const newQty   = updates.quantity   !== undefined ? Math.max(1, Math.floor(Number(updates.quantity))) : null;
+
+    if (newPrice !== null && (Number.isNaN(newPrice) || newPrice < 0)) {
+      return { success: false, error: "מחיר ליחידה לא תקין" };
+    }
+
+    const resolvedPrice = newPrice  ?? Number(sale.sale_price ?? 0);
+    const resolvedQty   = newQty    ?? Math.max(1, Math.floor(Number(sale.quantity ?? 1)));
+
+    if (newPrice !== null || newQty !== null) {
+      patch.sale_price  = resolvedPrice;
+      patch.quantity    = resolvedQty;
+      const newTotal    = resolvedPrice * resolvedQty;
+      patch.total_price = newTotal;
+
+      const saleType = (sale.sale_type as string) ?? "ממלאי";
+      if (saleType === "תיווך") {
+        patch.profit = newTotal;
+        patch.commission_profit = newTotal;
+        patch.commission_received = newTotal;
+        patch.actual_commission_received = newTotal;
+      } else {
+        const cost = sale.cost_price != null ? Number(sale.cost_price) : null;
+        patch.profit = cost != null ? newTotal - cost : null;
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { success: false, error: "אין שדות לעדכון" };
+    }
+
+    const { error: upErr } = await supabase
+      .from("erp_sales")
+      .update(patch)
+      .eq("id", saleId)
+      .eq("user_id", user.id);
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    revalidatePath("/sales");
+    revalidatePath("/inventory");
+    revalidatePath("/crm");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
 
 export async function addSalePayment(
   saleId: string,
@@ -396,6 +589,7 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
     revalidatePath("/sales");
     revalidatePath("/inventory");
     revalidatePath("/investments");
+    revalidatePath("/crm");
     revalidatePath("/");
     return { success: true };
   } catch (err) {

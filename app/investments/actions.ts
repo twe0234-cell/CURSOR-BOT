@@ -4,6 +4,7 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { generateInventorySku } from "@/lib/inventory/sku";
 import { recordLedgerPayment, type LedgerDirection } from "@/app/payments/actions";
+import { getDealFinancials } from "@/src/services/crm.logic";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -405,10 +406,21 @@ export async function addInvestmentLedgerPayment(
 
     if (!inv) return { success: false, error: "השקעה לא נמצאה" };
 
+    const { totalCost } = getDealFinancials({
+      total_price: inv.total_agreed_price,
+      amount_paid: inv.amount_paid,
+    });
+
     const paid = Number(inv.amount_paid ?? 0);
     const delta = direction === "outgoing" ? -amount : amount;
     const newPaid = paid + delta;
     if (newPaid < 0) return { success: false, error: "הסכום חורג מהיתרה שנרשמה" };
+    if (direction === "incoming" && newPaid > totalCost) {
+      return {
+        success: false,
+        error: `הסכום חורג מסכום ההשקעה הכולל (${totalCost.toLocaleString("he-IL")} ₪)`,
+      };
+    }
 
     const { error: upErr } = await supabase
       .from("erp_investments")
@@ -455,6 +467,73 @@ export async function addInvestmentLedgerPayment(
 /** @deprecated Prefer PaymentModal + addInvestmentLedgerPayment (writes ledger). */
 export async function addPayment(investmentId: string, amount: number): Promise<ActionResult> {
   return addInvestmentLedgerPayment(investmentId, amount, undefined, null, null, "incoming");
+}
+
+/** Updates core investment fields (item details, quantity, cost, dates, notes). */
+export async function updateInvestmentDetails(
+  investmentId: string,
+  data: {
+    scribe_id?: string | null;
+    item_details?: string | null;
+    quantity?: number;
+    cost_per_unit?: number;
+    target_date?: string | null;
+    notes?: string | null;
+  }
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+    if (data.scribe_id !== undefined) patch.scribe_id = data.scribe_id || null;
+    if (data.item_details !== undefined) patch.item_details = data.item_details?.trim() || null;
+    if (data.target_date !== undefined) patch.target_date = data.target_date || null;
+    if (data.notes !== undefined) patch.notes = data.notes?.trim() || null;
+
+    if (data.quantity !== undefined || data.cost_per_unit !== undefined) {
+      const { data: inv } = await supabase
+        .from("erp_investments")
+        .select("quantity, cost_per_unit")
+        .eq("id", investmentId)
+        .eq("user_id", user.id)
+        .single();
+      if (!inv) return { success: false, error: "השקעה לא נמצאה" };
+
+      const qty =
+        data.quantity !== undefined ? data.quantity : Math.max(1, Number(inv.quantity ?? 1));
+      const cpu =
+        data.cost_per_unit !== undefined
+          ? data.cost_per_unit
+          : Number(inv.cost_per_unit ?? 0);
+
+      if (qty <= 0) return { success: false, error: "הכמות חייבת להיות חיובית" };
+      if (cpu < 0) return { success: false, error: "עלות ליחידה לא יכולה להיות שלילית" };
+
+      patch.quantity = qty;
+      patch.cost_per_unit = cpu;
+      patch.total_agreed_price = qty * cpu;
+    }
+
+    if (Object.keys(patch).length <= 1) {
+      return { success: false, error: "אין שדות לעדכון" };
+    }
+
+    const { error } = await supabase
+      .from("erp_investments")
+      .update(patch)
+      .eq("id", investmentId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/investments");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
 }
 
 /** Create inventory from an active investment; mark investment delivered_to_inventory. */

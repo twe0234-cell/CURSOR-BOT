@@ -30,6 +30,7 @@ import {
   createInvestment,
   bulkImportInvestments,
   updateInvestment,
+  updateInvestmentDetails,
   getShareLink,
   moveInvestmentToInventory,
   type InvestmentRecord,
@@ -37,7 +38,8 @@ import {
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon } from "lucide-react";
+import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon, PencilIcon } from "lucide-react";
+import { handleNumericChange } from "@/lib/numericInput";
 
 export default function InvestmentsClient() {
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
@@ -54,6 +56,15 @@ export default function InvestmentsClient() {
   const [detailDeductions, setDetailDeductions] = useState("");
   const [detailDocLoading, setDetailDocLoading] = useState(false);
   const [movingToInventoryId, setMovingToInventoryId] = useState<string | null>(null);
+
+  // Edit mode state
+  const [editOpen, setEditOpen] = useState<string | null>(null);
+  const [editScribeId, setEditScribeId] = useState("");
+  const [editItemDetails, setEditItemDetails] = useState("");
+  const [editQuantity, setEditQuantity] = useState("1");
+  const [editCostPerUnit, setEditCostPerUnit] = useState("");
+  const [editTargetDate, setEditTargetDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   const loadData = () => {
     fetchInvestments().then((r) => {
@@ -104,13 +115,15 @@ export default function InvestmentsClient() {
 
   const openDetail = (inv: InvestmentRecord) => {
     setDetailOpen(inv.id);
-    setDetailDeductions(String(inv.deductions ?? 0));
+    // Show blank instead of "0" so the field invites user input
+    setDetailDeductions(inv.deductions ? String(inv.deductions) : "");
   };
 
   const handleSaveDeductions = async () => {
     if (!detailOpen) return;
-    const val = parseFloat(detailDeductions);
-    if (isNaN(val) || val < 0) {
+    // "" means "no deductions" → treat as 0; negative values are invalid
+    const val = parseFloat(detailDeductions) || 0;
+    if (val < 0) {
       toast.error("הזן ערך תקין");
       return;
     }
@@ -162,6 +175,47 @@ export default function InvestmentsClient() {
     setMovingToInventoryId(null);
     if (res.success) {
       toast.success("הפריט נוצר במלאי וההשקעה סומנה כנמסרה");
+      loadData();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const openEdit = (inv: InvestmentRecord) => {
+    setEditOpen(inv.id);
+    setEditScribeId(inv.scribe_id ?? "");
+    setEditItemDetails(inv.item_details ?? "");
+    setEditQuantity(String(inv.quantity));
+    setEditCostPerUnit(inv.cost_per_unit != null ? String(inv.cost_per_unit) : "");
+    setEditTargetDate(inv.target_date ? inv.target_date.slice(0, 10) : "");
+    setEditNotes(inv.notes ?? "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editOpen) return;
+    const qty = parseFloat(editQuantity);
+    const cpu = parseFloat(editCostPerUnit);
+    if (isNaN(qty) || qty <= 0) {
+      toast.error("הזן כמות חיובית");
+      return;
+    }
+    if (isNaN(cpu) || cpu < 0) {
+      toast.error("הזן עלות ליחידה תקינה");
+      return;
+    }
+    setLoading(true);
+    const res = await updateInvestmentDetails(editOpen, {
+      scribe_id: editScribeId || null,
+      item_details: editItemDetails || null,
+      quantity: qty,
+      cost_per_unit: cpu,
+      target_date: editTargetDate || null,
+      notes: editNotes || null,
+    });
+    setLoading(false);
+    if (res.success) {
+      toast.success("ההשקעה עודכנה");
+      setEditOpen(null);
       loadData();
     } else {
       toast.error(res.error);
@@ -294,6 +348,15 @@ export default function InvestmentsClient() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            onClick={() => openEdit(inv)}
+                            className="rounded-lg h-8"
+                            title="ערוך פרטים"
+                          >
+                            <PencilIcon className="size-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => openDetail(inv)}
                             className="rounded-lg h-8"
                             title="פרטי פרויקט"
@@ -357,7 +420,7 @@ export default function InvestmentsClient() {
                   min={0.01}
                   step={0.01}
                   value={newQuantity}
-                  onChange={(e) => setNewQuantity(e.target.value)}
+                  onChange={handleNumericChange(setNewQuantity)}
                   placeholder="1"
                   className="rounded-xl"
                 />
@@ -368,7 +431,7 @@ export default function InvestmentsClient() {
                   type="number"
                   min={0}
                   value={newCostPerUnit}
-                  onChange={(e) => setNewCostPerUnit(e.target.value)}
+                  onChange={handleNumericChange(setNewCostPerUnit)}
                   placeholder="0"
                   className="rounded-xl"
                 />
@@ -419,6 +482,107 @@ export default function InvestmentsClient() {
         onSuccess={loadData}
       />
 
+      {/* Edit Investment Dialog */}
+      <Dialog open={!!editOpen} onOpenChange={(o) => !o && setEditOpen(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>עריכת השקעה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">סופר</label>
+              <UnifiedScribeSelect
+                value={editScribeId || null}
+                onChange={(s) => setEditScribeId(s?.id ?? "")}
+                placeholder="בחר סופר"
+                className="w-full [&>div]:h-10 [&>div]:rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">פרטי פריט</label>
+              <Input
+                value={editItemDetails}
+                onChange={(e) => setEditItemDetails(e.target.value)}
+                placeholder="ספר תורה, סופר X..."
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold">כמות</label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={editQuantity}
+                  onChange={handleNumericChange(setEditQuantity)}
+                  placeholder="1"
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold">עלות ליחידה (₪)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editCostPerUnit}
+                  onChange={handleNumericChange(setEditCostPerUnit)}
+                  placeholder="0"
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            {(() => {
+              const q = parseFloat(editQuantity);
+              const c = parseFloat(editCostPerUnit);
+              if (!isNaN(q) && !isNaN(c) && q > 0 && c >= 0) {
+                return (
+                  <p className="text-sm font-medium text-slate-700">
+                    ס״ה השקעה: {(q * c).toLocaleString("he-IL")} ₪
+                  </p>
+                );
+              }
+              return null;
+            })()}
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">תאריך יעד</label>
+              <Input
+                type="date"
+                value={editTargetDate}
+                onChange={(e) => setEditTargetDate(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">הערות</label>
+              <Input
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={loading}
+                className="flex-1 rounded-xl"
+              >
+                {loading ? "שומר..." : "שמור שינויים"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditOpen(null)}
+                className="rounded-xl"
+              >
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!detailOpen} onOpenChange={(o) => !o && setDetailOpen(null)}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
@@ -442,7 +606,7 @@ export default function InvestmentsClient() {
                       type="number"
                       min={0}
                       value={detailDeductions}
-                      onChange={(e) => setDetailDeductions(e.target.value)}
+                      onChange={handleNumericChange(setDetailDeductions)}
                       placeholder="0"
                       className="rounded-xl"
                     />
