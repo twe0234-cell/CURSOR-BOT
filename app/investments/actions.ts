@@ -414,10 +414,12 @@ export async function addInvestmentLedgerPayment(
     });
 
     const paid = Number(inv.amount_paid ?? 0);
-    const delta = direction === "outgoing" ? -amount : amount;
+    // Investments: "outgoing" = we pay the scribe → amount_paid increases.
+    // "incoming" = scribe refunds us → amount_paid decreases.
+    const delta = direction === "outgoing" ? amount : -amount;
     const newPaid = paid + delta;
     if (newPaid < 0) return { success: false, error: "הסכום חורג מהיתרה שנרשמה" };
-    if (direction === "incoming" && newPaid > totalCost) {
+    if (direction === "outgoing" && newPaid > totalCost) {
       return {
         success: false,
         error: `הסכום חורג מסכום ההשקעה הכולל (${totalCost.toLocaleString("he-IL")} ₪)`,
