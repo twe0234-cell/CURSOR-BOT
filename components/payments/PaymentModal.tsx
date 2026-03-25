@@ -23,6 +23,7 @@ export type PaymentModalProps = {
   entityId: string | null;
   entityType: LedgerEntityType;
   defaultDirection?: LedgerDirection;
+  hideDirection?: boolean;
   title?: string;
   onSuccess?: () => void;
 };
@@ -33,6 +34,7 @@ export function PaymentModal({
   entityId,
   entityType,
   defaultDirection = "incoming",
+  hideDirection = false,
   title = "רישום תשלום",
   onSuccess,
 }: PaymentModalProps) {
@@ -85,17 +87,19 @@ export function PaymentModal({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">כיוון</label>
-            <select
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as LedgerDirection)}
-              className="w-full rounded-xl border px-3 py-2 text-sm"
-            >
-              <option value="incoming">נכנס (התקבל אצלנו)</option>
-              <option value="outgoing">יוצא (שילמנו)</option>
-            </select>
-          </div>
+          {!hideDirection && (
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">כיוון</label>
+              <select
+                value={direction}
+                onChange={(e) => setDirection(e.target.value as LedgerDirection)}
+                className="w-full rounded-xl border px-3 py-2 text-sm"
+              >
+                <option value="incoming">נכנס (התקבל אצלנו)</option>
+                <option value="outgoing">יוצא (שילמנו)</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-semibold">סכום (₪)</label>
             <Input

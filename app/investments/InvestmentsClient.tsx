@@ -486,7 +486,9 @@ export default function InvestmentsClient() {
         onOpenChange={(o) => !o && setPaymentOpen(null)}
         entityId={paymentOpen}
         entityType="investment"
-        title="רישום תשלום — השקעה"
+        defaultDirection="outgoing"
+        hideDirection
+        title="רישום תשלום לסופר"
         onSuccess={loadData}
       />
 
