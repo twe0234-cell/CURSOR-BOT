@@ -136,3 +136,12 @@ export async function addDocument(
   }
   return result;
 }
+
+export async function upsertSoferProfile(
+  contactId: string,
+  fields: Parameters<typeof crm.upsertSoferProfile>[1]
+) {
+  const result = await crm.upsertSoferProfile(contactId, fields);
+  if (result.success) revalidatePath(`/crm/${contactId}`);
+  return result;
+}

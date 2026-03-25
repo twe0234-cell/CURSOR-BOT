@@ -1212,6 +1212,14 @@ export type ContactDetailPageData = {
     handwriting_image_url: string | null;
   };
   contactHistory: Array<{ id: string; body: string; created_at: string; follow_up_date: string | null }>;
+  soferProfile: {
+    writing_style: string | null;
+    writing_level: string | null;
+    daily_page_capacity: number | null;
+    pricing_notes: string | null;
+    writing_constraints: string | null;
+    past_writings: string | null;
+  } | null;
   debtToContact: number;
   debtFromContact: number;
   futureCommitment: number;
@@ -1280,6 +1288,26 @@ export type ContactDetailPageData = {
  * then assembles the final `ContactDetailPageData` payload.
  * No query logic lives here.
  */
+export async function upsertSoferProfile(
+  contactId: string,
+  fields: {
+    writing_style?: string | null;
+    writing_level?: string | null;
+    daily_page_capacity?: number | null;
+    pricing_notes?: string | null;
+    writing_constraints?: string | null;
+    past_writings?: string | null;
+  }
+): Promise<{ success: true } | { success: false; error: string }> {
+  const { supabase, user } = await getAuthClient();
+  if (!user) return { success: false, error: "יש להתחבר" };
+  const { error } = await supabase
+    .from("crm_sofer_profiles")
+    .upsert({ contact_id: contactId, ...fields }, { onConflict: "contact_id" });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
 export async function loadContactDetailPage(
   id: string
 ): Promise<
@@ -1296,12 +1324,17 @@ export async function loadContactDetailPage(
     return { success: false, error: "לא נמצא" };
   }
 
-  // 2. Fetch CRM activity (history, transactions, docs, logs) and
-  //    ERP data (inventory, investments, sales) in parallel.
-  const [crmActivity, erpData] = await Promise.all([
+  // 2. Fetch CRM activity, ERP data, and sofer profile in parallel.
+  const [crmActivity, erpData, soferRes] = await Promise.all([
     fetchCrmActivity(supabase, id),
     fetchErpData(supabase, id, user.id),
+    supabase
+      .from("crm_sofer_profiles")
+      .select("writing_style, writing_level, daily_page_capacity, pricing_notes, writing_constraints, past_writings")
+      .eq("contact_id", id)
+      .maybeSingle(),
   ]);
+  const soferProfile = soferRes.data ?? null;
 
   const { txRows, docRows, logRows, contactHistoryRows } = crmActivity;
   const { inventoryRows, investmentRowsForBalance, buyerRows, sellerRows, allInvestmentRows } = erpData;
@@ -1384,6 +1417,16 @@ export async function loadContactDetailPage(
         created_at: (h.created_at as string) ?? "",
         follow_up_date: (h.follow_up_date as string | null) ?? null,
       })),
+      soferProfile: soferProfile
+        ? {
+            writing_style: soferProfile.writing_style ?? null,
+            writing_level: soferProfile.writing_level ?? null,
+            daily_page_capacity: soferProfile.daily_page_capacity ? Number(soferProfile.daily_page_capacity) : null,
+            pricing_notes: soferProfile.pricing_notes ?? null,
+            writing_constraints: soferProfile.writing_constraints ?? null,
+            past_writings: soferProfile.past_writings ?? null,
+          }
+        : null,
       debtToContact,
       debtFromContact,
       futureCommitment,

@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PenLine, Plus, CalendarCheck, ZoomIn } from "lucide-react";
+import Link from "next/link";
+import { PenLine, Plus, CalendarCheck, ZoomIn, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +33,14 @@ type Props = {
 export default function SoferimClient({ initialRows }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
+  const [filterLevel, setFilterLevel] = useState("");
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
+
+  const visibleRows = filterLevel
+    ? rows.filter((r) => (r.writing_level ?? "").includes(filterLevel))
+    : rows;
   const [modalOpen, setModalOpen] = useState(false);
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"existing" | "new">("existing");
@@ -182,22 +188,30 @@ export default function SoferimClient({ initialRows }: Props) {
             אנשי קשר מסוג סופר — תיק מקצועי, דוגמת כתב ומעקב קשר
           </p>
         </div>
-        <Button
-          onClick={openModal}
-          className="bg-sky-600 hover:bg-sky-700 text-white shrink-0"
-        >
-          <Plus className="size-4 ml-1" />
-          צור תיק סופר
-        </Button>
+        <div className="flex gap-2 items-center flex-wrap">
+          <Input
+            placeholder="סנן לפי רמת כתב..."
+            value={filterLevel}
+            onChange={(e) => setFilterLevel(e.target.value)}
+            className="w-44 h-9 text-sm"
+          />
+          <Button
+            onClick={openModal}
+            className="bg-sky-600 hover:bg-sky-700 text-white shrink-0"
+          >
+            <Plus className="size-4 ml-1" />
+            צור תיק סופר
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <p className="text-muted-foreground col-span-full text-center py-12">
             אין סופרים ב-CRM. הוסף איש קשר מסוג סופר ב-CRM או צור תיק חדש כאן.
           </p>
         ) : (
-          rows.map((row) => (
+          visibleRows.map((row) => (
             <Card
               key={row.contact_id}
               className="rounded-2xl border border-sky-100 bg-white shadow-sm overflow-hidden"
@@ -266,14 +280,21 @@ export default function SoferimClient({ initialRows }: Props) {
                   </Button>
                 </div>
 
-                <Button
-                  variant="secondary"
-                  className="w-full bg-sky-50 text-sky-800 hover:bg-sky-100"
-                  size="sm"
-                  onClick={() => openEdit(row)}
-                >
-                  ערוך תיק
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    className="flex-1 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                    size="sm"
+                    onClick={() => openEdit(row)}
+                  >
+                    ערוך תיק
+                  </Button>
+                  <Link href={`/crm/${row.contact_id}`}>
+                    <Button variant="outline" size="sm" className="h-9 px-2.5" title="כרטיס CRM">
+                      <ExternalLink className="size-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           ))

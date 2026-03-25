@@ -33,7 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { updateCrmContact, addTransaction, addDocument, addContactHistoryNote } from "../actions";
+import { updateCrmContact, addTransaction, addDocument, addContactHistoryNote, upsertSoferProfile } from "../actions";
 
 type Contact = {
   id: string;
@@ -63,8 +63,18 @@ export type LedgerPaymentRow = {
   summary: string;
 };
 
+type SoferProfile = {
+  writing_style: string | null;
+  writing_level: string | null;
+  daily_page_capacity: number | null;
+  pricing_notes: string | null;
+  writing_constraints: string | null;
+  past_writings: string | null;
+} | null;
+
 type Props = {
   contact: Contact;
+  soferProfile: SoferProfile;
   transactions: Array<{ id: string; amount: number; type: string; description: string | null; date: string }>;
   documents: Array<{ id: string; file_url: string; doc_type: string; name: string | null }>;
   logs: Array<{ id: string; channel: string; content: string | null; timestamp: string }>;
@@ -118,6 +128,7 @@ function roleBadges(type: string) {
 
 export default function ContactDetailClient({
   contact: initialContact,
+  soferProfile: initialSoferProfile,
   transactions: initialTx,
   documents: initialDocs,
   logs,
@@ -136,6 +147,17 @@ export default function ContactDetailClient({
   const [transactions, setTransactions] = useState(initialTx);
   const [documents, setDocuments] = useState(initialDocs);
   const [history, setHistory] = useState(initialHistory);
+  const [soferProfile, setSoferProfile] = useState(initialSoferProfile);
+  const [editSofer, setEditSofer] = useState(false);
+  const [soferForm, setSoferForm] = useState({
+    writing_style: initialSoferProfile?.writing_style ?? "",
+    writing_level: initialSoferProfile?.writing_level ?? "",
+    daily_page_capacity: initialSoferProfile?.daily_page_capacity?.toString() ?? "",
+    pricing_notes: initialSoferProfile?.pricing_notes ?? "",
+    writing_constraints: initialSoferProfile?.writing_constraints ?? "",
+    past_writings: initialSoferProfile?.past_writings ?? "",
+  });
+  const [soferLoading, setSoferLoading] = useState(false);
 
   const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + t.amount, 0);
   const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
@@ -201,6 +223,32 @@ export default function ContactDetailClient({
       setNoteBody("");
       setNoteFollowUp("");
       toast.success("הערה נשמרה");
+    } else toast.error(res.error);
+  };
+
+  const handleSaveSofer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSoferLoading(true);
+    const res = await upsertSoferProfile(contact.id, {
+      writing_style: soferForm.writing_style || null,
+      writing_level: soferForm.writing_level || null,
+      daily_page_capacity: soferForm.daily_page_capacity ? Number(soferForm.daily_page_capacity) : null,
+      pricing_notes: soferForm.pricing_notes || null,
+      writing_constraints: soferForm.writing_constraints || null,
+      past_writings: soferForm.past_writings || null,
+    });
+    setSoferLoading(false);
+    if (res.success) {
+      setSoferProfile({
+        writing_style: soferForm.writing_style || null,
+        writing_level: soferForm.writing_level || null,
+        daily_page_capacity: soferForm.daily_page_capacity ? Number(soferForm.daily_page_capacity) : null,
+        pricing_notes: soferForm.pricing_notes || null,
+        writing_constraints: soferForm.writing_constraints || null,
+        past_writings: soferForm.past_writings || null,
+      });
+      setEditSofer(false);
+      toast.success("פרופיל סופר עודכן");
     } else toast.error(res.error);
   };
 
@@ -401,6 +449,12 @@ export default function ContactDetailClient({
             <FileTextIcon className="size-4 ml-1" />
             הערות ויומן
           </TabsTrigger>
+          {contact.type === "Scribe" && (
+            <TabsTrigger value="sofer" className="rounded-lg data-[state=active]:bg-white">
+              <PencilIcon className="size-4 ml-1" />
+              פרופיל סופר
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="ledger" className="space-y-4">
@@ -729,6 +783,65 @@ export default function ContactDetailClient({
                   </li>
                 ))}
               </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="sofer" className="space-y-4">
+          <Card className="border-teal-100">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <h3 className="font-semibold">פרופיל מקצועי — סופר</h3>
+              <Button variant="outline" size="sm" onClick={() => setEditSofer((v) => !v)}>
+                <PencilIcon className="size-4 ml-1" />
+                {editSofer ? "ביטול" : "ערוך"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {editSofer ? (
+                <form onSubmit={handleSaveSofer} className="space-y-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">סגנון כתיבה</label>
+                      <Input value={soferForm.writing_style} onChange={(e) => setSoferForm((f) => ({ ...f, writing_style: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">רמת כתב</label>
+                      <Input value={soferForm.writing_level} onChange={(e) => setSoferForm((f) => ({ ...f, writing_level: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">קיבולת יומית (עמודים)</label>
+                      <Input type="number" value={soferForm.daily_page_capacity} onChange={(e) => setSoferForm((f) => ({ ...f, daily_page_capacity: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">הערות תמחור</label>
+                      <Input value={soferForm.pricing_notes} onChange={(e) => setSoferForm((f) => ({ ...f, pricing_notes: e.target.value }))} className="mt-1" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">אילוצי כתיבה</label>
+                    <textarea value={soferForm.writing_constraints} onChange={(e) => setSoferForm((f) => ({ ...f, writing_constraints: e.target.value }))} rows={2} className="w-full mt-1 rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">כתבי עבר</label>
+                    <textarea value={soferForm.past_writings} onChange={(e) => setSoferForm((f) => ({ ...f, past_writings: e.target.value }))} rows={3} className="w-full mt-1 rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                  </div>
+                  <Button type="submit" disabled={soferLoading} size="sm">
+                    {soferLoading ? "שומר..." : "שמור"}
+                  </Button>
+                </form>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-xs text-muted-foreground">סגנון כתיבה</span><p className="font-medium">{soferProfile?.writing_style ?? "—"}</p></div>
+                  <div><span className="text-xs text-muted-foreground">רמת כתב</span><p className="font-medium">{soferProfile?.writing_level ?? "—"}</p></div>
+                  <div><span className="text-xs text-muted-foreground">קיבולת יומית</span><p className="font-medium">{soferProfile?.daily_page_capacity ?? "—"} עמ׳</p></div>
+                  <div><span className="text-xs text-muted-foreground">הערות תמחור</span><p className="font-medium">{soferProfile?.pricing_notes ?? "—"}</p></div>
+                  {soferProfile?.writing_constraints && (
+                    <div className="col-span-2"><span className="text-xs text-muted-foreground">אילוצי כתיבה</span><p className="whitespace-pre-wrap">{soferProfile.writing_constraints}</p></div>
+                  )}
+                  {soferProfile?.past_writings && (
+                    <div className="col-span-2"><span className="text-xs text-muted-foreground">כתבי עבר</span><p className="whitespace-pre-wrap">{soferProfile.past_writings}</p></div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
