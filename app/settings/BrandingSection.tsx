@@ -16,7 +16,7 @@ export default function BrandingSection({ currentLogoUrl }: Props) {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.match(/image\/(png|ico|x-icon)/)) {
+    if (!file.type.match(/image\/(png|ico|x-icon|vnd\.microsoft\.icon)/) && !file.name.match(/\.(png|ico)$/i)) {
       toast.error("נא להעלות קובץ PNG או ICO");
       return;
     }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { logError } from "@/lib/logger";
 import { generateSku, crmSkuPrefix } from "@/lib/sku";
 import { soferProfileUpsertSchema, newScribeContactSchema } from "@/lib/validations/soferim";
+import { resolveContentType } from "@/lib/upload";
 
 const MEDIA_BUCKET = "media";
 const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
@@ -131,7 +132,7 @@ export async function uploadSoferSampleImage(formData: FormData): Promise<Upload
     const path = `sofer-samples/${user.id}/${Date.now()}.${ext}`;
 
     const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, blob, {
-      contentType: raw instanceof File && raw.type ? raw.type : "image/jpeg",
+      contentType: resolveContentType(raw as File | Blob),
       upsert: true,
     });
 

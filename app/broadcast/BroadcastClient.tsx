@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
-import { greenApiDispatchSpacingDelayMs } from "@/lib/whatsapp/greenApi";
 import {
   fetchTargetsByTags,
   fetchTargetsByGroupIds,
@@ -22,6 +20,7 @@ import {
 } from "./actions";
 import { SendIcon, VariableIcon, SmileIcon, CheckCircleIcon, XCircleIcon, HistoryIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isImageFile } from "@/lib/upload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import dynamic from "next/dynamic";
 
@@ -130,16 +129,16 @@ export default function BroadcastClient({
     setEmojiOpen(false);
   };
 
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-  const handleSelectedImageFile = async (file: File, clearInput?: HTMLInputElement | null) => {
-    if (!isLikelyImageFile(file)) {
-      toast.error("נא לבחור קובץ תמונה (כולל HEIC מהאייפון)");
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!isImageFile(file)) {
+      toast.error("נא לבחור קובץ תמונה");
       return;
     }
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (file.size > 5 * 1024 * 1024) {
       toast.error("התמונה חורגת ממגבלת 5MB");
-      if (clearInput) clearInput.value = "";
+      e.target.value = "";
       return;
     }
     setImageFile(file);
@@ -163,21 +162,8 @@ export default function BroadcastClient({
       setImageFile(null);
     } finally {
       setUploading(false);
-      if (clearInput) clearInput.value = "";
+      e.target.value = "";
     }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await handleSelectedImageFile(file, e.target);
-  };
-
-  const handleImageDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const file = e.dataTransfer.files?.[0];
-    if (file) void handleSelectedImageFile(file);
   };
 
   const handlePreviewCount = async () => {
@@ -264,11 +250,11 @@ export default function BroadcastClient({
       const finalScribe = scribeCode.trim() || undefined;
 
       const progressInterval = 5;
-      let sendIndex = 0;
-      for (const target of targets) {
-        if (sendIndex % progressInterval === 0 || sendIndex === targets.length - 1) {
-          setSendProgress({ current: sendIndex + 1, total });
+      for (let i = 0; i < targets.length; i++) {
+        if (i % progressInterval === 0 || i === targets.length - 1) {
+          setSendProgress({ current: i + 1, total });
         }
+        const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };
           let msg = messageText.trim();
@@ -292,10 +278,9 @@ export default function BroadcastClient({
           failed++;
           errors.push(`${target.wa_chat_id}: ${msg}`);
         }
-        if (sendIndex < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, greenApiDispatchSpacingDelayMs()));
+        if (i < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, 2000));
         }
-        sendIndex++;
       }
 
       setSendProgress(null);
@@ -512,25 +497,13 @@ export default function BroadcastClient({
             <label className="mb-2 block text-sm font-medium text-slate-700">
               תמונה (אופציונלי)
             </label>
-            <div
-              className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-6 transition-colors hover:border-teal-200 hover:bg-teal-50/20"
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onDrop={handleImageDrop}
-            >
             <input
               type="file"
-              accept="image/*,.heic,.heif,image/heic,image/heif"
+              accept="image/*"
               onChange={handleFileChange}
               disabled={uploading}
               className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-teal-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-teal-700 hover:file:bg-teal-100"
             />
-            <p className="mt-2 text-xs text-muted-foreground">
-              ניתן לגרור לכאן קובץ מהמחשב או מהאייפון (כולל HEIC)
-            </p>
-            </div>
             {uploading && (
               <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>
             )}

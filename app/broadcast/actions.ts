@@ -3,16 +3,7 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logError, logInfo } from "@/lib/logger";
-import {
-  inferStorageExtension,
-  resolveUploadContentType,
-} from "@/lib/broadcast/imageFile";
-import {
-  fileNameForImageUrl,
-  greenApiDispatchSpacingDelayMs,
-  interpretGreenApiSendResult,
-  normalizeWhatsAppChatId,
-} from "@/lib/whatsapp/greenApi";
+import { resolveContentType } from "@/lib/upload";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -24,11 +15,15 @@ export type UploadResult =
 /** העלאת קובץ ל-Supabase Storage (bucket: media) */
 export async function uploadMedia(formData: FormData): Promise<UploadResult> {
   try {
-    const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File)) {
+    const raw = formData.get("file");
+    if (raw == null || typeof raw !== "object") {
       return { success: false, error: "לא נבחר קובץ" };
     }
-    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
+    if (!(raw instanceof Blob)) {
+      return { success: false, error: "קובץ לא תקין" };
+    }
+    const blob = raw as Blob;
+    if (blob.size > IMAGE_SIZE_LIMIT_BYTES) {
       return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
     }
 
@@ -38,14 +33,14 @@ export async function uploadMedia(formData: FormData): Promise<UploadResult> {
       return { success: false, error: "יש להתחבר" };
     }
 
-    const ext = inferStorageExtension(file);
+    const name = raw instanceof File && raw.name ? raw.name : "image.jpg";
+    const ext = name.split(".").pop() || "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
-    const contentType = resolveUploadContentType(file, ext);
 
     const { error } = await supabase.storage
       .from(MEDIA_BUCKET)
-      .upload(path, file, {
-        contentType,
+      .upload(path, blob, {
+        contentType: resolveContentType(raw as File | Blob),
         upsert: true,
       });
 
@@ -184,15 +179,6 @@ export async function sendSingleMessage(
     const creds = await getGreenApiCredentials(user.id);
     if (!creds) return { success: false, error: "הגדר Green API בהגדרות" };
 
-    const chatId = normalizeWhatsAppChatId(waChatId);
-    if (!chatId.includes("@")) {
-      return {
-        success: false,
-        error:
-          "מזהה צ'אט לא תקין (נדרש מספר בפורמט בינלאומי או ...@c.us / ...@g.us)",
-      };
-    }
-
     let message = messageText;
     if (scribeCode?.trim()) {
       message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
@@ -210,25 +196,23 @@ export async function sendSingleMessage(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chatId,
+          chatId: waChatId,
           urlFile: urlCheck.url,
-          fileName: fileNameForImageUrl(urlCheck.url),
+          fileName: "image.jpg",
           caption: message,
         }),
       });
-      const bodyText = await res.text();
-      const parsed = interpretGreenApiSendResult(res.ok, bodyText);
-      if (!parsed.ok) return { success: false, error: parsed.error };
+      const errBody = await res.text();
+      if (!res.ok) return { success: false, error: errBody || "שגיאה לא ידועה" };
     } else {
       const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`;
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, message }),
+        body: JSON.stringify({ chatId: waChatId, message }),
       });
-      const bodyText = await res.text();
-      const parsed = interpretGreenApiSendResult(res.ok, bodyText);
-      if (!parsed.ok) return { success: false, error: parsed.error };
+      const errBody = await res.text();
+      if (!res.ok) return { success: false, error: errBody || "שגיאה לא ידועה" };
     }
     return { success: true };
   } catch (err) {
@@ -354,7 +338,7 @@ export async function fetchTargetsByTags(
     const targets = (data ?? [])
       .filter((r) => r?.wa_chat_id)
       .map((r) => ({
-        wa_chat_id: normalizeWhatsAppChatId(String(r.wa_chat_id)),
+        wa_chat_id: String(r.wa_chat_id),
         name: r?.name ?? null,
       }));
 
@@ -398,7 +382,7 @@ export async function fetchTargetsByGroupIds(
     const targets = (data ?? [])
       .filter((r) => r?.wa_chat_id)
       .map((r) => ({
-        wa_chat_id: normalizeWhatsAppChatId(String(r.wa_chat_id)),
+        wa_chat_id: String(r.wa_chat_id),
         name: r?.name ?? null,
       }));
 
@@ -463,8 +447,8 @@ export async function dispatchBroadcast(
       validatedImageUrl = urlCheck.url;
     }
 
-    let index = 0;
-    for (const target of targets) {
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
       try {
         const vars = { Name: target.name ?? "", name: target.name ?? "" };
         let message = replaceVariables(messageText, vars);
@@ -472,30 +456,22 @@ export async function dispatchBroadcast(
           message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
         }
 
-        const chatId = normalizeWhatsAppChatId(target.wa_chat_id);
-        if (!chatId.includes("@")) {
-          const errMsg =
-            "מזהה צ'אט לא תקין (נדרש מספר בינלאומי או ...@c.us / ...@g.us)";
-          errors.push(`${target.wa_chat_id}: ${errMsg}`);
-          failed++;
-          results.push({ target: target.wa_chat_id, success: false, error: errMsg });
-        } else if (validatedImageUrl) {
+        if (validatedImageUrl) {
           const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendFileByUrl/${creds.token}`;
           const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              chatId,
+              chatId: target.wa_chat_id,
               urlFile: validatedImageUrl,
-              fileName: fileNameForImageUrl(validatedImageUrl),
+              fileName: "image.jpg",
               caption: message,
             }),
           });
 
-          const bodyText = await res.text();
-          const parsed = interpretGreenApiSendResult(res.ok, bodyText);
-          if (!parsed.ok) {
-            const errMsg = parsed.error || "שגיאה לא ידועה";
+          const errBody = await res.text();
+          if (!res.ok) {
+            const errMsg = errBody || "שגיאה לא ידועה";
             errors.push(`${target.wa_chat_id}: ${errMsg}`);
             failed++;
             results.push({ target: target.wa_chat_id, success: false, error: errMsg });
@@ -509,15 +485,14 @@ export async function dispatchBroadcast(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              chatId,
+              chatId: target.wa_chat_id,
               message,
             }),
           });
 
-          const bodyText = await res.text();
-          const parsed = interpretGreenApiSendResult(res.ok, bodyText);
-          if (!parsed.ok) {
-            const errMsg = parsed.error || "שגיאה לא ידועה";
+          const errBody = await res.text();
+          if (!res.ok) {
+            const errMsg = errBody || "שגיאה לא ידועה";
             errors.push(`${target.wa_chat_id}: ${errMsg}`);
             failed++;
             results.push({ target: target.wa_chat_id, success: false, error: errMsg });
@@ -534,10 +509,9 @@ export async function dispatchBroadcast(
         results.push({ target: target.wa_chat_id, success: false, error: msg });
       }
 
-      if (index < targets.length - 1) {
-        await sleep(greenApiDispatchSpacingDelayMs());
+      if (i < targets.length - 1) {
+        await sleep(2000);
       }
-      index++;
     }
 
     await supabase.from("broadcast_logs").insert({

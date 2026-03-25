@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { inventoryItemSchema, PITUM_HAKETORET_CATEGORY } from "@/lib/validations/inventory";
 import { logError, logInfo } from "@/lib/logger";
 import { generateInventorySku } from "@/lib/inventory/sku";
+import { resolveContentType } from "@/lib/upload";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -377,7 +378,7 @@ export async function uploadInventoryImage(formData: FormData): Promise<UploadIm
     const { error } = await supabase.storage
       .from(MEDIA_BUCKET)
       .upload(path, blob, {
-        contentType: (raw instanceof File && raw.type) ? raw.type : "image/jpeg",
+        contentType: resolveContentType(raw as File | Blob),
         upsert: true,
       });
 
