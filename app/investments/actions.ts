@@ -399,7 +399,7 @@ export async function addInvestmentLedgerPayment(
 
     const { data: inv } = await supabase
       .from("erp_investments")
-      .select("amount_paid, total_agreed_price")
+      .select("amount_paid, total_agreed_price, quantity, cost_per_unit")
       .eq("id", investmentId)
       .eq("user_id", user.id)
       .single();
@@ -408,6 +408,8 @@ export async function addInvestmentLedgerPayment(
 
     const { totalCost } = getDealFinancials({
       total_price: inv.total_agreed_price,
+      quantity: inv.quantity,
+      unit_price: inv.cost_per_unit,
       amount_paid: inv.amount_paid,
     });
 
