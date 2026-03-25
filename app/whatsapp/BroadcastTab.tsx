@@ -12,6 +12,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
+import { greenApiDispatchSpacingDelayMs } from "@/lib/whatsapp/greenApi";
 import {
   fetchTargetsByTags,
   fetchTargetsByGroupIds,
@@ -151,16 +153,16 @@ export default function BroadcastTab({
     setEmojiOpen(false);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("נא לבחור קובץ תמונה");
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+  const handleSelectedImageFile = async (file: File, clearInput?: HTMLInputElement | null) => {
+    if (!isLikelyImageFile(file)) {
+      toast.error("נא לבחור קובץ תמונה (כולל HEIC מהאייפון)");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_IMAGE_BYTES) {
       toast.error("התמונה חורגת ממגבלת 5MB");
-      e.target.value = "";
+      if (clearInput) clearInput.value = "";
       return;
     }
     setImageFile(file);
@@ -184,8 +186,21 @@ export default function BroadcastTab({
       setImageFile(null);
     } finally {
       setUploading(false);
-      e.target.value = "";
+      if (clearInput) clearInput.value = "";
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleSelectedImageFile(file, e.target);
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleSelectedImageFile(file);
   };
 
   const handlePreviewCount = async () => {
@@ -272,11 +287,11 @@ export default function BroadcastTab({
       const finalScribe = scribeCode.trim() || undefined;
 
       const progressInterval = 5;
-      for (let i = 0; i < targets.length; i++) {
-        if (i % progressInterval === 0 || i === targets.length - 1) {
-          setSendProgress({ current: i + 1, total });
+      let sendIndex = 0;
+      for (const target of targets) {
+        if (sendIndex % progressInterval === 0 || sendIndex === targets.length - 1) {
+          setSendProgress({ current: sendIndex + 1, total });
         }
-        const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };
           let msg = messageText.trim();
@@ -300,9 +315,10 @@ export default function BroadcastTab({
           failed++;
           errors.push(`${target.wa_chat_id}: ${errMsg}`);
         }
-        if (i < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, 2000));
+        if (sendIndex < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, greenApiDispatchSpacingDelayMs()));
         }
+        sendIndex++;
       }
 
       setSendProgress(null);
@@ -534,13 +550,25 @@ export default function BroadcastTab({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">תמונה (אופציונלי)</label>
+              <div
+                className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-5 transition-colors hover:border-indigo-200 hover:bg-indigo-50/20"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={handleImageDrop}
+              >
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif,image/heic,image/heif"
                 onChange={handleFileChange}
                 disabled={uploading}
                 className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
               />
+              <p className="mt-2 text-xs text-muted-foreground">
+                גרירה לכאן נתמכת · HEIC מהאייפון
+              </p>
+              </div>
               {uploading && <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>}
               {imageUrl && !uploading && (
                 <div className="mt-3 space-y-2">

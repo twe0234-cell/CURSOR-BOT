@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { handleNumericChange } from "@/lib/numericInput";
 import {
   Card,
   CardContent,
@@ -34,6 +35,7 @@ import {
   deleteExpense,
   bulkImportSales,
   fetchInventoryForSales,
+  updateSaleCoreDetails,
   type SaleRecord,
   type ExpenseRecord,
   type InventorySaleOption,
@@ -43,7 +45,7 @@ import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon } from "lucide-react";
+import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon } from "lucide-react";
 
 const SALE_TYPES = ["ממלאי", "תיווך", "פרויקט חדש"] as const;
 type SaleType = (typeof SALE_TYPES)[number];
@@ -67,7 +69,7 @@ export default function SalesClient() {
   const [newSaleItemDescription, setNewSaleItemDescription] = useState("");
   const [newSaleQuantity, setNewSaleQuantity] = useState("1");
   const [newSalePrice, setNewSalePrice] = useState("");
-  const [newSaleAmountPaid, setNewSaleAmountPaid] = useState("0");
+  const [newSaleAmountPaid, setNewSaleAmountPaid] = useState("");
   const [newSaleCommission, setNewSaleCommission] = useState("");
   const [newSaleNotes, setNewSaleNotes] = useState("");
   const [newExpCategory, setNewExpCategory] = useState("");
@@ -75,6 +77,16 @@ export default function SalesClient() {
   const [newExpNotes, setNewExpNotes] = useState("");
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
+  const [editSale, setEditSale] = useState<SaleRecord | null>(null);
+  const [editBuyerId, setEditBuyerId] = useState("");
+  const [editSellerId, setEditSellerId] = useState("");
+  const [editSaleDate, setEditSaleDate] = useState("");
+  const [editTotalPrice, setEditTotalPrice] = useState("");
+  const [editSalePrice, setEditSalePrice] = useState("");
+  const [editQuantity, setEditQuantity] = useState("1");
+  const [editStatus, setEditStatus] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editItemDescription, setEditItemDescription] = useState("");
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -86,7 +98,7 @@ export default function SalesClient() {
   }, []);
 
   useEffect(() => {
-    if (saleOpen) {
+    if (saleOpen || editSale) {
       fetchInventoryForSales().then((r) => {
         if (r.success) setInventoryItems(r.items);
       });
@@ -103,7 +115,26 @@ export default function SalesClient() {
         if (r.success) setContacts(r.contacts.map((c) => ({ id: c.id, name: c.name })));
       });
     }
-  }, [saleOpen]);
+  }, [saleOpen, editSale]);
+
+  useEffect(() => {
+    if (!editSale) return;
+    setEditBuyerId(editSale.buyer_id ?? "");
+    setEditSellerId(editSale.seller_id ?? "");
+    setEditSaleDate(editSale.sale_date ? editSale.sale_date.slice(0, 10) : "");
+    const qty = editSale.quantity ?? 1;
+    const unitPrice = editSale.sale_price;
+    const total =
+      editSale.total_price != null
+        ? editSale.total_price
+        : unitPrice * qty;
+    setEditTotalPrice(String(total));
+    setEditSalePrice(String(unitPrice));
+    setEditQuantity(String(qty));
+    setEditStatus(editSale.status ?? "");
+    setEditNotes(editSale.notes ?? "");
+    setEditItemDescription(editSale.item_description ?? "");
+  }, [editSale]);
 
   const filteredInventory = inventorySearch.trim()
     ? inventoryItems.filter((i) => {
@@ -205,7 +236,7 @@ export default function SalesClient() {
     setNewSaleItemDescription("");
     setNewSaleQuantity("1");
     setNewSalePrice("");
-    setNewSaleAmountPaid("0");
+    setNewSaleAmountPaid("");
     setNewSaleCommission("");
     setNewSaleNotes("");
     setInventorySearch("");
@@ -226,6 +257,29 @@ export default function SalesClient() {
       setNewExpCategory("");
       setNewExpAmount("");
       setNewExpNotes("");
+      loadData();
+    } else toast.error(res.error);
+  };
+
+  const handleSaveEditSale = async () => {
+    if (!editSale) return;
+    const salePrice = parseFloat(editSalePrice);
+    const qty = Math.max(1, parseInt(editQuantity, 10) || 1);
+    if (Number.isNaN(salePrice) || salePrice < 0) {
+      toast.error("הזן מחיר ליחידה תקין");
+      return;
+    }
+    setLoading(true);
+    const res = await updateSaleCoreDetails(editSale.id, {
+      sale_price: salePrice,
+      quantity: qty,
+      notes: editNotes.trim() || undefined,
+      sale_date: editSaleDate || undefined,
+    });
+    setLoading(false);
+    if (res.success) {
+      toast.success("המכירה עודכנה");
+      setEditSale(null);
       loadData();
     } else toast.error(res.error);
   };
@@ -341,16 +395,28 @@ export default function SalesClient() {
                               : "—"}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-lg h-8 text-xs"
-                              onClick={() => setPaymentSaleId(s.id)}
-                            >
-                              <BanknoteIcon className="size-3.5 ml-1" />
-                              קבלת תשלום
-                            </Button>
+                            <div className="flex flex-wrap gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-lg h-8 text-xs"
+                                onClick={() => setEditSale(s)}
+                              >
+                                <PencilIcon className="size-3.5 ml-1" />
+                                ערוך
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-lg h-8 text-xs"
+                                onClick={() => setPaymentSaleId(s.id)}
+                              >
+                                <BanknoteIcon className="size-3.5 ml-1" />
+                                תשלום
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -386,7 +452,7 @@ export default function SalesClient() {
                   type="number"
                   placeholder="סכום (₪)"
                   value={newExpAmount}
-                  onChange={(e) => setNewExpAmount(e.target.value)}
+                  onChange={handleNumericChange(setNewExpAmount)}
                   className="max-w-[120px] rounded-lg"
                 />
                 <Input
@@ -499,7 +565,7 @@ export default function SalesClient() {
                       min={1}
                       max={maxQtyToSell}
                       value={newSaleQuantity}
-                      onChange={(e) => setNewSaleQuantity(e.target.value)}
+                      onChange={handleNumericChange(setNewSaleQuantity)}
                       placeholder="1"
                       className="rounded-xl"
                     />
@@ -510,7 +576,7 @@ export default function SalesClient() {
                       type="number"
                       min={0}
                       value={newSalePrice}
-                      onChange={(e) => setNewSalePrice(e.target.value)}
+                      onChange={handleNumericChange(setNewSalePrice)}
                       placeholder="0"
                       className="rounded-xl"
                     />
@@ -521,7 +587,7 @@ export default function SalesClient() {
                       type="number"
                       min={0}
                       value={newSaleAmountPaid}
-                      onChange={(e) => setNewSaleAmountPaid(e.target.value)}
+                      onChange={handleNumericChange(setNewSaleAmountPaid)}
                       placeholder="0"
                       className="rounded-xl"
                     />
@@ -577,7 +643,7 @@ export default function SalesClient() {
                     min={0}
                     step={0.01}
                     value={newSaleCommission}
-                    onChange={(e) => setNewSaleCommission(e.target.value)}
+                    onChange={handleNumericChange(setNewSaleCommission)}
                     placeholder="0"
                     className="rounded-xl"
                   />
@@ -606,7 +672,7 @@ export default function SalesClient() {
                     type="number"
                     min={0}
                     value={newSalePrice}
-                    onChange={(e) => setNewSalePrice(e.target.value)}
+                    onChange={handleNumericChange(setNewSalePrice)}
                     placeholder="0"
                     className="rounded-xl"
                   />
@@ -617,7 +683,7 @@ export default function SalesClient() {
                     type="number"
                     min={0}
                     value={newSaleAmountPaid}
-                    onChange={(e) => setNewSaleAmountPaid(e.target.value)}
+                    onChange={handleNumericChange(setNewSaleAmountPaid)}
                     placeholder="0"
                     className="rounded-xl"
                   />
@@ -664,6 +730,91 @@ export default function SalesClient() {
               {loading ? "שומר..." : "שמור מכירה"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editSale}
+        onOpenChange={(o) => {
+          if (!o) setEditSale(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>עריכת מכירה</DialogTitle>
+          </DialogHeader>
+          {editSale && (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                סוג: <span className="font-medium text-foreground">{editSale.sale_type ?? "ממלאי"}</span>
+                {" · "}
+                פריט: <span className="font-medium text-foreground">{getSaleDisplay(editSale)}</span>
+              </p>
+
+              <div>
+                <label className="mb-1 block font-semibold">תאריך מכירה</label>
+                <Input
+                  type="date"
+                  value={editSaleDate}
+                  onChange={(e) => setEditSaleDate(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    {editSale.sale_type === "תיווך" ? "עמלה (₪)" : "מחיר ליחידה (₪)"}
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                  value={editSalePrice}
+                  onChange={handleNumericChange(setEditSalePrice)}
+                  className="rounded-xl"
+                />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold">כמות</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={editQuantity}
+                    onChange={handleNumericChange(setEditQuantity)}
+                    className="rounded-xl"
+                    disabled={editSale.sale_type === "תיווך" || editSale.sale_type === "פרויקט חדש"}
+                  />
+                </div>
+              </div>
+              {(() => {
+                const p = parseFloat(editSalePrice);
+                const q = parseInt(editQuantity, 10) || 1;
+                if (Number.isNaN(p) || p < 0) return null;
+                return (
+                  <p className="text-xs text-muted-foreground rounded-lg bg-slate-50 px-3 py-2">
+                    סה״כ עסקה: <span className="font-semibold text-foreground">{(p * q).toLocaleString("he-IL")} ₪</span>
+                    {editSale.sale_type === "תיווך" && " (יסונכרן לשדות עמלה)"}
+                  </p>
+                );
+              })()}
+
+              <div>
+                <label className="mb-1 block font-semibold">הערות</label>
+                <Input
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="הערות אופציונליות"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <Button onClick={() => void handleSaveEditSale()} disabled={loading} className="w-full rounded-xl">
+                {loading ? "שומר..." : "שמור שינויים"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

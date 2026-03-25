@@ -21,6 +21,7 @@ export function DependentCategories() {
   const { watch, setValue, register } = useFormContext<FormValues>();
   const category = watch("product_category");
   const categoryMeta = watch("category_meta") ?? {};
+  const sizeRoot = watch("size");
   const prevCategoryRef = useRef<string | null | undefined>(undefined);
 
   const [torahSizes, setTorahSizes] = useState<string[]>([]);
@@ -32,6 +33,8 @@ export function DependentCategories() {
   useEffect(() => {
     if (prevCategoryRef.current !== undefined && prevCategoryRef.current !== category) {
       setValue("category_meta", {});
+      setValue("has_lamnatzeach", false);
+      setValue("size", null);
       if (category === "מגילה") {
         setValue("megillah_type", "אסתר");
       } else {
@@ -117,13 +120,8 @@ export function DependentCategories() {
             <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
           ) : (
             <select
-              value={String(categoryMeta.size ?? "")}
-              onChange={(e) =>
-                setValue("category_meta", {
-                  ...categoryMeta,
-                  size: e.target.value,
-                })
-              }
+              value={String(sizeRoot ?? "")}
+              onChange={(e) => setValue("size", e.target.value || null)}
               className={selectClass}
             >
               <option value="">בחר</option>
@@ -144,13 +142,8 @@ export function DependentCategories() {
             <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
           ) : (
             <select
-              value={String(categoryMeta.size ?? "")}
-              onChange={(e) =>
-                setValue("category_meta", {
-                  ...categoryMeta,
-                  size: e.target.value,
-                })
-              }
+              value={String(sizeRoot ?? "")}
+              onChange={(e) => setValue("size", e.target.value || null)}
               className={selectClass}
             >
               <option value="">בחר</option>

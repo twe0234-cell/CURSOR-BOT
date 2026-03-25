@@ -5,9 +5,12 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import {
+  fileNameForImageUrl,
+  greenApiDispatchSpacingDelayMs,
+} from "@/lib/whatsapp/greenApi";
 
 const GREEN_API_URL = "https://api.green-api.com";
-const DELAY_MS = 2500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -90,8 +93,8 @@ export async function GET(req: Request) {
       ? imageUrl.trim()
       : null;
 
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
+    let tIndex = 0;
+    for (const target of targets) {
       try {
         const vars = { Name: target.name ?? "", name: target.name ?? "" };
         let message = replaceVariables(messageText, vars);
@@ -108,7 +111,7 @@ export async function GET(req: Request) {
               body: JSON.stringify({
                 chatId: target.wa_chat_id,
                 urlFile: validatedImageUrl,
-                fileName: "image.jpg",
+                fileName: fileNameForImageUrl(validatedImageUrl),
                 caption: message,
               }),
             }
@@ -160,7 +163,10 @@ export async function GET(req: Request) {
         logDetails.push({ chatId: target.wa_chat_id, ok: false, error: msg });
       }
 
-      await sleep(DELAY_MS);
+      if (tIndex < targets.length - 1) {
+        await sleep(greenApiDispatchSpacingDelayMs());
+      }
+      tIndex++;
     }
 
     await supabase.from("broadcast_logs").insert({

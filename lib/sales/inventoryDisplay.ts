@@ -1,15 +1,19 @@
-/** Build human-readable size/navi/lines from category_meta for sales combobox */
+import { PITUM_HAKETORET_CATEGORY } from "@/lib/validations/inventory";
+
+/** Build human-readable size/navi/lines — root `size` preferred; legacy `category_meta.size` fallback */
 export function formatInventoryDetails(
   categoryMeta: Record<string, unknown> | null,
-  productCategory: string | null
+  productCategory: string | null,
+  rootSize?: string | null
 ): string {
-  if (!categoryMeta) return "—";
-  const m = categoryMeta as Record<string, string | number>;
+  const m = (categoryMeta ?? {}) as Record<string, string | number>;
   const cat = productCategory ?? "";
   const parts: string[] = [];
-  if (cat === "ספר תורה" || cat === "מזוזה") {
-    const sz = m.size;
-    if (sz != null && String(sz).trim() !== "") parts.push(`גודל ${sz}`);
+  const sizeFromRoot = rootSize != null && String(rootSize).trim() !== "";
+  const legacyMetaSize = m.size != null && String(m.size).trim() !== "";
+  if (cat === "ספר תורה" || cat === "מזוזה" || cat === PITUM_HAKETORET_CATEGORY) {
+    const sz = sizeFromRoot ? String(rootSize).trim() : legacyMetaSize ? String(m.size) : "";
+    if (sz) parts.push(`גודל ${sz}`);
   }
   if (cat === "נביא") {
     const navi = m.navi;
@@ -29,10 +33,15 @@ export function buildInventorySaleLabel(input: {
   category_meta: Record<string, unknown> | null;
   quantity: number;
   scribe_name: string | null;
+  size?: string | null;
 }): string {
   const sku = input.sku ?? input.id.slice(0, 8);
   const cat = input.product_category ?? "—";
-  const det = formatInventoryDetails(input.category_meta, input.product_category);
+  const det = formatInventoryDetails(
+    input.category_meta,
+    input.product_category,
+    input.size ?? null
+  );
   const sc = input.scribe_name ? `סופר: ${input.scribe_name}` : "סופר: —";
   return `[${sku}] ${cat} - ${det} (${sc}) - זמין: ${input.quantity}`;
 }
@@ -44,9 +53,14 @@ export function buildInventorySaleLabelSkuPrecise(input: {
   product_category: string | null;
   category_meta: Record<string, unknown> | null;
   quantity: number;
+  size?: string | null;
 }): string {
   const sku = input.sku ?? input.id.slice(0, 8);
   const cat = input.product_category ?? "—";
-  const det = formatInventoryDetails(input.category_meta, input.product_category);
+  const det = formatInventoryDetails(
+    input.category_meta,
+    input.product_category,
+    input.size ?? null
+  );
   return `[${sku}] ${cat} - ${det} (זמין: ${input.quantity})`;
 }

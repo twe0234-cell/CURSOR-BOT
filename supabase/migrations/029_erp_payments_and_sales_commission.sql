@@ -10,8 +10,17 @@ CREATE TABLE IF NOT EXISTS public.erp_payments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_erp_payments_user_target
-  ON public.erp_payments(user_id, target_type, target_id);
+-- Index only when legacy target_* columns exist (DB may already have entity_* from 030)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'erp_payments' AND column_name = 'target_type'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_erp_payments_user_target
+      ON public.erp_payments(user_id, target_type, target_id);
+  END IF;
+END $$;
 
 ALTER TABLE public.erp_payments ENABLE ROW LEVEL SECURITY;
 

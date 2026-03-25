@@ -3,6 +3,7 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logError } from "@/lib/logger";
+import { generateSku, crmSkuPrefix } from "@/lib/sku";
 import { soferProfileUpsertSchema, newScribeContactSchema } from "@/lib/validations/soferim";
 
 const MEDIA_BUCKET = "media";
@@ -227,6 +228,7 @@ export async function createScribeContactAndProfile(
         phone: parsedContact.data.phone ?? null,
         type: "Scribe",
         preferred_contact: "WhatsApp",
+        sku: generateSku(crmSkuPrefix),
       })
       .select("id")
       .single();
@@ -243,6 +245,7 @@ export async function createScribeContactAndProfile(
     }
 
     revalidatePath("/soferim");
+    revalidatePath("/crm");
     return { success: true, contact_id: inserted.id };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };

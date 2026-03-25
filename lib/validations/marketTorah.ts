@@ -34,4 +34,5 @@ export const marketTorahBookSchema = z.object({
   notes: z.string().max(4000).optional().nullable(),
   last_contact_date: optDate,
   negotiation_notes: z.string().max(8000).optional().nullable(),
+  handwriting_image_url: z.string().url().optional().nullable(),
 });

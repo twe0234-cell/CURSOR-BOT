@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { generateSku, crmSkuPrefix } from "@/lib/sku";
 
 const createScribeSchema = z.object({
   name: z.string().min(1, "שם נדרש").trim(),
@@ -46,6 +47,7 @@ export async function createScribeAction(data: {
       phone: phone ?? null,
       email: email ?? null,
       notes: city ? `עיר: ${city}` : null,
+      sku: generateSku(crmSkuPrefix),
     };
 
     const { data: inserted, error } = await supabase
@@ -61,6 +63,7 @@ export async function createScribeAction(data: {
     revalidatePath("/inventory");
     revalidatePath("/investments");
     revalidatePath("/market");
+    revalidatePath("/soferim");
 
     const cityVal = inserted.notes?.startsWith("עיר: ")
       ? inserted.notes.slice(5).trim() || null

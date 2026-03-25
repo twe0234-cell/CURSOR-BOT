@@ -1,8 +1,6 @@
-/** Shared SKU generator for inventory rows (investments pipeline, new items). */
+import { generateSku, inventorySkuPrefix } from "@/lib/sku";
+
+/** Inventory SKU generator — delegates to shared lib/sku.ts */
 export function generateInventorySku(): string {
-  const hex = Array.from(crypto.getRandomValues(new Uint8Array(4)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 8);
-  return `HD-${hex}`;
+  return generateSku(inventorySkuPrefix);
 }

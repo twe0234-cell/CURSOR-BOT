@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS public.market_torah_books (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- טבלה ישנה ללא user_id: הוספת עמודה לפני מדיניות RLS
+ALTER TABLE public.market_torah_books
+  ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+
 CREATE INDEX IF NOT EXISTS idx_market_torah_books_user ON public.market_torah_books(user_id, created_at DESC);
 
 ALTER TABLE public.market_torah_books ENABLE ROW LEVEL SECURITY;

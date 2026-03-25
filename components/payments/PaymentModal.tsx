@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { handleNumericChange } from "@/lib/numericInput";
 import { addSalePayment } from "@/app/sales/actions";
 import { addInvestmentLedgerPayment } from "@/app/investments/actions";
 import type { LedgerDirection, LedgerEntityType } from "@/app/payments/actions";
@@ -102,7 +103,7 @@ export function PaymentModal({
               min={0}
               step={0.01}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={handleNumericChange(setAmount)}
               placeholder="0"
               className="rounded-xl"
             />

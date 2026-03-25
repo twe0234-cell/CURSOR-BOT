@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useForm, FormProvider } from "react-hook-form";
+import { numericRegisterOptions, integerRegisterOptions } from "@/lib/numericInput";
 import { toast } from "sonner";
 import {
   Table,
@@ -178,10 +179,18 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
 
   const openEdit = (item: InventoryItem) => {
     setEditingId(item.id);
+    const rawMeta = { ...(item.category_meta ?? {}) } as Record<string, string | number>;
+    const legacySize =
+      rawMeta.size != null && rawMeta.size !== ""
+        ? String(rawMeta.size)
+        : "";
+    delete rawMeta.size;
+    const rootSize = (item.size && String(item.size).trim()) || legacySize || "";
+
     form.reset({
       product_category: item.product_category ?? "",
       purchase_date: item.purchase_date ?? "",
-      category_meta: (item.category_meta ?? {}) as Record<string, string | number>,
+      category_meta: rawMeta,
       script_type: item.script_type && SCRIPT_TYPES.includes(item.script_type as (typeof SCRIPT_TYPES)[number]) ? item.script_type : ("" as string | null),
       status: item.status ?? "available",
       quantity: item.quantity ?? 1,
@@ -197,7 +206,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       human_proofread: item.human_proofread ?? false,
       is_sewn: item.is_sewn ?? false,
       has_lamnatzeach: item.has_lamnatzeach ?? false,
-      size: item.size ?? "",
+      size: rootSize,
       megillah_type: item.megillah_type ?? "אסתר",
     });
     setEditOpen(true);
@@ -206,10 +215,13 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   const handleSave = form.handleSubmit(async (data) => {
     setLoading(true);
     try {
+      const metaPayload = { ...(data.category_meta ?? {}) } as Record<string, unknown>;
+      delete metaPayload.size;
+
       const payload: Partial<InventoryItem> = {
         product_category: data.product_category || null,
         purchase_date: data.purchase_date || null,
-        category_meta: data.category_meta ?? {},
+        category_meta: metaPayload as InventoryItem["category_meta"],
         script_type: data.script_type || null,
         status: data.status || null,
         quantity: data.quantity ?? 1,
@@ -631,7 +643,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={1}
-                        {...form.register("quantity", { valueAsNumber: true })}
+                        {...form.register("quantity", integerRegisterOptions(1))}
                         placeholder="1"
                         className="rounded-xl"
                       />
@@ -641,7 +653,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("cost_price", { valueAsNumber: true })}
+                        {...form.register("cost_price", numericRegisterOptions(0))}
                         placeholder="0"
                         className="rounded-xl"
                       />
@@ -651,7 +663,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("amount_paid", { valueAsNumber: true })}
+                        {...form.register("amount_paid", numericRegisterOptions(0))}
                         placeholder="0"
                         className="rounded-xl"
                       />
@@ -661,7 +673,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("target_price", { valueAsNumber: true })}
+                        {...form.register("target_price", numericRegisterOptions(0))}
                         placeholder="0"
                         className="rounded-xl"
                       />
