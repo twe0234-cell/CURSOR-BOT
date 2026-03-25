@@ -1,173 +1,222 @@
-# CLAUDE.md — STaM ERP (Broadcast Buddy)
+# CLAUDE.md — הידור הסת"ם ERP/CRM
 
 Source of truth for Claude Code. Read before touching any file.
 
 ---
 
-## 1. What this system is
+## 1. מה המערכת
 
-A **multi-tenant ERP** for STaM (סת"ם) dealers and soferim.
-It manages the full lifecycle:
-**Scribe commission (investment) → Inventory (SKU) → Sale → Payments → Realized profit**
+**"הידור הסת"ם"** — ERP/CRM פרודקשן למסחר ותיווך בסת"ם (ספרי תורה, תפילין, מזוזות).
 
-Domain is Hebrew. UI is RTL. Currency is ₪ (ILS). Users are religious-market dealers.
+מחזור חיים מלא:
+**הזמנת סופר (השקעה) → מלאי (SKU) → מכירה → תשלומים → רווח מומש**
+
+- דומיין: עברית. UI: RTL. מטבע: ₪.
+- משתמש יחיד כרגע (SaaS-ready — RLS מוכן לריבוי משתמשים).
 
 ---
 
-## 2. Stack
+## 2. מזהים קריטיים (MCP חי)
+
+| שירות | מזהה |
+|--------|------|
+| **Supabase project ID** | `wohrvtugrzqhxyeerxal` |
+| **Supabase region** | `ap-northeast-2` |
+| **Vercel project ID** | `prj_sfsCBHf5yax7yqzsVSVMdJ2MamGx` |
+| **Vercel team ID** | `team_M6xohw6vMmwSTSUYwOFWwjwV` |
+| **GitHub repo** | `twe0234-cell/CURSOR-BOT` |
+| **Production branch** | `main` (Vercel מחובר ל-main) |
+
+---
+
+## 3. Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 16 (App Router), React 19, TypeScript strict |
-| Database | Supabase (PostgreSQL + Auth + RLS + Storage) |
-| Hosting | Vercel (+ daily cron `/api/cron/process-broadcasts` at 00:00) |
-| UI | Tailwind CSS v4, Shadcn UI, Framer Motion, RTL Hebrew |
+| Database | Supabase PostgreSQL + Auth + RLS + Storage |
+| Hosting | Vercel + daily cron `/api/cron/process-broadcasts` 00:00 |
+| UI | Tailwind v4, Shadcn UI, Framer Motion, RTL Hebrew |
 | Forms | react-hook-form + Zod v4 |
-| Tests | Vitest (`npm test` = `vitest run`) |
-| Email | Gmail OAuth (googleapis) |
+| Tests | Vitest — `npm test` — כרגע **57 בדיקות עוברות** |
 | WhatsApp | Green API |
+| Email | Gmail OAuth (googleapis) |
+| Bundler | Turbopack |
 
 ---
 
-## 3. Architectural rules (non-negotiable)
+## 4. כללים ארכיטקטוניים (מוחלטים)
 
-### 3.1 Layer ownership
+### 4.1 שכבות
 
-| Layer | Location | Rule |
-|-------|----------|------|
-| **Pure logic** | `src/services/crm.logic.ts` | No I/O. No Supabase. Synchronous. Fully testable. |
-| **Service** | `src/services/crm.service.ts` | Orchestrator only. Calls Supabase + logic. No calculations. |
-| **Mutations** | `app/**/actions.ts` | Server Actions. Zod validation. Calls service. Calls `revalidatePath`. |
-| **Profit engine** | PostgreSQL only | `rebuild_sale_ledger()` trigger. Never reimplement in TypeScript. |
+| שכבה | מיקום | חוק |
+|------|--------|-----|
+| **Pure logic** | `src/services/crm.logic.ts` | ללא I/O, ללא Supabase, סינכרוני, ניתן לבדיקה |
+| **Service** | `src/services/crm.service.ts` | אורקסטרטור בלבד + Supabase. אפס חישובים |
+| **Mutations** | `app/**/actions.ts` | Server Actions. Zod. קורא לשירות. קורא `revalidatePath` |
+| **Profit engine** | PostgreSQL בלבד | `rebuild_sale_ledger()` trigger. לעולם לא מממש מחדש ב-TypeScript |
 
-### 3.2 Financial logic rules
+### 4.2 ZERO UI MATH
+קומפוננטות frontend לא מחשבות יתרות, רווחים, או חובות.
+הן מציגות בלבד את מה שמגיע מ-`crm.logic.ts`.
 
-- **ALL financial calculations → `src/services/crm.logic.ts`**
-- `crm.service.ts` is orchestrator only — zero math
-- Every logic change **must be followed by `npm test`**
-- Never reimplement profit logic in TypeScript — read from DB views/ledger
+### 4.3 SINGLE SOURCE OF TRUTH
+שינוי פיננסי אחד = קובץ אחד: `crm.logic.ts`. לא עוד.
 
-### 3.3 Database rules
+### 4.4 TEST DRIVEN
+אחרי כל שינוי לוגי: `npm test`. אם בדיקות נכשלות — אין commit.
 
-- RLS enforces tenant isolation: every query scoped to `auth.uid() = user_id`
-- Migrations live in `supabase/migrations/` — additive only, no destructive changes without explicit instruction
-- Profit ledger (`erp_profit_ledger`) is append-only, written only by `SECURITY DEFINER` functions
-- `entity_id` in the ledger always refers to `erp_sales.id`, never inventory
+### 4.5 SAFE TYPES
+- קלטים ריקים נשמרים כ-`0` (לא `null`, לא `undefined`)
+- בממשק מוצגים כ-`""` (מחרוזת ריקה) — למניעת באג "0450"
 
 ---
 
-## 4. Database schema (core)
+## 5. דומיינים עסקיים
+
+| דומיין | טבלה ראשית | כסף |
+|--------|------------|-----|
+| מלאי (Market) | `inventory` | מלאי פיזי בבעלות |
+| השקעות | `erp_investments` | כסף יוצא — מימון סופרים |
+| מכירות מלאי | `erp_sales` (sale_type≠תיווך) | כסף נכנס, עלות ידועה |
+| מכירות תיווך | `erp_sales` (sale_type=תיווך) | כסף נכנס, עלות=0, כל התשלום=רווח |
+| CRM | `crm_contacts` | יתרות מצטברות |
+
+---
+
+## 6. סכמת DB
 
 ### `erp_sales`
-Sale record. Key financial field: **`cost_price`** (basis for cost-recovery).
-Links: `item_id → inventory`, `buyer_id → crm_contacts`.
+שדה קריטי: **`cost_price`** (בסיס לחישוב רווח).
+קשרים: `item_id → inventory`, `buyer_id → crm_contacts`.
 
 ### `erp_payments`
-Unified cash ledger. Fields: `entity_id`, `entity_type` (`'sale' | 'investment'`), `amount`, `direction` (`incoming | outgoing`).
-Signed rule: incoming = +, outgoing = −.
+ספר חשבונות אחיד. שדות: `entity_id`, `entity_type` (`'sale'|'investment'`), `amount`, `direction` (`incoming|outgoing`).
+חוק סימן: incoming=+, outgoing=−.
 
 ### `erp_profit_ledger`
-Derived, append-only. Each payment slice is `COST_RECOVERY` or `PROFIT`.
-Written only by `rebuild_sale_ledger(p_entity_id uuid)` — never from app code.
+Append-only. כל payment מסווג: `COST_RECOVERY` או `PROFIT`.
+נכתב רק ע"י `rebuild_sale_ledger(uuid)` — SECURITY DEFINER. לעולם לא מאפליקציה.
 
 ### `erp_investments`
-Scribe writing projects. Payments via `erp_payments (entity_type='investment')`.
-Not included in profit ledger (ledger is sale-only).
+פרויקטי כתיבה. תשלומים דרך `erp_payments (entity_type='investment')`.
+לא נכנסים ל-`erp_profit_ledger` — הלג'ר הוא sale-only.
 
 ### `inventory`
-SKU units. Status: `available / in_use / reserved / sold / נמכר`.
-Partial sales decrement `quantity`; at 0 → sold.
+יחידות SKU. סטטוס: `available/in_use/reserved/sold/נמכר`.
 
 ### `crm_contacts`
-360 profiles: customers, soferim, traders.
+360 פרופילים — לקוחות, סופרים, סוחרים.
 
 ### `erp_torah_projects` + `erp_torah_sheets`
-Torah project parent (62 sheets grid). If not yet migrated → product spec only, do not invent tables.
+גריד 62 תאים. אם לא מוגרן — spec בלבד, אל תמציא טבלאות.
+
+### טבלאות קיימות ב-Supabase:
+`user_settings, audience, scribes, inventory, customers, broadcast_logs,`
+`email_contacts, email_campaigns, email_logs, crm_contacts, crm_transactions,`
+`crm_documents, crm_communication_logs, broadcast_queue, sys_settings,`
+`sys_dropdowns, sys_calculator_config, erp_sales, erp_expenses, erp_investments,`
+`erp_payments, market_torah_books, sys_logs, sys_ignored_emails,`
+`erp_profit_ledger, crm_sofer_profiles, crm_contact_history`
 
 ---
 
-## 5. Profit calculation algorithm (cost-recovery)
-
-Runs in PostgreSQL via `rebuild_sale_ledger(sale_id)`. **Do not reimplement.**
+## 7. אלגוריתם רווח (cost-recovery — PostgreSQL בלבד)
 
 ```
 cost = erp_sales.cost_price (COALESCE → 0)
 payments ordered by payment_date, created_at
-running total starts at 0
+running_total = 0
 
 for each payment:
   signed = (direction='outgoing' ? -1 : +1) * amount
-  if total_before >= cost       → all PROFIT
-  if total_after  <= cost       → all COST_RECOVERY
-  else (crosses cost line)      → split:
-      cost_left = cost - total_before  → COST_RECOVERY
-      signed - cost_left               → PROFIT
-  total_before = total_after
-```
+  if running_total >= cost       → כל signed = PROFIT
+  if running_total+signed <= cost → כל signed = COST_RECOVERY
+  else (חוצה את קו העלות)        → split:
+      cost_left = cost - running_total → COST_RECOVERY
+      signed - cost_left              → PROFIT
+  running_total += signed
 
-**Brokerage rule (`sale_type = 'תיווך'`):** cost = 0, so all payments are PROFIT.
-
----
-
-## 6. Views
-
-| View | Purpose |
-|------|---------|
-| `sale_profit_view` | Per-sale: price, cost, total_paid (signed), realized profit |
-| `monthly_realized_profit_view` | Per-user per-month: total_profit, total_cost_recovery, total_cash_flow |
-
----
-
-## 7. Key files
-
-```
-src/services/crm.logic.ts         ← All financial math (pure)
-src/services/crm.logic.test.ts    ← Tests for above (50+ tests)
-src/services/crm.service.ts       ← Orchestrator (Supabase + auth)
-src/services/crm.service.test.ts  ← Service tests
-src/lib/supabase/                 ← client / server / admin instances
-src/lib/errors.ts                 ← Error utilities
-lib/inventory/status.ts           ← Status constants + Hebrew labels
-lib/sku.ts                        ← SKU generation
-lib/logger.ts                     ← Logging
-app/api/cron/process-broadcasts/  ← Daily email cron
-supabase/migrations/              ← All DDL (source of truth for schema)
-ARCHITECTURE.md                   ← Full schema + profit algorithm detail
+תיווך: cost=0 → כל תשלום = PROFIT מיידי
 ```
 
 ---
 
-## 8. Commands
+## 8. Views
+
+| View | מטרה |
+|------|------|
+| `sale_profit_view` | Per-sale: מחיר, עלות, שולם (signed), רווח מומש |
+| `monthly_realized_profit_view` | Per-user per-month: total_profit, cost_recovery, cash_flow |
+
+---
+
+## 9. crm.logic.ts — API נוכחי
+
+**`getDealFinancials(entity)`** → `{ totalCost, totalPaid, remainingBalance }`
+- totalCost = total_price ?? (unit_price × max(1, floor(quantity)))
+- remainingBalance = max(0, totalCost - totalPaid)
+
+**`computeSaleProfit(input)`** → `{ paperMargin, realizedRecovery }`
+- תיווך → cost=0, paperMargin=total_price, realizedRecovery=total_paid (capped)
+- אחר → cost=cost_price, realizedRecovery מתחיל אחרי כיסוי עלות
+
+---
+
+## 10. יעד ארכיטקטוני הבא
+
+מיגרציה הדרגתית לטבלת **`ledger_entries` מאוחדת**:
+- כיום: תשלומים קשורים לישויות ספציפיות (sale/investment)
+- יעד: לג'ר מרכזי לכל תנועה (IN/OUT) עם קישור למקור
+- כלל: additive בלבד — לא לשבור מבנה קיים תוך כדי מיגרציה
+
+---
+
+## 11. קבצים חשובים
+
+```
+src/services/crm.logic.ts         ← כל החישובים הפיננסיים (pure)
+src/services/crm.logic.test.ts    ← 57 בדיקות
+src/services/crm.service.ts       ← אורקסטרטור
+src/lib/supabase/                 ← client / server / admin
+lib/inventory/status.ts           ← סטטוסים + תוויות עברית
+lib/upload.ts                     ← העלאת קבצים (MIME detection, mobile)
+lib/sku.ts                        ← יצירת SKU
+app/api/cron/process-broadcasts/  ← Cron יומי
+supabase/migrations/              ← כל ה-DDL
+ARCHITECTURE.md                   ← סכמה + אלגוריתם מפורט
+```
+
+---
+
+## 12. פקודות
 
 ```bash
-npm test          # Run all tests (vitest run) — mandatory after any logic change
-npm run dev       # Local dev server
-npm run build     # Production build
-npm run lint      # ESLint
-npm run db:apply-view   # Apply sale_profit_view migration
+npm test              # חובה אחרי כל שינוי לוגי
+npm run dev           # dev server
+npm run build         # production build
+npm run lint          # ESLint
+npm run db:apply-view # Apply sale_profit_view
 ```
 
 ---
 
-## 9. Workflow rules for Claude Code
+## 13. MCP זמין — השתמש לפני CLI
 
-1. **Logic change?** → edit `crm.logic.ts` → run `npm test` → only then proceed.
-2. **New financial calculation?** → it goes in `crm.logic.ts` with a matching test.
-3. **Supabase schema change?** → write a migration file in `supabase/migrations/`, additive only.
-4. **Never call Supabase from components directly** — go through Server Actions.
-5. **Hebrew strings in UI** — match existing tone (professional, concise, no emojis unless already present).
-6. **RLS** — every INSERT/UPDATE must include `user_id` or rely on `auth.uid()` default.
-7. **Profit reporting** — always read from `erp_profit_ledger` / views. Never compute in TypeScript.
+| MCP | שימוש |
+|-----|-------|
+| **Supabase MCP** | execute_sql, apply_migration, list_tables, get_logs |
+| **Vercel MCP** | list_deployments, get_deployment, get_runtime_logs |
 
 ---
 
-## 10. Environment variables
+## 14. env vars
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-DATABASE_URL              # optional, for migrations
+DATABASE_URL
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 NEXT_PUBLIC_APP_URL

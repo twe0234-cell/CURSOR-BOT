@@ -4,6 +4,7 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logError, logInfo } from "@/lib/logger";
 import { resolveContentType } from "@/lib/upload";
+import { greenApiDispatchSpacingDelayMs } from "@/lib/whatsapp/greenApi";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -510,7 +511,7 @@ export async function dispatchBroadcast(
       }
 
       if (i < targets.length - 1) {
-        await sleep(2000);
+        await sleep(greenApiDispatchSpacingDelayMs());
       }
     }
 

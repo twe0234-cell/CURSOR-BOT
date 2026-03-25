@@ -14,6 +14,7 @@ import { generateSku, crmSkuPrefix } from "@/lib/sku";
 import { logError, logInfo } from "@/lib/logger";
 import { toErrorMessage, handleSupabaseError } from "@/src/lib/errors";
 import { INVENTORY_ACTIVE_STATUSES } from "@/lib/inventory/status";
+import { classifyDealBalance } from "@/src/services/crm.logic";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -574,7 +575,8 @@ export async function updateCrmContact(
  */
 export async function addContactHistoryNote(
   contactId: string,
-  body: string
+  body: string,
+  follow_up_date?: string | null
 ): Promise<ActionResult> {
   try {
     const { supabase, user } = await getAuthClient();
@@ -596,6 +598,7 @@ export async function addContactHistoryNote(
       user_id: user.id,
       contact_id: contactId,
       body: text,
+      ...(follow_up_date ? { follow_up_date } : {}),
     });
 
     if (error) {
@@ -817,7 +820,7 @@ async function fetchCrmActivity(supabase: SupabaseClient, contactId: string) {
       .limit(50),
     supabase
       .from("crm_contact_history")
-      .select("id, body, created_at")
+      .select("id, body, created_at, follow_up_date")
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
       .limit(200),
@@ -853,9 +856,9 @@ async function fetchErpData(
         .in("status", [...INVENTORY_ACTIVE_STATUSES]),
       supabase
         .from("erp_investments")
-        .select("id, total_agreed_price, amount_paid")
+        .select("id, total_agreed_price, amount_paid, status")
         .eq("scribe_id", contactId)
-        .eq("status", "active")
+        .neq("status", "cancelled")
         .eq("user_id", userId),
       supabase
         .from("erp_sales")
@@ -885,7 +888,7 @@ async function fetchErpData(
 
   return {
     inventoryRows: invRes.data ?? [],
-    activeInvestmentRows: investActiveRes.data ?? [],
+    investmentRowsForBalance: investActiveRes.data ?? [],
     buyerRows: salesBuyerRes.data ?? [],
     sellerRows: salesSellerRes.data ?? [],
     allInvestmentRows: investAllRes.data ?? [],
@@ -1019,9 +1022,10 @@ export function calculateContactBalance(
     total_cost: number | null;
     amount_paid: number | null;
   }>,
-  activeInvestmentRows: Array<{
+  investmentRowsForBalance: Array<{
     total_agreed_price: number | null;
     amount_paid: number | null;
+    status: string | null;
   }>,
   buyerRows: Array<{
     id: string;
@@ -1031,8 +1035,9 @@ export function calculateContactBalance(
     amount_paid: number | null;
   }>,
   paymentExtraBySale: Map<string, number>
-): { debtToContact: number; debtFromContact: number } {
+): { debtToContact: number; debtFromContact: number; futureCommitment: number } {
   let debtToContact = 0;
+  let futureCommitment = 0;
 
   for (const inv of inventoryRows) {
     const total =
@@ -1042,11 +1047,14 @@ export function calculateContactBalance(
     debtToContact += Math.max(0, total - Number(inv.amount_paid ?? 0));
   }
 
-  for (const inv of activeInvestmentRows) {
-    debtToContact += Math.max(
+  for (const inv of investmentRowsForBalance) {
+    const remaining = Math.max(
       0,
       Number(inv.total_agreed_price ?? 0) - Number(inv.amount_paid ?? 0)
     );
+    const cls = classifyDealBalance(remaining, inv.status);
+    if (cls === "actual_debt") debtToContact += remaining;
+    else if (cls === "future_commitment") futureCommitment += remaining;
   }
 
   let debtFromContact = 0;
@@ -1062,7 +1070,7 @@ export function calculateContactBalance(
     debtFromContact += Math.max(0, total - paid);
   }
 
-  return { debtToContact, debtFromContact };
+  return { debtToContact, debtFromContact, futureCommitment };
 }
 
 /**
@@ -1203,9 +1211,10 @@ export type ContactDetailPageData = {
     created_at: string;
     handwriting_image_url: string | null;
   };
-  contactHistory: Array<{ id: string; body: string; created_at: string }>;
+  contactHistory: Array<{ id: string; body: string; created_at: string; follow_up_date: string | null }>;
   debtToContact: number;
   debtFromContact: number;
+  futureCommitment: number;
   netMutual: number;
   typeLabel: string;
   ledgerPayments: Array<{
@@ -1295,7 +1304,7 @@ export async function loadContactDetailPage(
   ]);
 
   const { txRows, docRows, logRows, contactHistoryRows } = crmActivity;
-  const { inventoryRows, activeInvestmentRows, buyerRows, sellerRows, allInvestmentRows } = erpData;
+  const { inventoryRows, investmentRowsForBalance, buyerRows, sellerRows, allInvestmentRows } = erpData;
 
   // 3. Collect all entity IDs needed for payment lookups.
   const allEntityIds = [
@@ -1315,9 +1324,9 @@ export async function loadContactDetailPage(
     ]);
 
   // 5. Compute financial balances (pure — no I/O).
-  const { debtToContact, debtFromContact } = calculateContactBalance(
+  const { debtToContact, debtFromContact, futureCommitment } = calculateContactBalance(
     inventoryRows,
-    activeInvestmentRows,
+    investmentRowsForBalance,
     buyerRows,
     paymentExtraBySale
   );
@@ -1373,9 +1382,11 @@ export async function loadContactDetailPage(
         id: h.id as string,
         body: (h.body as string) ?? "",
         created_at: (h.created_at as string) ?? "",
+        follow_up_date: (h.follow_up_date as string | null) ?? null,
       })),
       debtToContact,
       debtFromContact,
+      futureCommitment,
       netMutual: debtFromContact - debtToContact,
       typeLabel: CONTACT_TYPE_LABELS[c.type ?? "Other"] ?? c.type ?? "אחר",
       ledgerPayments,

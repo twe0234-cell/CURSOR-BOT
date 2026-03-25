@@ -279,7 +279,7 @@ export default function BroadcastClient({
           errors.push(`${target.wa_chat_id}: ${msg}`);
         }
         if (i < targets.length - 1) {
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 3000 + Math.floor(Math.random() * 2001)));
         }
       }
 

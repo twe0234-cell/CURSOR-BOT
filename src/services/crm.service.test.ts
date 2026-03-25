@@ -181,17 +181,18 @@ describe("calculateContactBalance", () => {
 
   // ── debtToContact: active investments ────────────────────────────────────
 
-  it("adds outstanding active investment debt", () => {
+  it("adds outstanding active investment debt (status=completed → actual_debt)", () => {
+    // status="completed" → classifyDealBalance → "actual_debt" → added to debtToContact
     const { debtToContact } = calc([], [
-      { total_agreed_price: 1000, amount_paid: 400 },
+      { total_agreed_price: 1000, amount_paid: 400, status: "completed" },
     ]);
     expect(debtToContact).toBe(600);
   });
 
-  it("accumulates inventory + investment debt", () => {
+  it("accumulates inventory + investment debt (status=completed → actual_debt)", () => {
     const { debtToContact } = calc(
       [{ quantity: null, cost_price: null, total_cost: 500, amount_paid: 100 }],
-      [{ total_agreed_price: 800, amount_paid: 300 }]
+      [{ total_agreed_price: 800, amount_paid: 300, status: "completed" }]
     );
     // inventory: 400 + investment: 500 = 900
     expect(debtToContact).toBe(900);
@@ -250,7 +251,7 @@ describe("calculateContactBalance", () => {
   });
 
   it("returns zeros for completely empty inputs", () => {
-    expect(calc()).toEqual({ debtToContact: 0, debtFromContact: 0 });
+    expect(calc()).toEqual({ debtToContact: 0, debtFromContact: 0, futureCommitment: 0 });
   });
 });
 

@@ -35,7 +35,6 @@ import {
   deleteInventoryItem,
   type InventoryItem,
 } from "./actions";
-import { toggleInventoryShare } from "./actions-share";
 import { fetchDropdownOptions } from "@/app/settings/lists/actions";
 import { SCRIPT_TYPES } from "@/lib/constants";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
@@ -48,7 +47,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, Share2Icon, LinkIcon, UnlinkIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, ChevronDown, ChevronUp } from "lucide-react";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 import { INVENTORY_CATEGORY_OPTIONS } from "@/lib/validations/inventory";
 import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
@@ -259,37 +258,6 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
     }
   });
 
-  const handleShare = async (item: InventoryItem) => {
-    if (item.is_public && item.public_slug) {
-      const url = `${window.location.origin}/p/${item.public_slug}`;
-      await navigator.clipboard.writeText(url);
-      toast.success("הקישור הועתק ללוח");
-      return;
-    }
-    const res = await toggleInventoryShare(item.id);
-    if (res.success && res.link) {
-      const url = `${window.location.origin}${res.link}`;
-      await navigator.clipboard.writeText(url);
-      toast.success("הקישור הועתק ללוח");
-      window.location.reload();
-    } else if (res.success) {
-      toast.success("שיתוף בוטל");
-      window.location.reload();
-    } else {
-      toast.error(res.error);
-    }
-  };
-
-  const handleUnshare = async (item: InventoryItem) => {
-    if (!item.is_public) return;
-    const res = await toggleInventoryShare(item.id);
-    if (res.success) {
-      toast.success("שיתוף בוטל");
-      window.location.reload();
-    } else {
-      toast.error(res.error);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("למחוק?")) return;
@@ -367,8 +335,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead className="w-28 text-slate-400 text-xs font-normal">
+                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline">
                       מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
@@ -392,66 +361,58 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead className="w-40">פעולות</TableHead>
+                  <TableHead className="w-32">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {activeItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono font-medium text-sky-700">
+                  <TableRow key={item.id} className="group">
+                    <TableCell className="p-1.5">
+                      {item.images?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.images[0]}
+                          alt=""
+                          className="w-10 h-10 rounded-md object-cover border border-slate-200"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-10 h-10" />
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-sky-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
                       <span className="hidden md:block">
                         <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
                       </span>
                     </TableCell>
                     <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
-                <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
-                <TableCell>{inventoryStatusLabelHe(item.status)}</TableCell>
-                <TableCell>
-                  {item.target_price != null ? `${item.target_price} ₪` : "—"}
-                </TableCell>
-                <TableCell>
-                  {item.is_public ? (
-                    <>
-                      <Button size="sm" variant="default" onClick={() => handleShare(item)} title="העתק קישור" className="rounded-lg">
-                        <LinkIcon className="size-4 ml-1" />
-                        העתק קישור
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleUnshare(item)} title="בטל שיתוף" className="rounded-lg text-slate-500">
-                        <UnlinkIcon className="size-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => handleShare(item)} title="שיתוף והעתק קישור" className="rounded-lg">
-                      <Share2Icon className="size-4 ml-1" />
-                      שיתוף
-                    </Button>
-                  )}
-                  <Link
-                    href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}
-                  >
-                    <Button size="sm" variant="outline">
-                      <SendIcon className="size-4 ml-1" />
-                      שידור
-                    </Button>
-                  </Link>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openEdit(item)}
-                  >
-                    <PencilIcon className="size-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDelete(item.id)}
-                    disabled={loading}
-                  >
-                    <TrashIcon className="size-4 text-red-600" />
-                  </Button>
-                </TableCell>
-              </TableRow>
+                    <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
+                    <TableCell>
+                      {item.status !== "available"
+                        ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">{inventoryStatusLabelHe(item.status)}</span>
+                        : null}
+                    </TableCell>
+                    <TableCell>
+                      {item.target_price != null ? `${item.target_price} ₪` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}>
+                          <Button size="sm" variant="outline" className="rounded-lg">
+                            <SendIcon className="size-4 ml-1" />
+                            שידור
+                          </Button>
+                        </Link>
+                        <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                          <PencilIcon className="size-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)} disabled={loading}>
+                          <TrashIcon className="size-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -480,8 +441,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead className="w-28 text-slate-400 text-xs font-normal">
+                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline">
                       מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
@@ -505,13 +467,26 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead className="w-40">פעולות</TableHead>
+                  <TableHead className="w-20">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {archiveItems.map((item) => (
-                  <TableRow key={item.id} className="bg-slate-50/50 opacity-90">
-                    <TableCell className="font-mono font-medium text-slate-600">
+                  <TableRow key={item.id} className="group bg-slate-50/50 opacity-90">
+                    <TableCell className="p-1.5">
+                      {item.images?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.images[0]}
+                          alt=""
+                          className="w-10 h-10 rounded-md object-cover border border-slate-200 grayscale"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-10 h-10" />
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-slate-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
                       <span className="hidden md:block">
                         <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
@@ -519,17 +494,16 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                     </TableCell>
                     <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
-                    <TableCell className="text-slate-600">{inventoryStatusLabelHe(item.status)}</TableCell>
+                    <TableCell>
+                      {item.status && !["available", "sold", "נמכר"].includes(item.status)
+                        ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">{inventoryStatusLabelHe(item.status)}</span>
+                        : <span className="text-xs text-slate-400">{inventoryStatusLabelHe(item.status)}</span>}
+                    </TableCell>
                     <TableCell className="text-slate-600">
                       {item.target_price != null ? `${item.target_price} ₪` : "—"}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openEdit(item)}
-                        title="צפייה בלבד"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(item)} title="צפייה בלבד">
                         <PencilIcon className="size-4 text-slate-500" />
                       </Button>
                     </TableCell>

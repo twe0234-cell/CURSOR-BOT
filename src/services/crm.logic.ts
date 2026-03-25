@@ -6,6 +6,8 @@
  * next/headers, etc.) never leak into pure-logic test files.
  */
 
+import { z } from "zod";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // getDealFinancials
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +105,49 @@ export type SaleProfitOutput = {
   realizedRecovery: number | null;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// classifyDealBalance — pending vs. delivered commitment
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Statuses that indicate a deal has been delivered / completed.
+ * Any other status means work is still in progress → future commitment.
+ */
+const DELIVERED_STATUSES = new Set([
+  "completed",
+  "delivered_to_inventory",
+  "delivered",
+  "נמסר",
+  "נמכר",
+  "sold",
+]);
+
+/** Returns true when the investment or market item has been delivered. */
+export function isDealDelivered(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return DELIVERED_STATUSES.has(status);
+}
+
+export type DealBalanceClass = "actual_debt" | "future_commitment" | "settled";
+
+/**
+ * Classifies a deal's remaining balance:
+ *   - "actual_debt"       — work done, money is owed now.
+ *   - "future_commitment" — work in progress, money reserved for later.
+ *   - "settled"           — no remaining balance.
+ */
+export function classifyDealBalance(
+  remainingBalance: number,
+  status: string | null | undefined
+): DealBalanceClass {
+  if (remainingBalance <= 0) return "settled";
+  return isDealDelivered(status) ? "actual_debt" : "future_commitment";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeSaleProfit
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Pure utility. Computes paper margin and cost-recovery realized profit for a
  * single sale record.
@@ -138,4 +183,225 @@ export function computeSaleProfit(input: SaleProfitInput): SaleProfitOutput {
   }
 
   return { paperMargin, realizedRecovery };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DealType — canonical four-way deal classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Canonical deal types for "Hidur HaSTaM" ERP.
+ *
+ *  brokerage_direct  — broker only; no cash flows through us. We register
+ *                       commission income only. Buyer ↔ supplier deal is external.
+ *  brokerage_managed — full sale price flows through us. We pay supplier from
+ *                       proceeds. Profit recognized only after supplier cost covered.
+ *  inventory_sale    — item sold from own inventory. Cost is known at time of sale.
+ *  long_term_project — scribe commission (Torah, Tefillin…). Same profit math as
+ *                       inventory_sale; remaining balance classified as
+ *                       actual_debt / future_commitment via classifyDealBalance.
+ */
+export type DealType =
+  | "brokerage_direct"
+  | "brokerage_managed"
+  | "inventory_sale"
+  | "long_term_project";
+
+const DEAL_TYPE_MAP: Record<string, DealType> = {
+  // Hebrew legacy strings
+  "תיווך": "brokerage_direct",
+  "פרויקט חדש": "long_term_project",
+  "ממלאי": "inventory_sale",
+  // Canonical English pass-through
+  brokerage_direct: "brokerage_direct",
+  brokerage_managed: "brokerage_managed",
+  inventory_sale: "inventory_sale",
+  long_term_project: "long_term_project",
+};
+
+/**
+ * Maps a raw sale_type string (Hebrew or canonical English) to a DealType.
+ * Unknown or empty values default to "inventory_sale".
+ */
+export function normalizeDealType(saleType: string | null | undefined): DealType {
+  const t = (saleType ?? "").trim();
+  return DEAL_TYPE_MAP[t] ?? "inventory_sale";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeDealFinancialsByType
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ExtendedSaleProfitInput = {
+  deal_type: DealType;
+  /** Agreed sale price (full deal value). */
+  total_price: number;
+  /** Total received from buyer so far. */
+  total_paid: number;
+  /** Supplier / inventory acquisition cost. Required for inventory_sale, brokerage_managed, long_term_project. */
+  cost_price?: number | null;
+  /** Fixed commission for brokerage_direct. Falls back to total_price when absent. */
+  commission_amount?: number | null;
+};
+
+export type ExtendedSaleProfitOutput = {
+  /** Maximum realizable profit if fully collected. Null when cost is unknown. */
+  paperMargin: number | null;
+  /** Profit recognized to date via cost-recovery method. Null when cost unknown. */
+  realizedRecovery: number | null;
+  /** Commission earned (brokerage_direct only; null for all other deal types). */
+  commissionRevenue: number | null;
+  /**
+   * Accounts Receivable: amount the buyer still owes us, clamped ≥ 0.
+   * Always 0 for brokerage_direct (buyer pays supplier directly).
+   */
+  systemDebt: number;
+  /**
+   * Accounts Payable to supplier, clamped ≥ 0.
+   * 0 for inventory_sale (item already owned) and brokerage_direct.
+   * For brokerage_managed, supplier debt is tracked on erp_investments / erp_payments
+   * and is NOT duplicated here — caller must aggregate separately.
+   */
+  supplierDebt: number;
+};
+
+/**
+ * Core deal financial engine. Computes all financial positions for a single deal
+ * based on its canonical DealType.
+ *
+ * Rules per type:
+ *
+ *  brokerage_direct:
+ *    No cash flows through the system. systemDebt = 0.
+ *    commissionRevenue = commission_amount ?? total_price.
+ *    realizedRecovery = total_paid (capped at commission) once any payment arrives.
+ *
+ *  brokerage_managed:
+ *    Full sale price flows through. Supplier paid from proceeds.
+ *    Profit recognized ONLY after supplier cost is covered (cost-recovery method).
+ *    systemDebt = max(0, total_price - total_paid).
+ *
+ *  inventory_sale / long_term_project:
+ *    Standard cost-recovery. supplierDebt = 0 (item already owned or cost settled separately).
+ *    Debt classification (actual_debt vs future_commitment) is delegated to classifyDealBalance.
+ */
+export function computeDealFinancialsByType(
+  input: ExtendedSaleProfitInput
+): ExtendedSaleProfitOutput {
+  const { deal_type, total_price, total_paid } = input;
+  const cost = input.cost_price != null ? Number(input.cost_price) : null;
+
+  // ── brokerage_direct: no money flows through, commission only ─────────────
+  if (deal_type === "brokerage_direct") {
+    const commissionRevenue =
+      input.commission_amount != null
+        ? Number(input.commission_amount)
+        : total_price;
+    const paperMargin = commissionRevenue;
+    const realizedRecovery =
+      total_paid > 0 ? Math.min(total_paid, commissionRevenue) : 0;
+
+    return {
+      paperMargin,
+      realizedRecovery,
+      commissionRevenue,
+      systemDebt: 0,
+      supplierDebt: 0,
+    };
+  }
+
+  // ── brokerage_managed: profit only after supplier cost is covered ──────────
+  if (deal_type === "brokerage_managed") {
+    const supplierCost = cost ?? 0;
+    const paperMargin =
+      cost != null ? Math.max(0, total_price - supplierCost) : null;
+    const realizedRecovery: number | null =
+      cost != null
+        ? total_paid > supplierCost
+          ? Math.min(
+              total_paid - supplierCost,
+              paperMargin ?? Number.POSITIVE_INFINITY
+            )
+          : 0
+        : null;
+
+    return {
+      paperMargin,
+      realizedRecovery,
+      commissionRevenue: null,
+      systemDebt: Math.max(0, total_price - total_paid),
+      supplierDebt: 0,
+    };
+  }
+
+  // ── inventory_sale / long_term_project: standard cost-recovery ────────────
+  const paperMargin =
+    cost != null ? Math.max(0, total_price - cost) : null;
+  const realizedRecovery: number | null =
+    cost != null
+      ? total_paid > cost
+        ? Math.min(
+            total_paid - cost,
+            paperMargin ?? Number.POSITIVE_INFINITY
+          )
+        : 0
+      : null;
+
+  return {
+    paperMargin,
+    realizedRecovery,
+    commissionRevenue: null,
+    systemDebt: Math.max(0, total_price - total_paid),
+    supplierDebt: 0,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// validatePaymentAmount — Zod-backed ledger overpayment guard
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Zod schema for payment validation.
+ * Enforces: amount > 0, total_price ≥ 0, already_paid ≥ 0,
+ * and amount ≤ remaining balance (total_price − already_paid).
+ */
+export const PaymentAmountSchema = z
+  .object({
+    amount: z.number().positive({ message: "סכום חייב להיות חיובי" }),
+    total_price: z
+      .number()
+      .nonnegative({ message: "מחיר עסקה אינו יכול להיות שלילי" }),
+    already_paid: z
+      .number()
+      .nonnegative({ message: "סכום ששולם אינו יכול להיות שלילי" }),
+  })
+  .refine(
+    (d) => d.amount <= Math.max(0, d.total_price - d.already_paid),
+    { message: "תשלום חורג מהיתרה הנותרת", path: ["amount"] }
+  );
+
+export type PaymentAmountInput = z.infer<typeof PaymentAmountSchema>;
+
+export type PaymentValidationResult =
+  | { valid: true }
+  | { valid: false; error: string };
+
+/**
+ * Validates a proposed payment amount against the remaining deal balance.
+ * Returns { valid: true } or { valid: false, error } — never throws.
+ *
+ * Business rule: payment must be positive and must not exceed
+ * (total_price − already_paid).  Overpayments are BLOCKED.
+ */
+export function validatePaymentAmount(input: {
+  amount: number;
+  total_price: number;
+  already_paid: number;
+}): PaymentValidationResult {
+  const result = PaymentAmountSchema.safeParse(input);
+  if (result.success) return { valid: true };
+  return {
+    valid: false,
+    error: result.error.issues[0]?.message ?? "קלט לא תקין",
+  };
 }

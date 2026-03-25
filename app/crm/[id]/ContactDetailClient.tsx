@@ -33,7 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { updateCrmContact, addTransaction, addDocument } from "../actions";
+import { updateCrmContact, addTransaction, addDocument, addContactHistoryNote } from "../actions";
 
 type Contact = {
   id: string;
@@ -48,6 +48,7 @@ type Contact = {
   certification: string | null;
   phone_type: string | null;
   created_at: string;
+  handwriting_image_url: string | null;
 };
 
 export type LedgerPaymentRow = {
@@ -67,8 +68,10 @@ type Props = {
   transactions: Array<{ id: string; amount: number; type: string; description: string | null; date: string }>;
   documents: Array<{ id: string; file_url: string; doc_type: string; name: string | null }>;
   logs: Array<{ id: string; channel: string; content: string | null; timestamp: string }>;
+  contactHistory: Array<{ id: string; body: string; created_at: string; follow_up_date: string | null }>;
   debtToContact: number;
   debtFromContact: number;
+  futureCommitment: number;
   netMutual: number;
   typeLabel: string;
   ledgerPayments: LedgerPaymentRow[];
@@ -118,8 +121,10 @@ export default function ContactDetailClient({
   transactions: initialTx,
   documents: initialDocs,
   logs,
+  contactHistory: initialHistory,
   debtToContact,
   debtFromContact,
+  futureCommitment,
   netMutual,
   typeLabel,
   ledgerPayments,
@@ -130,6 +135,7 @@ export default function ContactDetailClient({
   const [contact, setContact] = useState(initialContact);
   const [transactions, setTransactions] = useState(initialTx);
   const [documents, setDocuments] = useState(initialDocs);
+  const [history, setHistory] = useState(initialHistory);
 
   const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + t.amount, 0);
   const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
@@ -147,6 +153,9 @@ export default function ContactDetailClient({
   const [newTxDesc, setNewTxDesc] = useState("");
   const [txLoading, setTxLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
+  const [noteBody, setNoteBody] = useState("");
+  const [noteFollowUp, setNoteFollowUp] = useState("");
+  const [noteLoading, setNoteLoading] = useState(false);
 
   const badges = roleBadges(contact.type);
 
@@ -173,6 +182,25 @@ export default function ContactDetailClient({
       }));
       setEditMode(false);
       toast.success("נשמר");
+    } else toast.error(res.error);
+  };
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!noteBody.trim()) return;
+    setNoteLoading(true);
+    const res = await addContactHistoryNote(contact.id, noteBody.trim(), noteFollowUp || null);
+    setNoteLoading(false);
+    if (res.success) {
+      setHistory((prev) => [{
+        id: crypto.randomUUID(),
+        body: noteBody.trim(),
+        created_at: new Date().toISOString(),
+        follow_up_date: noteFollowUp || null,
+      }, ...prev]);
+      setNoteBody("");
+      setNoteFollowUp("");
+      toast.success("הערה נשמרה");
     } else toast.error(res.error);
   };
 
@@ -385,16 +413,23 @@ export default function ContactDetailClient({
             </CardHeader>
             <CardContent className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
-                <p className="text-xs text-amber-900/80 font-medium">אנחנו חייבים לו</p>
+                <p className="text-xs text-amber-900/80 font-medium">חוב ממשי (מגיע לו עכשיו)</p>
                 <p className="text-2xl font-bold text-amber-800">₪{debtToContact.toLocaleString("he-IL")}</p>
-                <p className="text-xs text-muted-foreground mt-1">מלאי (סופר) + פרויקטים פעילים</p>
+                <p className="text-xs text-muted-foreground mt-1">עבודה שהסתיימה + מלאי</p>
               </div>
+              {futureCommitment > 0 && (
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                  <p className="text-xs text-blue-900/80 font-medium">לשריין (עבודה בתהליך)</p>
+                  <p className="text-2xl font-bold text-blue-800">₪{futureCommitment.toLocaleString("he-IL")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">טרם הושלם — ישולם בהמשך</p>
+                </div>
+              )}
               <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
                 <p className="text-xs text-emerald-900/80 font-medium">הוא חייב לנו</p>
                 <p className="text-2xl font-bold text-emerald-800">₪{debtFromContact.toLocaleString("he-IL")}</p>
                 <p className="text-xs text-muted-foreground mt-1">מכירות כקונה</p>
               </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 sm:col-span-2 lg:col-span-2">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
                 <p className="text-xs text-slate-600 font-medium">יתרה נטו (חיובי = לטובתנו)</p>
                 <p className={`text-2xl font-bold ${netMutual >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                   ₪{netMutual.toLocaleString("he-IL")}
@@ -582,69 +617,86 @@ export default function ContactDetailClient({
           </Card>
         </TabsContent>
 
-        <TabsContent value="notes" className="space-y-6">
+        <TabsContent value="notes" className="space-y-4">
+          {/* Add Note */}
           <Card className="border-teal-100">
             <CardHeader>
-              <h3 className="font-semibold">הערות ותקשורת</h3>
+              <h3 className="font-semibold">הוסף הערה</h3>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={handleAddTransaction} className="flex gap-2 flex-wrap items-end">
-                <div>
-                  <label className="text-xs text-muted-foreground">סכום ידני</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newTxAmount}
-                    onChange={(e) => setNewTxAmount(e.target.value)}
-                    className="w-28 rounded-lg mt-1"
-                  />
-                </div>
-                <select
-                  value={newTxType}
-                  onChange={(e) => setNewTxType(e.target.value as "Debt" | "Credit")}
-                  className="rounded-lg border px-3 py-2 h-10"
-                >
-                  <option value="Debt">חוב</option>
-                  <option value="Credit">זכות</option>
-                </select>
-                <Input
-                  placeholder="תיאור"
-                  value={newTxDesc}
-                  onChange={(e) => setNewTxDesc(e.target.value)}
-                  className="flex-1 min-w-[120px] rounded-lg"
+            <CardContent>
+              <form onSubmit={handleAddNote} className="space-y-3">
+                <textarea
+                  value={noteBody}
+                  onChange={(e) => setNoteBody(e.target.value)}
+                  placeholder="תוכן ההערה / תיעוד שיחה..."
+                  rows={3}
+                  className="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-300"
                 />
-                <Button type="submit" disabled={txLoading} size="sm">
-                  הוסף
-                </Button>
-              </form>
-              <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
-                {transactions.map((t) => (
-                  <div key={t.id} className="flex justify-between text-sm border-b border-slate-100 pb-2 last:border-0">
-                    <span>{t.description || "—"}</span>
-                    <span className={t.type === "Debt" ? "text-red-600" : "text-green-600"}>
-                      {t.type === "Debt" ? "+" : "-"}₪{t.amount.toFixed(2)}
-                    </span>
+                <div className="flex gap-3 items-center flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">תאריך מעקב:</label>
+                    <Input
+                      type="date"
+                      value={noteFollowUp}
+                      onChange={(e) => setNoteFollowUp(e.target.value)}
+                      className="rounded-lg text-sm w-40"
+                    />
                   </div>
-                ))}
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold mb-2">יומן תקשורת</h4>
-                <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
-                  {logs.length === 0 ? (
-                    <p className="text-muted-foreground">אין רשומות</p>
-                  ) : (
-                    logs.map((l) => (
-                      <div key={l.id} className="border-b border-slate-100 pb-2">
-                        <span className="text-muted-foreground">{l.channel}</span> ·{" "}
-                        {new Date(l.timestamp).toLocaleString("he-IL")}
-                        <p className="mt-1">{(l.content ?? "").slice(0, 200)}</p>
-                      </div>
-                    ))
-                  )}
+                  <Button type="submit" disabled={noteLoading || !noteBody.trim()} size="sm">
+                    {noteLoading ? "שומר..." : "שמור הערה"}
+                  </Button>
                 </div>
-              </div>
+              </form>
             </CardContent>
           </Card>
+
+          {/* History timeline */}
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">היסטוריית התקשרויות ({history.length})</h3>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">אין הערות עדיין</p>
+              ) : (
+                <div className="space-y-3 max-h-[480px] overflow-y-auto">
+                  {history.map((h) => (
+                    <div key={h.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm space-y-1">
+                      <p className="whitespace-pre-wrap">{h.body}</p>
+                      <div className="flex gap-4 text-xs text-muted-foreground pt-1">
+                        <span>{new Date(h.created_at).toLocaleString("he-IL")}</span>
+                        {h.follow_up_date && (
+                          <span className="text-blue-600 font-medium">
+                            מעקב: {new Date(h.follow_up_date).toLocaleDateString("he-IL")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Communication log (WhatsApp/email) */}
+          {logs.length > 0 && (
+            <Card className="border-teal-100">
+              <CardHeader>
+                <h3 className="font-semibold">יומן תקשורת אוטומטי</h3>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
+                  {logs.map((l) => (
+                    <div key={l.id} className="border-b border-slate-100 pb-2">
+                      <span className="text-muted-foreground">{l.channel}</span> ·{" "}
+                      {new Date(l.timestamp).toLocaleString("he-IL")}
+                      <p className="mt-1">{(l.content ?? "").slice(0, 200)}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-teal-100">
             <CardHeader>

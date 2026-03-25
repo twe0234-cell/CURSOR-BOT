@@ -100,8 +100,8 @@ export async function updateCrmContact(
 }
 
 
-export async function addContactHistoryNote(contactId: string, body: string) {
-  const result = await crm.addContactHistoryNote(contactId, body);
+export async function addContactHistoryNote(contactId: string, body: string, follow_up_date?: string | null) {
+  const result = await crm.addContactHistoryNote(contactId, body, follow_up_date);
   if (result.success) {
     revalidatePath("/crm");
     revalidatePath(`/crm/${contactId}`);
