@@ -350,7 +350,7 @@ export default function SalesClient() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-xl border overflow-hidden">
+              <div className="rounded-xl border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">
@@ -465,7 +465,7 @@ export default function SalesClient() {
                   הוסף
                 </Button>
               </div>
-              <div className="rounded-xl border overflow-hidden">
+              <div className="rounded-xl border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">
