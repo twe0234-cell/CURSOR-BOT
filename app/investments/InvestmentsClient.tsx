@@ -38,8 +38,9 @@ import {
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon, PencilIcon } from "lucide-react";
+import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon, PencilIcon, CalendarClockIcon } from "lucide-react";
 import { handleNumericChange } from "@/lib/numericInput";
+import { getWorkingDays, estimateEndDate } from "@/src/lib/calendar/workDaysCalculator";
 
 export default function InvestmentsClient() {
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
@@ -52,6 +53,7 @@ export default function InvestmentsClient() {
   const [newCostPerUnit, setNewCostPerUnit] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newWorkDaysNeeded, setNewWorkDaysNeeded] = useState("");
   const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [detailDeductions, setDetailDeductions] = useState("");
   const [detailDocLoading, setDetailDocLoading] = useState(false);
@@ -282,6 +284,7 @@ export default function InvestmentsClient() {
                   <TableHead className="font-semibold">שולם</TableHead>
                   <TableHead className="font-semibold">יתרה</TableHead>
                   <TableHead className="font-semibold">תאריך יעד</TableHead>
+                  <TableHead className="font-semibold" title="ימי עבודה עבריים עד תאריך היעד"><CalendarClockIcon className="size-4 inline ml-1" />ימי כתיבה</TableHead>
                   <TableHead className="font-semibold">סטטוס</TableHead>
                   <TableHead className="font-semibold">התקדמות</TableHead>
                   <TableHead className="font-semibold w-24">פעולות</TableHead>
@@ -312,6 +315,21 @@ export default function InvestmentsClient() {
                       <TableCell className="font-medium">{inv.remaining_balance.toLocaleString("he-IL")} ₪</TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {inv.target_date ? new Date(inv.target_date).toLocaleDateString("he-IL") : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {(() => {
+                          if (!inv.target_date || inv.status !== "active") return <span className="text-muted-foreground">—</span>;
+                          const today = new Date();
+                          const target = new Date(inv.target_date);
+                          if (target < today) return <span className="text-red-500 font-medium">איחור</span>;
+                          const days = getWorkingDays(today, target);
+                          const urgent = days <= 14;
+                          return (
+                            <span className={urgent ? "text-amber-600 font-semibold" : "text-emerald-700"}>
+                              {days} יום
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -457,14 +475,36 @@ export default function InvestmentsClient() {
               }
               return null;
             })()}
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">תאריך יעד</label>
-              <Input
-                type="date"
-                value={newTargetDate}
-                onChange={(e) => setNewTargetDate(e.target.value)}
-                className="rounded-xl"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold">תאריך יעד</label>
+                <Input
+                  type="date"
+                  value={newTargetDate}
+                  onChange={(e) => setNewTargetDate(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold" title="חשב תאריך יעד אוטומטית">
+                  או: ימי כתיבה נדרשים
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="120"
+                  value={newWorkDaysNeeded}
+                  onChange={(e) => {
+                    setNewWorkDaysNeeded(e.target.value);
+                    const days = parseInt(e.target.value);
+                    if (days > 0) {
+                      const end = estimateEndDate(new Date(), days);
+                      setNewTargetDate(end.toISOString().slice(0, 10));
+                    }
+                  }}
+                  className="rounded-xl"
+                />
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold">הערות</label>
