@@ -101,6 +101,18 @@ export interface TorahProjectWithNames extends TorahProject {
   sheets_approved: number;
 }
 
+/** Project row + CRM names for `/torah/[id]` detail */
+export interface TorahProjectDetailView extends TorahProject {
+  scribe_name: string | null;
+  client_name: string | null;
+}
+
+/** Minimal sheet row for the 62-cell grid (detail page) */
+export type TorahSheetGridRow = Pick<
+  TorahSheet,
+  "id" | "project_id" | "sheet_number" | "columns_count" | "status" | "sku"
+>;
+
 // ── Helper constants ─────────────────────────────────────────
 
 export const TORAH_PROJECT_STATUSES: TorahProjectStatus[] = [

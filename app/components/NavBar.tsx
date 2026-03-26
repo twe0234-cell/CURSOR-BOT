@@ -17,6 +17,7 @@ import {
   TrendingUp,
   PenLine,
   ScrollText,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export default function NavBar() {
     { href: "/investments", label: "תיק השקעות", icon: TrendingUp },
     { href: "/soferim", label: "מאגר סופרים", icon: PenLine },
     { href: "/market", label: "מאגר ספרי תורה", icon: ScrollText },
+    { href: "/torah", label: "פרויקטי ס״ת", icon: BookOpen },
     { href: "/inventory", label: "ניהול מלאי סת״ם", icon: Package },
     { href: "/settings", label: "הגדרות", icon: Settings },
   ];
