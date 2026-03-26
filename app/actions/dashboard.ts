@@ -302,6 +302,53 @@ export async function fetchIncomeExpensesChart(): Promise<
   }
 }
 
+export type TorahDashboardStats = {
+  activeProjects: number;
+  totalSheets: number;
+  approvedSheets: number;
+  progressPct: number;
+};
+
+export async function fetchTorahDashboardStats(): Promise<
+  { success: true; stats: TorahDashboardStats } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: projects, error: pErr } = await supabase
+      .from("torah_projects")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .in("status", ["contract", "writing", "qa"]);
+
+    if (pErr) return { success: false, error: pErr.message };
+
+    const activeIds = (projects ?? []).map((p) => p.id as string);
+    const activeProjects = activeIds.length;
+
+    if (activeIds.length === 0) {
+      return { success: true, stats: { activeProjects: 0, totalSheets: 0, approvedSheets: 0, progressPct: 0 } };
+    }
+
+    const { data: sheets } = await supabase
+      .from("torah_sheets")
+      .select("status")
+      .in("project_id", activeIds);
+
+    const totalSheets = (sheets ?? []).length;
+    const approvedSheets = (sheets ?? []).filter(
+      (s) => s.status === "approved" || s.status === "sewn"
+    ).length;
+    const progressPct = totalSheets > 0 ? Math.round((approvedSheets / totalSheets) * 100) : 0;
+
+    return { success: true, stats: { activeProjects, totalSheets, approvedSheets, progressPct } };
+  } catch {
+    return { success: true, stats: { activeProjects: 0, totalSheets: 0, approvedSheets: 0, progressPct: 0 } };
+  }
+}
+
 export async function fetchMonthlyRealizedProfit(): Promise<
   { success: true; data: MonthlyRealizedProfitRow[] } | { success: false; error: string }
 > {
