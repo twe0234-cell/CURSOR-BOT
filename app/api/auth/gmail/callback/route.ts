@@ -8,7 +8,9 @@ export async function GET(req: Request) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  ).replace(/\s/g, "").replace(/\/+$/, "");
   const settingsUrl = new URL("/settings", appUrl);
 
   if (error) {
@@ -32,8 +34,8 @@ export async function GET(req: Request) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = process.env.GOOGLE_CLIENT_ID?.replace(/\s/g, "");
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.replace(/\s/g, "");
 
   if (!clientId || !clientSecret) {
     settingsUrl.searchParams.set("gmail_error", "config");

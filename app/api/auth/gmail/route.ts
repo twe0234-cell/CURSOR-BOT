@@ -10,8 +10,10 @@ const SCOPES = [
 ].join(" ");
 
 export async function GET() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const clientId = process.env.GOOGLE_CLIENT_ID?.replace(/\s/g, "");
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  ).replace(/\s/g, "").replace(/\/+$/, "");
 
   if (!clientId) {
     return NextResponse.json(
