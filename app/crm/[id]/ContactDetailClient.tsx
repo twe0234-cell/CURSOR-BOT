@@ -28,6 +28,7 @@ import {
   UserIcon,
   ScrollTextIcon,
 } from "lucide-react";
+import { isDealDelivered } from "@/src/services/crm.logic";
 import {
   Collapsible,
   CollapsibleContent,
@@ -466,16 +467,22 @@ export default function ContactDetailClient({
               </p>
             </CardHeader>
             <CardContent className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
-                <p className="text-xs text-amber-900/80 font-medium">חוב ממשי (מגיע לו עכשיו)</p>
-                <p className="text-2xl font-bold text-amber-800">₪{debtToContact.toLocaleString("he-IL")}</p>
-                <p className="text-xs text-muted-foreground mt-1">עבודה שהסתיימה + מלאי</p>
+              {/* יתרת חוב מידי — actual debt: work done, money owed NOW → red */}
+              <div className={`rounded-xl p-4 border ${debtToContact > 0 ? "bg-red-50 border-red-200" : "bg-slate-50 border-slate-200"}`}>
+                <p className={`text-xs font-medium ${debtToContact > 0 ? "text-red-900/80" : "text-slate-600"}`}>
+                  יתרת חוב מידי
+                </p>
+                <p className={`text-2xl font-bold ${debtToContact > 0 ? "text-red-700" : "text-slate-500"}`}>
+                  ₪{debtToContact.toLocaleString("he-IL")}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">עבודה שהסתיימה + מלאי — מגיע לו עכשיו</p>
               </div>
+              {/* שריון כספים — future commitment: work in progress → amber/yellow neutral */}
               {futureCommitment > 0 && (
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
-                  <p className="text-xs text-blue-900/80 font-medium">לשריין (עבודה בתהליך)</p>
-                  <p className="text-2xl font-bold text-blue-800">₪{futureCommitment.toLocaleString("he-IL")}</p>
-                  <p className="text-xs text-muted-foreground mt-1">טרם הושלם — ישולם בהמשך</p>
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                  <p className="text-xs text-amber-900/80 font-medium">שריון כספים</p>
+                  <p className="text-2xl font-bold text-amber-700">₪{futureCommitment.toLocaleString("he-IL")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">עבודה בתהליך — ישולם עם סיום</p>
                 </div>
               )}
               <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
@@ -649,20 +656,43 @@ export default function ContactDetailClient({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {investments.map((i) => (
-                        <TableRow key={i.id}>
-                          <TableCell className="max-w-[200px] truncate">{i.item_details ?? "—"}</TableCell>
-                          <TableCell>{invStatusHe(i.status)}</TableCell>
-                          <TableCell>₪{i.total_agreed_price.toLocaleString("he-IL")}</TableCell>
-                          <TableCell>₪{i.amount_paid.toLocaleString("he-IL")}</TableCell>
-                          <TableCell>
-                            ₪{Math.max(0, i.total_agreed_price - i.amount_paid).toLocaleString("he-IL")}
-                          </TableCell>
-                          <TableCell>
-                            {i.target_date ? new Date(i.target_date).toLocaleDateString("he-IL") : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {investments.map((i) => {
+                        const remaining = Math.max(0, i.total_agreed_price - i.amount_paid);
+                        const delivered = isDealDelivered(i.status);
+                        const isActualDebt = remaining > 0 && delivered;
+                        const isFutureCommitment = remaining > 0 && !delivered;
+                        return (
+                          <TableRow key={i.id}>
+                            <TableCell className="max-w-[200px] truncate">{i.item_details ?? "—"}</TableCell>
+                            <TableCell>{invStatusHe(i.status)}</TableCell>
+                            <TableCell>₪{i.total_agreed_price.toLocaleString("he-IL")}</TableCell>
+                            <TableCell>₪{i.amount_paid.toLocaleString("he-IL")}</TableCell>
+                            <TableCell>
+                              {remaining > 0 ? (
+                                <span className={`inline-flex flex-col gap-0.5`}>
+                                  <span className={`font-semibold ${isActualDebt ? "text-red-600" : "text-amber-600"}`}>
+                                    ₪{remaining.toLocaleString("he-IL")}
+                                  </span>
+                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full w-fit ${
+                                    isActualDebt
+                                      ? "bg-red-100 text-red-700"
+                                      : isFutureCommitment
+                                        ? "bg-amber-100 text-amber-700"
+                                        : ""
+                                  }`}>
+                                    {isActualDebt ? "חוב מידי" : "שריון"}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-emerald-600 font-medium">שולם</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {i.target_date ? new Date(i.target_date).toLocaleDateString("he-IL") : "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

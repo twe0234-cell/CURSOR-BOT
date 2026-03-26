@@ -24,7 +24,6 @@ export const marketTorahBookSchema = z.object({
   size_cm: optPositiveNum,
   parchment_type: z.string().max(200).optional().nullable(),
   influencer_style: z.string().max(200).optional().nullable(),
-  current_progress: z.string().max(500).optional().nullable(),
   asking_price: optPositiveNum,
   target_brokerage_price: optPositiveNum,
   currency: z.string().max(10).default("ILS"),

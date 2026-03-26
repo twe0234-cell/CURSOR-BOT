@@ -22,6 +22,7 @@ import {
   normalizeDealType,
   computeDealFinancialsByType,
   validatePaymentAmount,
+  calculateTorahProjectFinancials,
 } from "./crm.logic";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +65,13 @@ describe("getDealFinancials", () => {
 
   it("handles all-null input without throwing and returns zeros", () => {
     const result = getDealFinancials({});
-    expect(result).toEqual({ totalCost: 0, totalPaid: 0, remainingBalance: 0 });
+    expect(result).toEqual({
+      totalCost: 0,
+      totalPaid: 0,
+      remainingBalance: 0,
+      actual_debt: 0,
+      future_commitment: 0,
+    });
   });
 
   // ── totalPaid ─────────────────────────────────────────────────────────────
@@ -120,6 +127,86 @@ describe("getDealFinancials", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 1b. getDealFinancials — actual_debt vs future_commitment classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("getDealFinancials — actual_debt vs future_commitment", () => {
+  // Task requirement: in-progress project must produce future_commitment > 0, actual_debt === 0
+
+  it("in-progress project ('active'): future_commitment = remaining, actual_debt = 0", () => {
+    const result = getDealFinancials({ total_price: 15000, amount_paid: 6000, status: "active" });
+    expect(result.remainingBalance).toBe(9000);
+    expect(result.future_commitment).toBe(9000);
+    expect(result.actual_debt).toBe(0);
+  });
+
+  it("being-written project ('בכתיבה'): future_commitment = remaining, actual_debt = 0", () => {
+    const result = getDealFinancials({ total_price: 20000, amount_paid: 5000, status: "בכתיבה" });
+    expect(result.future_commitment).toBe(15000);
+    expect(result.actual_debt).toBe(0);
+  });
+
+  it("in-process project ('בתהליך'): future_commitment = remaining, actual_debt = 0", () => {
+    const result = getDealFinancials({ total_price: 10000, amount_paid: 0, status: "בתהליך" });
+    expect(result.future_commitment).toBe(10000);
+    expect(result.actual_debt).toBe(0);
+  });
+
+  // Task requirement: completed project must produce actual_debt > 0, future_commitment === 0
+
+  it("completed project ('completed'): actual_debt = remaining, future_commitment = 0", () => {
+    const result = getDealFinancials({ total_price: 15000, amount_paid: 6000, status: "completed" });
+    expect(result.remainingBalance).toBe(9000);
+    expect(result.actual_debt).toBe(9000);
+    expect(result.future_commitment).toBe(0);
+  });
+
+  it("delivered project ('הושלם'): actual_debt = remaining, future_commitment = 0", () => {
+    const result = getDealFinancials({ total_price: 12000, amount_paid: 4000, status: "הושלם" });
+    expect(result.actual_debt).toBe(8000);
+    expect(result.future_commitment).toBe(0);
+  });
+
+  it("in-inventory project ('במלאי'): actual_debt = remaining, future_commitment = 0", () => {
+    const result = getDealFinancials({ total_price: 8000, amount_paid: 3000, status: "במלאי" });
+    expect(result.actual_debt).toBe(5000);
+    expect(result.future_commitment).toBe(0);
+  });
+
+  it("delivered_to_inventory: actual_debt = remaining, future_commitment = 0", () => {
+    const result = getDealFinancials({ total_price: 5000, amount_paid: 1000, status: "delivered_to_inventory" });
+    expect(result.actual_debt).toBe(4000);
+    expect(result.future_commitment).toBe(0);
+  });
+
+  it("settled deal: both actual_debt and future_commitment are 0", () => {
+    const result = getDealFinancials({ total_price: 5000, amount_paid: 5000, status: "completed" });
+    expect(result.remainingBalance).toBe(0);
+    expect(result.actual_debt).toBe(0);
+    expect(result.future_commitment).toBe(0);
+  });
+
+  it("no status provided: balance defaults to future_commitment (conservative)", () => {
+    const result = getDealFinancials({ total_price: 3000, amount_paid: 1000 });
+    expect(result.remainingBalance).toBe(2000);
+    expect(result.future_commitment).toBe(2000);
+    expect(result.actual_debt).toBe(0);
+  });
+
+  it("actual_debt + future_commitment always equals remainingBalance", () => {
+    const cases = [
+      { total_price: 1000, amount_paid: 300, status: "completed" },
+      { total_price: 1000, amount_paid: 300, status: "active" },
+      { total_price: 1000, amount_paid: 1000, status: "completed" },
+    ];
+    for (const c of cases) {
+      const r = getDealFinancials(c);
+      expect(r.actual_debt + r.future_commitment).toBe(r.remainingBalance);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 2. isDealDelivered + classifyDealBalance
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -128,7 +215,12 @@ describe("isDealDelivered", () => {
   it("returns true for 'delivered_to_inventory'", () => expect(isDealDelivered("delivered_to_inventory")).toBe(true));
   it("returns true for 'נמסר'", () => expect(isDealDelivered("נמסר")).toBe(true));
   it("returns true for 'נמכר'", () => expect(isDealDelivered("נמכר")).toBe(true));
+  it("returns true for 'הושלם' (Hebrew: completed)", () => expect(isDealDelivered("הושלם")).toBe(true));
+  it("returns true for 'במלאי' (Hebrew: in inventory)", () => expect(isDealDelivered("במלאי")).toBe(true));
   it("returns false for 'active' (in progress)", () => expect(isDealDelivered("active")).toBe(false));
+  it("returns false for 'בכתיבה' (being written)", () => expect(isDealDelivered("בכתיבה")).toBe(false));
+  it("returns false for 'בתהליך' (in process)", () => expect(isDealDelivered("בתהליך")).toBe(false));
+  it("returns false for 'in_progress'", () => expect(isDealDelivered("in_progress")).toBe(false));
   it("returns false for null", () => expect(isDealDelivered(null)).toBe(false));
   it("returns false for undefined", () => expect(isDealDelivered(undefined)).toBe(false));
 });
@@ -609,5 +701,80 @@ describe("computeDealFinancialsByType — long_term_project", () => {
     });
     expect(paperMargin).toBeNull();
     expect(realizedRecovery).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// calculateTorahProjectFinancials — per-column Torah scroll pricing
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("calculateTorahProjectFinancials", () => {
+  it("treats falsy columns_count as 4 (matches || 4 in formula)", () => {
+    const sheets = [
+      { columns_count: 0, status: "not_started" },
+      { columns_count: undefined as unknown as number, status: "not_started" },
+    ];
+    const r = calculateTorahProjectFinancials(800, sheets);
+    expect(r.totalColumns).toBe(8);
+    expect(r.pricePerColumn).toBe(100);
+  });
+
+  it("62 sheets × 4 columns = 248 columns for a full scroll", () => {
+    const sheets = Array.from({ length: 62 }, () => ({
+      columns_count: 4,
+      status: "not_started",
+    }));
+    const r = calculateTorahProjectFinancials(6200, sheets);
+    expect(r.totalColumns).toBe(248);
+    expect(r.pricePerColumn).toBe(25);
+  });
+
+  it("computes price per column from mixed column counts", () => {
+    const sheets = [
+      { columns_count: 4, status: "approved" },
+      { columns_count: 3, status: "not_started" },
+      { columns_count: 2, status: "written" },
+    ];
+    const r = calculateTorahProjectFinancials(900, sheets);
+    expect(r.totalColumns).toBe(9);
+    expect(r.pricePerColumn).toBe(100);
+    expect(r.completedColumns).toBe(4);
+    expect(r.actualDebt).toBe(400);
+    expect(r.futureCommitment).toBe(500);
+  });
+
+  it("counts approved, sewn, and delivered sheet statuses toward completed columns", () => {
+    const sheets = [
+      { columns_count: 4, status: "approved" },
+      { columns_count: 4, status: "sewn" },
+      { columns_count: 4, status: "delivered" },
+    ];
+    const r = calculateTorahProjectFinancials(1200, sheets);
+    expect(r.completedColumns).toBe(12);
+    expect(r.actualDebt).toBe(1200);
+    expect(r.futureCommitment).toBe(0);
+  });
+
+  it("treats non-positive totalAgreedPrice as zero debt and commitment", () => {
+    const sheets = [{ columns_count: 4, status: "approved" }];
+    expect(calculateTorahProjectFinancials(0, sheets)).toMatchObject({
+      totalColumns: 4,
+      pricePerColumn: 0,
+      completedColumns: 4,
+      actualDebt: 0,
+      futureCommitment: 0,
+    });
+    expect(calculateTorahProjectFinancials(-100, sheets).actualDebt).toBe(0);
+  });
+
+  it("returns zeros when there are no sheets", () => {
+    const r = calculateTorahProjectFinancials(5000, []);
+    expect(r).toEqual({
+      totalColumns: 0,
+      pricePerColumn: 0,
+      completedColumns: 0,
+      actualDebt: 0,
+      futureCommitment: 5000,
+    });
   });
 });

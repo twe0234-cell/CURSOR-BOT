@@ -15,10 +15,11 @@ import {
   fetchNextScribeNumber,
   sendSingleMessage,
   insertBroadcastLog,
+  deleteBroadcastLog,
   type BroadcastLog,
   type QueueItem,
 } from "./actions";
-import { SendIcon, VariableIcon, SmileIcon, CheckCircleIcon, XCircleIcon, HistoryIcon } from "lucide-react";
+import { SendIcon, VariableIcon, SmileIcon, CheckCircleIcon, XCircleIcon, HistoryIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isImageFile } from "@/lib/upload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -547,7 +548,7 @@ export default function BroadcastClient({
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-teal-800">היסטוריית שידורים</h2>
-                <p className="text-sm text-muted-foreground">סטטוס ותגובות API מפורטות</p>
+                <p className="text-sm text-muted-foreground">סיכום לפי שידור — הצלחות / כשלונות</p>
               </div>
               <Button variant="outline" size="sm" onClick={refreshLogs} className="rounded-xl">
                 רענן
@@ -555,79 +556,88 @@ export default function BroadcastClient({
             </CardHeader>
             <CardContent>
               {queueItems.length === 0 && logs.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8">אין עדיין שידורים</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">אין עדיין שידורים</p>
               ) : (
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+                  {/* Cron / queue broadcasts */}
                   {queueItems.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-2"
+                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
                     >
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                        <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                            item.status === "completed"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          )}
-                        >
-                          {item.status === "completed" ? "הושלם" : "נכשל"}
-                        </span>
-                        {item.result && (
-                          <>
-                            <span className="flex items-center gap-1 text-green-600">
-                              <CheckCircleIcon className="size-4" />
-                              {item.result.sent ?? 0}
-                            </span>
-                            <span className="flex items-center gap-1 text-red-600">
-                              <XCircleIcon className="size-4" />
-                              {item.result.failed ?? 0}
-                            </span>
-                          </>
+                      <span className="text-xs text-muted-foreground w-28 shrink-0">{formatDate(item.created_at)}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-medium shrink-0",
+                          item.status === "completed" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                         )}
-                      </div>
-                      {item.result?.errors && item.result.errors.length > 0 && (
-                        <details className="text-xs">
-                          <summary className="cursor-pointer text-muted-foreground">שגיאות (result)</summary>
-                          <ul className="mt-1 space-y-1 text-red-600">
-                            {item.result.errors.slice(0, 5).map((e, i) => (
-                              <li key={i} className="break-words">{e}</li>
-                            ))}
-                            {item.result.errors.length > 5 && <li>+{item.result.errors.length - 5} נוספות</li>}
-                          </ul>
-                        </details>
+                      >
+                        {item.status === "completed" ? "הושלם" : "נכשל"}
+                      </span>
+                      {item.result && (
+                        <>
+                          <span className="flex items-center gap-1 text-green-600 text-sm">
+                            <CheckCircleIcon className="size-3.5" />
+                            {item.result.sent ?? 0}
+                          </span>
+                          <span className="flex items-center gap-1 text-red-500 text-sm">
+                            <XCircleIcon className="size-3.5" />
+                            {item.result.failed ?? 0}
+                          </span>
+                        </>
                       )}
-                      {renderLogDetails(item)}
+                      <span className="text-xs text-slate-400 truncate flex-1">{item.payload?.tags?.join(", ") ?? ""}</span>
                     </div>
                   ))}
+                  {/* Client-side broadcast logs */}
                   {logs.map((log) => (
                     <div
                       key={`log-${log.id}`}
-                      className="rounded-lg border border-slate-100 bg-slate-50/30 p-3"
+                      className="flex items-center gap-3 rounded-lg border border-slate-100 bg-white px-4 py-3 group"
                     >
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                        <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
-                        <span className="flex items-center gap-1 text-green-600">
-                          <CheckCircleIcon className="size-4" />
-                          {log.sent}
+                      <span className="text-xs text-muted-foreground w-28 shrink-0">{formatDate(log.created_at)}</span>
+                      <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                        <CheckCircleIcon className="size-3.5" />
+                        {log.sent}
+                      </span>
+                      <span className="flex items-center gap-1 text-red-500 text-sm font-medium">
+                        <XCircleIcon className="size-3.5" />
+                        {log.failed}
+                      </span>
+                      {log.scribe_code && (
+                        <span className="text-xs bg-slate-100 rounded px-1.5 py-0.5 font-mono shrink-0">
+                          {log.scribe_code}
                         </span>
-                        <span className="flex items-center gap-1 text-red-600">
-                          <XCircleIcon className="size-4" />
-                          {log.failed}
-                        </span>
-                      </div>
+                      )}
+                      {log.tags.length > 0 && (
+                        <span className="text-xs text-slate-400 truncate flex-1">{log.tags.join(", ")}</span>
+                      )}
                       {log.errors.length > 0 && (
-                        <details className="mt-2 text-xs">
-                          <summary className="cursor-pointer text-muted-foreground">שגיאות</summary>
-                          <ul className="mt-1 space-y-1 text-red-600">
+                        <details className="text-xs shrink-0">
+                          <summary className="cursor-pointer text-red-400">{log.errors.length} שגיאות</summary>
+                          <ul className="absolute z-10 mt-1 rounded border bg-white p-2 shadow-md space-y-1 text-red-600 max-w-xs">
                             {log.errors.slice(0, 5).map((e, i) => (
                               <li key={i} className="break-words">{e}</li>
                             ))}
                           </ul>
                         </details>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50"
+                        title="מחק רשומה"
+                        onClick={async () => {
+                          const res = await deleteBroadcastLog(log.id);
+                          if (res.success) {
+                            setLogs((prev) => prev.filter((l) => l.id !== log.id));
+                          } else {
+                            toast.error("שגיאה במחיקה: " + res.error);
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>

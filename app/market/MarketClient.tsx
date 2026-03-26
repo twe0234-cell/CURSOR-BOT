@@ -27,11 +27,13 @@ import {
   createMarketTorahBook,
   updateMarketTorahBook,
   deleteMarketTorahBook,
-  uploadHandwritingSample,
 } from "./actions";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
-import { formatMarketPriceK } from "@/lib/market/kPricing";
+// formatMarketPriceK is intentionally NOT imported here.
+// mapBookRow in actions.ts already converts DB prices → K units before they
+// reach this component, so dividing by 1000 again would produce 0.175 instead
+// of 175. Use formatDisplayK (below) for values that are already in K.
 import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
 import { applyNumericTransform } from "@/lib/numericInput";
 
@@ -49,6 +51,15 @@ function displayOwner(row: MarketTorahBookRow): string {
   if (row.external_sofer_name) return row.external_sofer_name;
   return "—";
 }
+
+/** Values arrive already in K-units from mapBookRow — no division needed. */
+const formatK = (val: number | null | undefined): string => {
+  if (val == null) return "—";
+  const s = Number.isInteger(val)
+    ? val.toLocaleString("he-IL")
+    : val.toLocaleString("he-IL", { maximumFractionDigits: 2 });
+  return `${s} אל"ש`;
+};
 
 /** SKU badge — subtle, visible only on hover for privacy during screenshots */
 function SkuBadge({ sku }: { sku: string | null }) {
@@ -70,7 +81,6 @@ const emptyForm = () => ({
   size_cm: "",
   parchment_type: "",
   influencer_style: "",
-  current_progress: "",
   asking_price: "",
   target_brokerage_price: "",
   last_contact_date: todayISODate(),
@@ -85,6 +95,30 @@ export default function MarketClient({ initialRows }: Props) {
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
+
+  // ── Filters ──────────────────────────────────────────────────────────────
+  const [filterText, setFilterText] = useState("");
+  const [filterParchment, setFilterParchment] = useState("");
+  const [filterSizeMin, setFilterSizeMin] = useState("");
+  const [filterSizeMax, setFilterSizeMax] = useState("");
+
+  const parchmentOptions = [...new Set(
+    rows.map((r) => r.parchment_type).filter(Boolean) as string[]
+  )].sort();
+
+  const filteredRows = rows.filter((row) => {
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      const hit = [row.sofer_name, row.dealer_name, row.external_sofer_name, row.style]
+        .some((v) => v?.toLowerCase().includes(q));
+      if (!hit) return false;
+    }
+    if (filterParchment && row.parchment_type !== filterParchment) return false;
+    if (filterSizeMin !== "" && (row.size_cm == null || row.size_cm < Number(filterSizeMin))) return false;
+    if (filterSizeMax !== "" && (row.size_cm == null || row.size_cm > Number(filterSizeMax))) return false;
+    return true;
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -106,7 +140,6 @@ export default function MarketClient({ initialRows }: Props) {
       size_cm: editRow.size_cm != null ? String(editRow.size_cm) : "",
       parchment_type: editRow.parchment_type ?? "",
       influencer_style: editRow.influencer_style ?? "",
-      current_progress: editRow.current_progress ?? "",
       asking_price: editRow.asking_price != null ? String(editRow.asking_price) : "",
       target_brokerage_price:
         editRow.target_brokerage_price != null ? String(editRow.target_brokerage_price) : "",
@@ -131,13 +164,14 @@ export default function MarketClient({ initialRows }: Props) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await uploadHandwritingSample(fd);
-      if (res.success) {
-        setEditHwUrl(res.url);
+      const res = await fetch("/api/market/upload", { method: "POST", body: fd });
+      const json = await res.json() as { url?: string; error?: string };
+      if (res.ok && json.url) {
+        setEditHwUrl(json.url);
         setEditHwPreview(URL.createObjectURL(file));
         toast.success("דוגמת הכתב הועלתה");
       } else {
-        toast.error(res.error || "שגיאה בהעלאה");
+        toast.error(json.error || "שגיאה בהעלאה");
       }
     } catch {
       toast.error("שגיאה בהעלאת הקובץ");
@@ -172,12 +206,13 @@ export default function MarketClient({ initialRows }: Props) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await uploadHandwritingSample(fd);
-      if (res.success) {
-        setHwUrl(res.url);
+      const res = await fetch("/api/market/upload", { method: "POST", body: fd });
+      const json = await res.json() as { url?: string; error?: string };
+      if (res.ok && json.url) {
+        setHwUrl(json.url);
         toast.success("דוגמת הכתב הועלתה");
       } else {
-        toast.error(res.error || "שגיאה בהעלאה");
+        toast.error(json.error || "שגיאה בהעלאה");
         setHwFile(null);
         setHwPreview("");
       }
@@ -213,7 +248,6 @@ export default function MarketClient({ initialRows }: Props) {
         size_cm: form.size_cm,
         parchment_type: form.parchment_type.trim() || null,
         influencer_style: form.influencer_style.trim() || null,
-        current_progress: form.current_progress.trim() || null,
         asking_price: form.asking_price,
         target_brokerage_price: form.target_brokerage_price,
         currency: "ILS",
@@ -262,7 +296,6 @@ export default function MarketClient({ initialRows }: Props) {
         size_cm: editForm.size_cm,
         parchment_type: editForm.parchment_type.trim() || null,
         influencer_style: editForm.influencer_style.trim() || null,
-        current_progress: editForm.current_progress.trim() || null,
         asking_price: editForm.asking_price,
         target_brokerage_price: editForm.target_brokerage_price,
         currency: "ILS",
@@ -377,23 +410,6 @@ export default function MarketClient({ initialRows }: Props) {
                   setForm((f) => ({ ...f, style: e.target.value }))
                 }
                 placeholder='אריז"ל, חב"ד...'
-              />
-            </div>
-
-            {/* Progress */}
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">
-                סטטוס התקדמות
-              </p>
-              <Input
-                value={form.current_progress}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    current_progress: e.target.value,
-                  }))
-                }
-                placeholder="אוחז בבראשית..."
               />
             </div>
 
@@ -556,89 +572,135 @@ export default function MarketClient({ initialRows }: Props) {
         </CardContent>
       </Card>
 
+      {/* ── Filter bar ─────────────────────────────────────────────────── */}
+      <div className="mb-4 flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <p className="text-xs text-muted-foreground mb-1">חיפוש (סוחר / סופר / סגנון)</p>
+          <Input
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="חיפוש חופשי..."
+            className="h-9"
+          />
+        </div>
+        <div className="min-w-[150px]">
+          <p className="text-xs text-muted-foreground mb-1">סוג קלף</p>
+          <select
+            value={filterParchment}
+            onChange={(e) => setFilterParchment(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">הכל</option>
+            {parchmentOptions.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end gap-2">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">גודל מינ׳ (ס״מ)</p>
+            <Input
+              type="number"
+              min={0}
+              step={0.5}
+              value={filterSizeMin}
+              onChange={(e) => setFilterSizeMin(e.target.value)}
+              className="h-9 w-24"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">גודל מקס׳</p>
+            <Input
+              type="number"
+              min={0}
+              step={0.5}
+              value={filterSizeMax}
+              onChange={(e) => setFilterSizeMax(e.target.value)}
+              className="h-9 w-24"
+              placeholder="∞"
+            />
+          </div>
+        </div>
+        {(filterText || filterParchment || filterSizeMin || filterSizeMax) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 self-end text-slate-500"
+            onClick={() => { setFilterText(""); setFilterParchment(""); setFilterSizeMin(""); setFilterSizeMax(""); }}
+          >
+            <X className="size-3.5 ml-1" />
+            נקה
+          </Button>
+        )}
+        {filteredRows.length !== rows.length && (
+          <span className="self-end text-xs text-muted-foreground pb-1.5">
+            {filteredRows.length} / {rows.length} רשומות
+          </span>
+        )}
+      </div>
+
       <Card className="rounded-2xl border border-sky-100 bg-white shadow-sm overflow-hidden">
-        <CardContent className="p-0 sm:p-6">
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/90">
-                  <TableHead className="text-right">בעלים</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">
-                    סופר
-                  </TableHead>
-                  <TableHead className="text-right hidden md:table-cell">
-                    סוחר
-                  </TableHead>
-                  <TableHead className="text-right hidden lg:table-cell">
-                    קשר אחרון
-                  </TableHead>
-                  <TableHead className="text-right hidden md:table-cell">
-                    גודל
-                  </TableHead>
-                  <TableHead className="text-right hidden lg:table-cell">
-                    סוג קלף
-                  </TableHead>
-                  <TableHead className="text-right">סגנון</TableHead>
-                  <TableHead className="text-right hidden xl:table-cell">
-                    התקדמות
-                  </TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">
-                    כתב
-                  </TableHead>
-                  <TableHead className="text-right">מחיר דורש</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">
-                    יעד תיווך
-                  </TableHead>
-                  <TableHead className="text-right hidden md:table-cell">
-                    רווח צפוי
-                  </TableHead>
-                  <TableHead className="text-right w-[72px]">פעולות</TableHead>
+                <TableRow className="bg-slate-50 border-b border-slate-200">
+                  <TableHead className="text-right py-3 px-4 w-[150px]">בעלים</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">קשר אחרון</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[80px]">גודל</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">סוג קלף</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[120px]">סגנון</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px]">כתב</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[100px]">מחיר דורש</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px]">יעד תיווך</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[100px]">רווח צפוי</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[76px]">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.length === 0 ? (
+                {filteredRows.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={13}
-                      className="text-center text-muted-foreground py-12"
+                      colSpan={12}
+                      className="text-center text-muted-foreground py-14"
                     >
-                      אין רשומות במאגר. הוסף רשומה מהטופס למעלה.
+                      {rows.length === 0
+                        ? "אין רשומות במאגר. הוסף רשומה מהטופס למעלה."
+                        : "אין תוצאות לפי הסינון שנבחר."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  rows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-medium max-w-[120px]">
-                        <div className="truncate">{displayOwner(row)}</div>
+                  filteredRows.map((row) => (
+                    <TableRow key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                      <TableCell className="py-3 px-4 font-medium">
+                        <div className="truncate max-w-[138px]">{displayOwner(row)}</div>
                         <SkuBadge sku={row.sku} />
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell max-w-[100px] truncate">
+                      <TableCell className="py-3 px-4 hidden sm:table-cell text-sm text-slate-700 truncate max-w-[108px]">
                         {row.sofer_name ?? "—"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell max-w-[100px] truncate">
+                      <TableCell className="py-3 px-4 hidden md:table-cell text-sm text-slate-700 truncate max-w-[108px]">
                         {row.dealer_name ?? "—"}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground whitespace-nowrap">
+                      <TableCell className="py-3 px-4 hidden lg:table-cell text-sm text-muted-foreground whitespace-nowrap">
                         {row.last_contact_date
-                          ? new Date(row.last_contact_date).toLocaleDateString(
-                              "he-IL"
-                            )
+                          ? new Date(row.last_contact_date).toLocaleDateString("he-IL")
                           : "—"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
+                      <TableCell className="py-3 px-4 hidden md:table-cell text-sm whitespace-nowrap">
                         {row.size_cm != null ? `${row.size_cm} ס״מ` : "—"}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[100px] truncate">
+                      <TableCell className="py-3 px-4 hidden lg:table-cell text-sm text-muted-foreground truncate max-w-[100px]">
                         {row.parchment_type ?? "—"}
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate">
+                      <TableCell className="py-3 px-4 text-sm truncate max-w-[108px]">
                         {row.style ?? "—"}
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell max-w-[140px] truncate text-sm">
-                        {row.current_progress ?? "—"}
-                      </TableCell>
-                      {/* Handwriting sample thumbnail */}
-                      <TableCell className="hidden sm:table-cell">
+                      <TableCell className="py-3 px-4 hidden sm:table-cell">
                         {row.handwriting_image_url ? (
                           <a
                             href={row.handwriting_image_url}
@@ -657,16 +719,16 @@ export default function MarketClient({ initialRows }: Props) {
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap text-sm">
-                        {formatMarketPriceK(row.asking_price)}
+                      <TableCell className="py-3 px-4 tabular-nums whitespace-nowrap text-sm font-medium">
+                        {formatK(row.asking_price)}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap hidden sm:table-cell text-sm">
-                        {formatMarketPriceK(row.target_brokerage_price)}
+                      <TableCell className="py-3 px-4 tabular-nums whitespace-nowrap hidden sm:table-cell text-sm">
+                        {formatK(row.target_brokerage_price)}
                       </TableCell>
-                      <TableCell className="tabular-nums whitespace-nowrap hidden md:table-cell text-sm text-emerald-700 font-medium">
-                        {formatMarketPriceK(row.potential_profit)}
+                      <TableCell className="py-3 px-4 tabular-nums whitespace-nowrap hidden md:table-cell text-sm text-emerald-700 font-semibold">
+                        {formatK(row.potential_profit)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3 px-4">
                         <div className="flex gap-1">
                           <Button
                             type="button"
@@ -747,13 +809,6 @@ export default function MarketClient({ initialRows }: Props) {
                 <Input
                   value={editForm.style}
                   onChange={(e) => setEditForm((f) => ({ ...f, style: e.target.value }))}
-                />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">סטטוס התקדמות</p>
-                <Input
-                  value={editForm.current_progress}
-                  onChange={(e) => setEditForm((f) => ({ ...f, current_progress: e.target.value }))}
                 />
               </div>
               <div>

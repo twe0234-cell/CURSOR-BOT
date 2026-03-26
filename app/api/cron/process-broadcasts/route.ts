@@ -99,7 +99,7 @@ export async function GET(req: Request) {
         const vars = { Name: target.name ?? "", name: target.name ?? "" };
         let message = replaceVariables(messageText, vars);
         if (scribeCode?.trim()) {
-          message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+          message = message.trimEnd() + "\n\n" + scribeCode.trim();
         }
 
         if (validatedImageUrl && (validatedImageUrl.startsWith("http://") || validatedImageUrl.startsWith("https://"))) {

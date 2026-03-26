@@ -9,6 +9,56 @@
 import { z } from "zod";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// classifyDealBalance — pending vs. delivered commitment
+// (declared first so getDealFinancials can call it without a forward reference)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Statuses that indicate a deal has been delivered / completed.
+ * Any other status (including null / undefined) means work is in progress → future commitment.
+ *
+ * Hebrew additions:
+ *   "הושלם"  = completed
+ *   "במלאי"  = in inventory (delivered)
+ *   "נמסר"   = handed over
+ *   "נמכר"   = sold
+ */
+const DELIVERED_STATUSES = new Set([
+  // English canonical
+  "completed",
+  "delivered_to_inventory",
+  "delivered",
+  "sold",
+  // Hebrew
+  "הושלם",
+  "במלאי",
+  "נמסר",
+  "נמכר",
+]);
+
+/** Returns true when the investment or market item has been delivered. */
+export function isDealDelivered(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return DELIVERED_STATUSES.has(status);
+}
+
+export type DealBalanceClass = "actual_debt" | "future_commitment" | "settled";
+
+/**
+ * Classifies a deal's remaining balance:
+ *   - "actual_debt"       — work done, money is owed now.
+ *   - "future_commitment" — work in progress, money reserved for later.
+ *   - "settled"           — no remaining balance.
+ */
+export function classifyDealBalance(
+  remainingBalance: number,
+  status: string | null | undefined
+): DealBalanceClass {
+  if (remainingBalance <= 0) return "settled";
+  return isDealDelivered(status) ? "actual_debt" : "future_commitment";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getDealFinancials
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -31,6 +81,12 @@ export type DealEntity = {
   total_price?: number | null;
   /** Total amount already paid toward this deal. */
   amount_paid?: number | null;
+  /**
+   * Entity lifecycle status (e.g. "active", "completed", "הושלם", "בכתיבה").
+   * Used to classify the remaining balance as `actual_debt` or `future_commitment`.
+   * When omitted the balance defaults to `future_commitment` (conservative).
+   */
+  status?: string | null;
 };
 
 export type DealFinancials = {
@@ -38,19 +94,39 @@ export type DealFinancials = {
   totalCost: number;
   /** Total amount paid so far. */
   totalPaid: number;
-  /** Outstanding balance, clamped to ≥ 0. */
+  /**
+   * Outstanding balance, clamped to ≥ 0.
+   * Equal to actual_debt + future_commitment.
+   */
   remainingBalance: number;
+  /**
+   * Portion of remainingBalance that is due NOW:
+   * work is done / item delivered, money not yet paid.
+   * Displayed in red in the UI.
+   */
+  actual_debt: number;
+  /**
+   * Portion of remainingBalance that is reserved for future payment:
+   * work is still in progress (בכתיבה / בתהליך / active).
+   * Displayed in a neutral color (yellow/gray) in the UI.
+   */
+  future_commitment: number;
 };
 
 /**
  * Pure utility. Calculates financial totals for any investment or sale entity.
  *
  * Calculation priority:
- *   totalCost = total_price ?? (unit_price × max(1, floor(quantity)))
- *   totalPaid = amount_paid (defaults to 0)
+ *   totalCost    = total_price ?? (unit_price × max(1, floor(quantity)))
+ *   totalPaid    = amount_paid (defaults to 0)
  *   remainingBalance = max(0, totalCost - totalPaid)
  *
+ * Balance classification (requires `status`):
+ *   actual_debt       — remainingBalance when status ∈ DELIVERED_STATUSES
+ *   future_commitment — remainingBalance when status is pending / in-progress / unknown
+ *
  * Safe to call with null / undefined fields — all default to 0.
+ * When `status` is omitted the balance is conservatively classified as future_commitment.
  */
 export function getDealFinancials(entity: DealEntity): DealFinancials {
   const qty = Math.max(1, Math.floor(Number(entity.quantity ?? 1)));
@@ -64,11 +140,15 @@ export function getDealFinancials(entity: DealEntity): DealFinancials {
   const totalPaid = Number(entity.amount_paid ?? 0);
   const remainingBalance = Math.max(0, totalCost - totalPaid);
 
-  return { totalCost, totalPaid, remainingBalance };
+  const cls = classifyDealBalance(remainingBalance, entity.status);
+  const actual_debt = cls === "actual_debt" ? remainingBalance : 0;
+  const future_commitment = cls === "future_commitment" ? remainingBalance : 0;
+
+  return { totalCost, totalPaid, remainingBalance, actual_debt, future_commitment };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// computeSaleProfit
+// SaleProfitInput / computeSaleProfit
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SaleProfitInput = {
@@ -104,45 +184,6 @@ export type SaleProfitOutput = {
    */
   realizedRecovery: number | null;
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// classifyDealBalance — pending vs. delivered commitment
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Statuses that indicate a deal has been delivered / completed.
- * Any other status means work is still in progress → future commitment.
- */
-const DELIVERED_STATUSES = new Set([
-  "completed",
-  "delivered_to_inventory",
-  "delivered",
-  "נמסר",
-  "נמכר",
-  "sold",
-]);
-
-/** Returns true when the investment or market item has been delivered. */
-export function isDealDelivered(status: string | null | undefined): boolean {
-  if (!status) return false;
-  return DELIVERED_STATUSES.has(status);
-}
-
-export type DealBalanceClass = "actual_debt" | "future_commitment" | "settled";
-
-/**
- * Classifies a deal's remaining balance:
- *   - "actual_debt"       — work done, money is owed now.
- *   - "future_commitment" — work in progress, money reserved for later.
- *   - "settled"           — no remaining balance.
- */
-export function classifyDealBalance(
-  remainingBalance: number,
-  status: string | null | undefined
-): DealBalanceClass {
-  if (remainingBalance <= 0) return "settled";
-  return isDealDelivered(status) ? "actual_debt" : "future_commitment";
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // computeSaleProfit
@@ -403,5 +444,58 @@ export function validatePaymentAmount(input: {
   return {
     valid: false,
     error: result.error.issues[0]?.message ?? "קלט לא תקין",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// calculateTorahProjectFinancials — per-column allocation (Sefer Torah)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Sheet statuses that count completed work toward billable columns (incl. forward-compatible "delivered"). */
+const TORAH_SHEET_COMPLETED_STATUSES = new Set([
+  "approved",
+  "sewn",
+  "delivered",
+]);
+
+export type TorahProjectFinancialsResult = {
+  totalColumns: number;
+  pricePerColumn: number;
+  completedColumns: number;
+  actualDebt: number;
+  futureCommitment: number;
+};
+
+/**
+ * Allocates `totalAgreedPrice` evenly across all columns (sum of per-sheet
+ * `columns_count`, defaulting each sheet to 4 when missing).
+ * "Earned" / billable portion = completed columns × price per column;
+ * remainder of the contract is treated as future commitment.
+ */
+export function calculateTorahProjectFinancials(
+  totalAgreedPrice: number,
+  sheets: { columns_count: number; status: string }[]
+): TorahProjectFinancialsResult {
+  const agreed = Number.isFinite(totalAgreedPrice) && totalAgreedPrice > 0 ? totalAgreedPrice : 0;
+
+  const totalColumns = sheets.reduce(
+    (sum, sheet) => sum + (sheet.columns_count || 4),
+    0
+  );
+  const pricePerColumn = totalColumns > 0 ? agreed / totalColumns : 0;
+
+  const completedColumns = sheets
+    .filter((s) => TORAH_SHEET_COMPLETED_STATUSES.has(s.status))
+    .reduce((sum, sheet) => sum + (sheet.columns_count || 4), 0);
+
+  const actualDebt = completedColumns * pricePerColumn;
+  const futureCommitment = Math.max(0, agreed - actualDebt);
+
+  return {
+    totalColumns,
+    pricePerColumn,
+    completedColumns,
+    actualDebt,
+    futureCommitment,
   };
 }

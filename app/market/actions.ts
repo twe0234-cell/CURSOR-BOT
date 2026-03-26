@@ -5,20 +5,16 @@ import { revalidatePath } from "next/cache";
 import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
-import { guessContentTypeFromFilename } from "@/lib/broadcast/imageFile";
-
-const MEDIA_BUCKET = "media";
-const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5MB
 
 /** כולל סוחר + משא ומתן + SKU + דוגמת כתב */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
+  "id, sku, sofer_id, dealer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
 
 const MARKET_SELECT_FULL =
-  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, target_brokerage_price, potential_profit, currency, expected_completion_date, notes, created_at";
+  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, expected_completion_date, notes, created_at";
 
 const MARKET_SELECT_LEGACY =
-  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, current_progress, asking_price, currency, expected_completion_date, notes, created_at";
+  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, currency, expected_completion_date, notes, created_at";
 
 function isMissingColumnError(msg: string | undefined): boolean {
   if (!msg) return false;
@@ -41,7 +37,6 @@ export type MarketTorahBookRow = {
   size_cm: number | null;
   parchment_type: string | null;
   influencer_style: string | null;
-  current_progress: string | null;
   /** מחירי תצוגה (אלפי ש״ח / K) אחרי המרה ממאגר — הערכים ב-DB נשמרים ×1000 */
   asking_price: number | null;
   target_brokerage_price: number | null;
@@ -84,7 +79,6 @@ function mapBookRow(
     size_cm: b.size_cm != null ? Number(b.size_cm) : null,
     parchment_type: (b.parchment_type as string | null) ?? null,
     influencer_style: (b.influencer_style as string | null) ?? null,
-    current_progress: (b.current_progress as string | null) ?? null,
     asking_price: ask,
     target_brokerage_price: target,
     potential_profit: pot,
@@ -258,7 +252,6 @@ export async function createMarketTorahBook(
       size_cm: v.size_cm ?? null,
       parchment_type: v.parchment_type ?? null,
       influencer_style: v.influencer_style ?? null,
-      current_progress: v.current_progress ?? null,
       asking_price: askDb,
       target_brokerage_price: targetDb,
       currency: v.currency ?? "ILS",
@@ -332,7 +325,6 @@ export async function updateMarketTorahBook(
         size_cm: v.size_cm ?? null,
         parchment_type: v.parchment_type ?? null,
         influencer_style: v.influencer_style ?? null,
-        current_progress: v.current_progress ?? null,
         asking_price: askDb,
         target_brokerage_price: targetDb,
         currency: v.currency ?? "ILS",
@@ -383,51 +375,3 @@ export async function deleteMarketTorahBook(id: string): Promise<
   }
 }
 
-export type UploadResult =
-  | { success: true; url: string }
-  | { success: false; error: string };
-
-/** העלאת דוגמת כתב ל-Supabase Storage (bucket: media/market-hw/) */
-export async function uploadHandwritingSample(
-  formData: FormData
-): Promise<UploadResult> {
-  try {
-    const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File)) {
-      return { success: false, error: "לא נבחר קובץ" };
-    }
-    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
-      return { success: false, error: "הקובץ חורג ממגבלת 5MB" };
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "יש להתחבר" };
-
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/market-hw/${Date.now()}.${ext}`;
-    const contentType =
-      file.type && file.type !== "application/octet-stream"
-        ? file.type
-        : guessContentTypeFromFilename(file.name || `file.${ext}`);
-
-    const { error } = await supabase.storage
-      .from(MEDIA_BUCKET)
-      .upload(path, file, { contentType, upsert: true });
-
-    if (error) return { success: false, error: error.message };
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
-
-    return { success: true, url: publicUrl };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "שגיאה בהעלאה",
-    };
-  }
-}

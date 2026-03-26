@@ -182,7 +182,7 @@ export async function sendSingleMessage(
 
     let message = messageText;
     if (scribeCode?.trim()) {
-      message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+      message = message.trimEnd() + "\n\n" + scribeCode.trim();
     }
 
     if (imageUrl?.trim()) {
@@ -454,7 +454,7 @@ export async function dispatchBroadcast(
         const vars = { Name: target.name ?? "", name: target.name ?? "" };
         let message = replaceVariables(messageText, vars);
         if (scribeCode?.trim()) {
-          message = message.trimEnd() + "\n\nRef: " + scribeCode.trim();
+          message = message.trimEnd() + "\n\n" + scribeCode.trim();
         }
 
         if (validatedImageUrl) {
@@ -572,5 +572,28 @@ export async function insertBroadcastLog(
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     logError("Broadcast", "insertBroadcastLog failed", { error: String(err) });
     return { success: false, error: msg };
+  }
+}
+
+/** Delete a single broadcast log row (by ID, scoped to current user) */
+export async function deleteBroadcastLog(
+  id: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("broadcast_logs")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/broadcast");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
