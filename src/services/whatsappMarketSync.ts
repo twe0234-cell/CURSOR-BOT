@@ -34,10 +34,6 @@ function combinedMessageText(m: GreenChatHistoryMessage): string {
   return parts.join("\n");
 }
 
-function isIncoming(m: GreenChatHistoryMessage): boolean {
-  return String(m.type ?? "").toLowerCase() === "incoming";
-}
-
 async function downloadAndUploadWaImage(
   supabase: SupabaseClient,
   userId: string,
@@ -142,11 +138,6 @@ export async function syncMarketFromWhatsAppGroup(
   const errors: string[] = [];
 
   for (const m of hist.messages) {
-    if (!isIncoming(m)) {
-      skipped++;
-      continue;
-    }
-
     const idMsg = m.idMessage?.trim();
     if (!idMsg) {
       skipped++;

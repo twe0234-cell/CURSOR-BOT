@@ -71,7 +71,7 @@ export default function NavBar() {
 
         <nav
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-end gap-0 sm:gap-0.5 overflow-x-auto overscroll-x-contain py-0.5",
+            "flex min-w-0 flex-1 flex-nowrap overflow-x-auto w-full items-center justify-end gap-0 sm:gap-0.5 py-0.5 overscroll-x-contain",
             "scroll-pl-2 scroll-pr-2",
             "[scrollbar-width:thin]",
             "[scrollbar-color:var(--border)_transparent]",
@@ -92,7 +92,7 @@ export default function NavBar() {
                 title={label}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "group/nav-item relative flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold shrink-0",
+                  "group/nav-item relative flex shrink-0 flex-nowrap items-center gap-1 sm:gap-1.5 whitespace-nowrap rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold",
                   "transition-all duration-200 ease-out",
                   "ring-1 ring-transparent hover:ring-border/50",
                   "hover:-translate-y-px",
@@ -123,7 +123,7 @@ export default function NavBar() {
                     strokeWidth={isActive ? 2.25 : 2}
                   />
                 </motion.span>
-                <span className="hidden min-[420px]:inline sm:inline max-w-[5.5rem] sm:max-w-none truncate">
+                <span className="hidden min-[420px]:inline sm:inline whitespace-nowrap">
                   {label}
                 </span>
 
@@ -143,7 +143,7 @@ export default function NavBar() {
             type="button"
             onClick={handleSignOut}
             title="התנתקות"
-            className="group/nav-out flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold text-muted-foreground shrink-0 transition-all duration-200 hover:bg-destructive/10 hover:text-destructive hover:ring-1 hover:ring-destructive/15 hover:-translate-y-px"
+            className="group/nav-out flex shrink-0 flex-nowrap items-center gap-1 sm:gap-1.5 whitespace-nowrap rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive hover:ring-1 hover:ring-destructive/15 hover:-translate-y-px"
           >
             <motion.span
               className="inline-flex shrink-0"

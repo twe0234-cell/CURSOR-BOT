@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeMarketMessageText,
   parseMarketTorahMessage,
   parsedMessageIsActionable,
 } from "./parseWhatsAppMarketMessage";
@@ -38,5 +39,21 @@ describe("parseMarketTorahMessage", () => {
     expect(p.torah_size).toBeNull();
     expect(p.script_type).toBeNull();
     expect(parsedMessageIsActionable(p)).toBe(false);
+  });
+
+  it("handles CRLF and line breaks between fields", () => {
+    const raw = "ספרדי\r\n48\r\nמחיר\r\n120 אלף";
+    expect(normalizeMarketMessageText(raw)).toMatch(/ספרדי 48 מחיר 120 אלף/);
+    const p = parseMarketTorahMessage(raw);
+    expect(p.torah_size).toBe("48");
+    expect(p.script_type).toBe("ספרדי");
+    expect(p.asking_price_full_shekels).toBe(120_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
+  });
+
+  it("collapses NBSP and extra spaces", () => {
+    const p = parseMarketTorahMessage("ספרדי\u00a0\u00a048  מחיר  90 אלף");
+    expect(p.torah_size).toBe("48");
+    expect(p.asking_price_full_shekels).toBe(90_000);
   });
 });

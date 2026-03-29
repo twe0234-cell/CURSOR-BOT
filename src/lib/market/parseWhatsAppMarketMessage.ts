@@ -11,9 +11,25 @@ export type ParsedMarketTorahMessage = {
 
 const SIZE_RE = /\b(36|42|45|48|50|56)\b/;
 
+/**
+ * אחידות לפני regex: סיומי שורה, רווחים אופקיים, תווי כיווניות.
+ * ממיר שבירות שורה לרווח יחיד כדי שדפוסים כמו "מחיר" ומספר בשורה נפרדת יימצאו.
+ */
+export function normalizeMarketMessageText(raw: string): string {
+  return raw
+    .replace(/\u200f|\u200e|\u202a|\u202b|\u202c/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[\t\f\v]+/g, " ")
+    .replace(/ *\n+ */g, " ")
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
+
 /** מחיר: ליד מילות מפתח או סימני מטבע */
 function extractPriceFullShekels(text: string): number | null {
-  const t = text.replace(/\u200f/g, "").trim();
+  const t = text.trim();
   if (!t) return null;
 
   const nearPrice =
@@ -62,9 +78,10 @@ function extractTorahSize(text: string): string | null {
 }
 
 export function parseMarketTorahMessage(text: string): ParsedMarketTorahMessage {
-  const torah_size = extractTorahSize(text);
-  const script_type = extractScript(text);
-  const asking_price_full_shekels = extractPriceFullShekels(text);
+  const normalized = normalizeMarketMessageText(text);
+  const torah_size = extractTorahSize(normalized);
+  const script_type = extractScript(normalized);
+  const asking_price_full_shekels = extractPriceFullShekels(normalized);
   return { torah_size, script_type, asking_price_full_shekels };
 }
 
