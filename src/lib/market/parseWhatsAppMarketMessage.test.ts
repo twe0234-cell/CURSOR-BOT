@@ -56,4 +56,21 @@ describe("parseMarketTorahMessage", () => {
     expect(p.torah_size).toBe("48");
     expect(p.asking_price_full_shekels).toBe(90_000);
   });
+
+  it("parses ארי 36 / שיינר / 185 אלף across lines (image caption style)", () => {
+    const raw = "ארי 36\nשיינר\n185 אלף\nמוכן.";
+    const p = parseMarketTorahMessage(raw);
+    expect(p.torah_size).toBe("36");
+    expect(p.script_type).toBe("ארי");
+    expect(p.asking_price_full_shekels).toBe(185_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
+  });
+
+  it("maps שיינר alone with size and price to ב״י", () => {
+    const p = parseMarketTorahMessage("שיינר\n45\n200 אלף");
+    expect(p.torah_size).toBe("45");
+    expect(p.script_type).toBe("ב״י");
+    expect(p.asking_price_full_shekels).toBe(200_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
+  });
 });

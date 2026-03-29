@@ -8,6 +8,8 @@ import {
   type GreenChatHistoryMessage,
 } from "@/lib/whatsapp/greenApi";
 import {
+  explainParseNotActionable,
+  listMissingParseFields,
   parseMarketTorahMessage,
   parsedMessageIsActionable,
 } from "@/src/lib/market/parseWhatsAppMarketMessage";
@@ -31,6 +33,9 @@ function combinedMessageText(m: GreenChatHistoryMessage): string {
   push(m.textMessage);
   push(m.extendedTextMessage?.text);
   push(m.caption);
+  push(m.imageMessage?.caption ?? undefined);
+  push(m.videoMessage?.caption ?? undefined);
+  push(m.documentMessage?.caption ?? undefined);
   return parts.join("\n");
 }
 
@@ -112,9 +117,24 @@ export async function syncMarketFromWhatsAppGroup(
     return { success: false, error: "חסרים Instance ID או API Token של Green API" };
   }
 
+  console.log("[WA sync] Fetching history for group (wa_market_group_id):", groupId);
+
   const hist = await greenApiGetChatHistory(instanceId, token, groupId, 20);
   if (!hist.ok) {
     return { success: false, error: hist.error };
+  }
+
+  const sampleN = Math.min(3, hist.messages.length);
+  console.log("[WA sync] history message count:", hist.messages.length, "logging first", sampleN, "raw payloads");
+  for (let i = 0; i < sampleN; i++) {
+    const msg = hist.messages[i];
+    const raw = JSON.stringify(msg);
+    console.log(
+      "[WA sync] raw message sample",
+      i,
+      { type: msg.type, typeMessage: msg.typeMessage, idMessage: msg.idMessage?.slice(0, 24) },
+      raw.length > 1200 ? `${raw.slice(0, 1200)}…` : raw
+    );
   }
 
   const { data: existingRows, error: exErr } = await supabase
@@ -137,7 +157,8 @@ export async function syncMarketFromWhatsAppGroup(
   let skipped = 0;
   const errors: string[] = [];
 
-  for (const m of hist.messages) {
+  for (let mi = 0; mi < hist.messages.length; mi++) {
+    const m = hist.messages[mi];
     const idMsg = m.idMessage?.trim();
     if (!idMsg) {
       skipped++;
@@ -150,12 +171,30 @@ export async function syncMarketFromWhatsAppGroup(
 
     const body = combinedMessageText(m);
     if (!body.trim()) {
+      if (mi < 3) {
+        console.log("[WA sync] empty extracted text — inspect nested media", {
+          idMessage: idMsg.slice(0, 32),
+          type: m.type,
+          typeMessage: m.typeMessage,
+          hasDownloadUrl: Boolean(m.downloadUrl),
+        });
+      }
       skipped++;
       continue;
     }
 
+    console.log("[WA sync] Extracted Text:", body.slice(0, 500) + (body.length > 500 ? "…" : ""));
+
     const parsed = parseMarketTorahMessage(body);
+    console.log("[WA sync] parseMarketTorahMessage result:", parsed);
+
     if (!parsedMessageIsActionable(parsed)) {
+      console.log("[WA sync] parse NOT actionable:", {
+        idMessage: idMsg.slice(0, 32),
+        reasons: explainParseNotActionable(parsed),
+        missingFieldHints: listMissingParseFields(parsed),
+        parsed,
+      });
       skipped++;
       continue;
     }

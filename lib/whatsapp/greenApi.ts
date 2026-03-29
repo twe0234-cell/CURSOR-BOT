@@ -94,6 +94,9 @@ export function fileNameForImageUrl(url: string): string {
 
 const GREEN_API_BASE = "https://api.green-api.com";
 
+/** מבנים מקוננים — Green-API (במיוחד outgoing) לעיתים שמים כיתוב תחת imageMessage וכו׳ */
+export type GreenMediaCaption = { caption?: string | null } | null | undefined;
+
 export type GreenChatHistoryMessage = {
   type?: string;
   typeMessage?: string;
@@ -104,6 +107,9 @@ export type GreenChatHistoryMessage = {
   fileName?: string;
   mimeType?: string;
   extendedTextMessage?: { text?: string } | null;
+  imageMessage?: GreenMediaCaption;
+  videoMessage?: GreenMediaCaption;
+  documentMessage?: GreenMediaCaption;
 };
 
 /**
