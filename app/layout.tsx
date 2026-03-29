@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const APP_TITLE = "הידור הסת״ם";
+const APP_DESCRIPTION = "מערכת ניהול חכמה לסת״ם";
+
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const supabase = await createClient();
@@ -25,16 +28,16 @@ export async function generateMetadata(): Promise<Metadata> {
       .eq("id", "default")
       .single();
 
-    const logoUrl = data?.logo_url;
+    const logoUrl = data?.logo_url?.trim() || undefined;
     return {
-      title: "Broadcast Buddy",
-      description: "מערכת שידור הודעות וואטסאפ",
-      icons: logoUrl ? { icon: logoUrl, apple: logoUrl } : undefined,
+      title: APP_TITLE,
+      description: APP_DESCRIPTION,
+      icons: logoUrl ? { icon: logoUrl, apple: logoUrl, shortcut: logoUrl } : undefined,
     };
   } catch {
     return {
-      title: "Broadcast Buddy",
-      description: "מערכת שידור הודעות וואטסאפ",
+      title: APP_TITLE,
+      description: APP_DESCRIPTION,
     };
   }
 }

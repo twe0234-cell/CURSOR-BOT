@@ -7,38 +7,61 @@ import { PrinterIcon } from "lucide-react";
 
 type Props = {
   value: string;
-  /** Niimbot B1 label ~25x15mm at 96dpi ≈ 94x57px; use 2x for retina */
+  /** Barcode module width (react-barcode) */
   width?: number;
   height?: number;
 };
 
-export function BarcodePrint({ value, width = 2, height = 1 }: Props) {
+/**
+ * Opens a print window sized for Nimbot B1 landscape labels (50mm × 30mm),
+ * matching Torah QA batch print CSS.
+ */
+export function BarcodePrint({ value, width = 1.4, height = 0.9 }: Props) {
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
     if (!printRef.current) return;
-    const printWindow = window.open("", "_blank", "width=400,height=200");
+    const printWindow = window.open("", "_blank", "width=400,height=320");
     if (!printWindow) return;
+    const inner = printRef.current.innerHTML;
     printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="rtl">
         <head>
+          <meta charset="utf-8" />
           <title>הדפסת מק״ט</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              width: 25mm;
-              height: 15mm;
-              padding: 2mm;
-              font-family: sans-serif;
-              font-size: 8px;
+            @media print {
+              @page { size: 50mm 30mm; margin: 0; }
+              body {
+                width: 50mm;
+                height: 30mm;
+                margin: 0;
+                padding: 2mm;
+                overflow: hidden;
+              }
             }
-            .barcode-wrap { display: flex; justify-content: center; align-items: center; }
-            svg { max-width: 100%; height: auto; }
+            body {
+              width: 50mm;
+              height: 30mm;
+              margin: 0;
+              padding: 2mm;
+              overflow: hidden;
+              font-family: system-ui, sans-serif;
+            }
+            .barcode-wrap {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 100%;
+            }
+            .barcode-wrap svg { max-width: 100%; height: auto; }
           </style>
         </head>
         <body>
-          <div class="barcode-wrap">${printRef.current.innerHTML}</div>
+          <div class="barcode-wrap">${inner}</div>
         </body>
       </html>
     `);
@@ -47,18 +70,18 @@ export function BarcodePrint({ value, width = 2, height = 1 }: Props) {
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
-    }, 250);
+    }, 300);
   };
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div ref={printRef} className="[&>svg]:max-w-full [&>svg]:h-auto">
+      <div ref={printRef} className="nimbot-b1-label flex items-center justify-center [&>svg]:max-w-full [&>svg]:h-auto">
         <Barcode
           value={value}
           width={width}
           height={height}
           displayValue={true}
-          fontSize={10}
+          fontSize={8}
         />
       </div>
       <Button

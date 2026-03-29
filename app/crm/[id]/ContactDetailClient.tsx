@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { updateCrmContact, addTransaction, addDocument, addContactHistoryNote, upsertSoferProfile } from "../actions";
+import type { CrmContactHistoryEntry } from "@/src/lib/types/crm";
+import { updateCrmContact, updateContactTags, addTransaction, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
+import { StarRating } from "@/components/ui/StarRating";
 
 type Contact = {
   id: string;
@@ -67,6 +69,7 @@ export type LedgerPaymentRow = {
 type SoferProfile = {
   writing_style: string | null;
   writing_level: string | null;
+  handwriting_quality: number | null;
   daily_page_capacity: number | null;
   pricing_notes: string | null;
   writing_constraints: string | null;
@@ -78,8 +81,8 @@ type Props = {
   soferProfile: SoferProfile;
   transactions: Array<{ id: string; amount: number; type: string; description: string | null; date: string }>;
   documents: Array<{ id: string; file_url: string; doc_type: string; name: string | null }>;
-  logs: Array<{ id: string; channel: string; content: string | null; timestamp: string }>;
-  contactHistory: Array<{ id: string; body: string; created_at: string; follow_up_date: string | null }>;
+  logs: Array<{ id: string; channel: string; content: string | null; timestamp: string; direction: string | null }>;
+  contactHistory: CrmContactHistoryEntry[];
   debtToContact: number;
   debtFromContact: number;
   futureCommitment: number;
@@ -111,6 +114,137 @@ type Props = {
     target_date: string | null;
   }>;
 };
+
+type LegacyCommLog = {
+  id: string;
+  channel: string;
+  content: string | null;
+  timestamp: string;
+  direction: string | null;
+};
+
+function HistoryTimelineBubble({ row }: { row: CrmContactHistoryEntry }) {
+  const subject =
+    typeof row.metadata?.subject === "string" ? row.metadata.subject : null;
+  const isWa = row.source === "whatsapp";
+  const isGmail = row.source === "gmail";
+  const isManual = row.source === "manual";
+  const isSystem = row.source === "system";
+  const incoming = row.direction === "in";
+  const outgoing = row.direction === "out";
+
+  let align = "self-center max-w-[92%]";
+  let boxClass =
+    "rounded-xl border bg-slate-100 text-slate-800 border-slate-200";
+
+  if (isWa) {
+    if (incoming) {
+      align = "self-start max-w-[88%]";
+      boxClass =
+        "rounded-xl border bg-emerald-50 text-emerald-950 border-emerald-200";
+    } else if (outgoing) {
+      align = "self-end max-w-[88%]";
+      boxClass =
+        "rounded-xl border bg-emerald-700 text-white border-emerald-800";
+    }
+  } else if (isGmail) {
+    boxClass =
+      "rounded-xl border bg-sky-50 text-sky-950 border-sky-200";
+  } else if (isManual || isSystem) {
+    boxClass =
+      "rounded-xl border bg-slate-100 text-slate-800 border-slate-200 text-center";
+  }
+
+  const Icon =
+    isWa ? MessageCircleIcon : isGmail ? MailIcon : FileTextIcon;
+
+  return (
+    <div className={align}>
+      <div className={`${boxClass} p-3 text-sm shadow-sm`}>
+        <div
+          className={`flex items-center gap-2 mb-1 text-xs font-medium opacity-90 ${isManual || isSystem ? "justify-center" : ""}`}
+        >
+          <Icon className="size-3.5 shrink-0" />
+          <span>
+            {row.source === "whatsapp"
+              ? "וואטסאפ"
+              : row.source === "gmail"
+                ? "דוא״ל"
+                : row.source === "manual"
+                  ? "הערה ידנית"
+                  : "מערכת"}
+            {row.direction === "in"
+              ? " · נכנס"
+              : row.direction === "out"
+                ? " · יוצא"
+                : row.direction === "internal"
+                  ? " · פנימי"
+                  : ""}
+          </span>
+        </div>
+        {subject && (
+          <p className="text-xs font-semibold mb-1 break-words">{subject}</p>
+        )}
+        <p className="whitespace-pre-wrap break-words">{row.body}</p>
+        <div className="mt-2 flex flex-wrap justify-between gap-3 text-[11px] opacity-75">
+          <span>{new Date(row.created_at).toLocaleString("he-IL")}</span>
+          {row.follow_up_date && (
+            <span className="font-medium text-blue-600">
+              מעקב: {new Date(row.follow_up_date).toLocaleDateString("he-IL")}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegacyLogBubble({ log }: { log: LegacyCommLog }) {
+  const ch = log.channel;
+  const isWa = ch === "WhatsApp";
+  const isEmail = ch === "Email";
+  const incoming = log.direction === "inbound";
+  const outgoing = log.direction === "outbound";
+
+  let align = "self-center max-w-[92%]";
+  let boxClass = "rounded-xl border bg-slate-100 text-slate-800 border-slate-200";
+
+  if (isWa) {
+    if (outgoing) {
+      align = "self-end max-w-[88%]";
+      boxClass =
+        "rounded-xl border bg-emerald-700 text-white border-emerald-800";
+    } else {
+      align = "self-start max-w-[88%]";
+      boxClass =
+        "rounded-xl border bg-emerald-50 text-emerald-950 border-emerald-200";
+    }
+  } else if (isEmail) {
+    boxClass =
+      "rounded-xl border bg-sky-50 text-sky-950 border-sky-200";
+  }
+
+  const Icon = isWa ? MessageCircleIcon : MailIcon;
+  const desc = (log.content ?? "").slice(0, 2000);
+
+  return (
+    <div className={align}>
+      <div className={`${boxClass} p-3 text-sm shadow-sm`}>
+        <div className="mb-1 flex items-center gap-2 text-xs font-medium opacity-90">
+          <Icon className="size-3.5 shrink-0" />
+          <span>
+            {ch}
+            {outgoing ? " · יוצא" : incoming ? " · נכנס" : " · יומן ישן"}
+          </span>
+        </div>
+        <p className="break-words whitespace-pre-wrap">{desc}</p>
+        <p className="mt-2 text-[11px] opacity-70">
+          {new Date(log.timestamp).toLocaleString("he-IL")}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function ledgerEntityTypeHe(t: string): string {
   if (t === "sale") return "מכירה";
@@ -153,12 +287,15 @@ export default function ContactDetailClient({
   const [soferForm, setSoferForm] = useState({
     writing_style: initialSoferProfile?.writing_style ?? "",
     writing_level: initialSoferProfile?.writing_level ?? "",
+    handwriting_quality: initialSoferProfile?.handwriting_quality ?? null as number | null,
     daily_page_capacity: initialSoferProfile?.daily_page_capacity?.toString() ?? "",
     pricing_notes: initialSoferProfile?.pricing_notes ?? "",
     writing_constraints: initialSoferProfile?.writing_constraints ?? "",
     past_writings: initialSoferProfile?.past_writings ?? "",
   });
   const [soferLoading, setSoferLoading] = useState(false);
+  const [tagsLine, setTagsLine] = useState(() => initialContact.tags.join(", "));
+  const [tagsSaving, setTagsSaving] = useState(false);
 
   const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + t.amount, 0);
   const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
@@ -182,6 +319,27 @@ export default function ContactDetailClient({
 
   const badges = roleBadges(contact.type);
 
+  type TimelineItem =
+    | { kind: "history"; at: string; data: CrmContactHistoryEntry }
+    | { kind: "legacy"; at: string; data: LegacyCommLog };
+
+  const timeline = useMemo(() => {
+    const items: TimelineItem[] = [
+      ...history.map((data) => ({
+        kind: "history" as const,
+        at: data.created_at,
+        data,
+      })),
+      ...logs.map((data) => ({
+        kind: "legacy" as const,
+        at: data.timestamp,
+        data,
+      })),
+    ];
+    items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return items;
+  }, [history, logs]);
+
   const handleSaveProfile = async () => {
     const res = await updateCrmContact(contact.id, {
       wa_chat_id: editWa.trim() || undefined,
@@ -193,18 +351,31 @@ export default function ContactDetailClient({
       phone_type: editPhoneType.trim() || undefined,
     });
     if (res.success) {
+      const nextTags = editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean);
       setContact((prev) => ({
         ...prev,
         wa_chat_id: editWa.trim() || null,
         email: editEmail.trim() || null,
         phone: editPhone.trim() || null,
-        tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
+        tags: nextTags,
         notes: editNotes.trim() || null,
         certification: editCertification.trim() || null,
         phone_type: editPhoneType.trim() || null,
       }));
+      setTagsLine(nextTags.join(", "));
       setEditMode(false);
       toast.success("נשמר");
+    } else toast.error(res.error);
+  };
+
+  const handleSaveTagsOnly = async () => {
+    const tags = tagsLine.split(/[,]+/).map((t) => t.trim()).filter(Boolean);
+    setTagsSaving(true);
+    const res = await updateContactTags(contact.id, tags);
+    setTagsSaving(false);
+    if (res.success) {
+      setContact((prev) => ({ ...prev, tags }));
+      toast.success("תגיות נשמרו");
     } else toast.error(res.error);
   };
 
@@ -212,15 +383,15 @@ export default function ContactDetailClient({
     e.preventDefault();
     if (!noteBody.trim()) return;
     setNoteLoading(true);
-    const res = await addContactHistoryNote(contact.id, noteBody.trim(), noteFollowUp || null);
+    const res = await addHistoryEntry(contact.id, {
+      body: noteBody.trim(),
+      follow_up_date: noteFollowUp || null,
+      direction: "internal",
+      source: "manual",
+    });
     setNoteLoading(false);
     if (res.success) {
-      setHistory((prev) => [{
-        id: crypto.randomUUID(),
-        body: noteBody.trim(),
-        created_at: new Date().toISOString(),
-        follow_up_date: noteFollowUp || null,
-      }, ...prev]);
+      setHistory((prev) => [res.entry, ...prev]);
       setNoteBody("");
       setNoteFollowUp("");
       toast.success("הערה נשמרה");
@@ -233,6 +404,7 @@ export default function ContactDetailClient({
     const res = await upsertSoferProfile(contact.id, {
       writing_style: soferForm.writing_style || null,
       writing_level: soferForm.writing_level || null,
+      handwriting_quality: soferForm.handwriting_quality,
       daily_page_capacity: soferForm.daily_page_capacity ? Number(soferForm.daily_page_capacity) : null,
       pricing_notes: soferForm.pricing_notes || null,
       writing_constraints: soferForm.writing_constraints || null,
@@ -243,6 +415,7 @@ export default function ContactDetailClient({
       setSoferProfile({
         writing_style: soferForm.writing_style || null,
         writing_level: soferForm.writing_level || null,
+        handwriting_quality: soferForm.handwriting_quality,
         daily_page_capacity: soferForm.daily_page_capacity ? Number(soferForm.daily_page_capacity) : null,
         pricing_notes: soferForm.pricing_notes || null,
         writing_constraints: soferForm.writing_constraints || null,
@@ -434,6 +607,31 @@ export default function ContactDetailClient({
             </Collapsible>
           </CardContent>
         )}
+      </Card>
+
+      <Card className="border-teal-100 shadow-sm">
+        <CardHeader className="pb-2">
+          <h3 className="text-sm font-semibold text-teal-900">תגיות</h3>
+          <p className="text-xs text-muted-foreground">הפרדה בפסיק — שמירה נפרדת מפרופיל</p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <Input
+            value={tagsLine}
+            onChange={(e) => setTagsLine(e.target.value)}
+            placeholder="למשל: VIP, ספר תורה"
+            className="rounded-lg flex-1"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={tagsSaving}
+            onClick={() => void handleSaveTagsOnly()}
+          >
+            {tagsSaving ? "שומר..." : "שמור תגיות"}
+          </Button>
+        </CardContent>
       </Card>
 
       <Tabs defaultValue="ledger" className="w-full">
@@ -734,53 +932,35 @@ export default function ContactDetailClient({
             </CardContent>
           </Card>
 
-          {/* History timeline */}
+          {/* Unified communication timeline */}
           <Card className="border-teal-100">
             <CardHeader>
-              <h3 className="font-semibold">היסטוריית התקשרויות ({history.length})</h3>
+              <h3 className="font-semibold">ציר זמן מאוחד ({timeline.length})</h3>
+              <p className="text-xs text-muted-foreground">
+                הערות, מערכת, ועתידית: דוא״ל ווואטסאפ — לפי כיוון ומקור
+              </p>
             </CardHeader>
             <CardContent>
-              {history.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">אין הערות עדיין</p>
+              {timeline.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  אין פעילות מתועדת
+                </p>
               ) : (
-                <div className="space-y-3 max-h-[480px] overflow-y-auto">
-                  {history.map((h) => (
-                    <div key={h.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm space-y-1">
-                      <p className="whitespace-pre-wrap">{h.body}</p>
-                      <div className="flex gap-4 text-xs text-muted-foreground pt-1">
-                        <span>{new Date(h.created_at).toLocaleString("he-IL")}</span>
-                        {h.follow_up_date && (
-                          <span className="text-blue-600 font-medium">
-                            מעקב: {new Date(h.follow_up_date).toLocaleDateString("he-IL")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div
+                  dir="ltr"
+                  className="flex max-h-[520px] flex-col gap-3 overflow-y-auto px-1"
+                >
+                  {timeline.map((item) =>
+                    item.kind === "history" ? (
+                      <HistoryTimelineBubble key={`h-${item.data.id}`} row={item.data} />
+                    ) : (
+                      <LegacyLogBubble key={`l-${item.data.id}`} log={item.data} />
+                    )
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
-
-          {/* Communication log (WhatsApp/email) */}
-          {logs.length > 0 && (
-            <Card className="border-teal-100">
-              <CardHeader>
-                <h3 className="font-semibold">יומן תקשורת אוטומטי</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
-                  {logs.map((l) => (
-                    <div key={l.id} className="border-b border-slate-100 pb-2">
-                      <span className="text-muted-foreground">{l.channel}</span> ·{" "}
-                      {new Date(l.timestamp).toLocaleString("he-IL")}
-                      <p className="mt-1">{(l.content ?? "").slice(0, 200)}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <Card className="border-teal-100">
             <CardHeader>
@@ -833,9 +1013,27 @@ export default function ContactDetailClient({
                       <label className="text-xs text-muted-foreground">סגנון כתיבה</label>
                       <Input value={soferForm.writing_style} onChange={(e) => setSoferForm((f) => ({ ...f, writing_style: e.target.value }))} className="mt-1" />
                     </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-muted-foreground">רמת כתב (כוכבים)</label>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <StarRating
+                          value={soferForm.handwriting_quality}
+                          onChange={(v) => setSoferForm((f) => ({ ...f, handwriting_quality: v }))}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-8"
+                          onClick={() => setSoferForm((f) => ({ ...f, handwriting_quality: null }))}
+                        >
+                          נקה דירוג
+                        </Button>
+                      </div>
+                    </div>
                     <div>
-                      <label className="text-xs text-muted-foreground">רמת כתב</label>
-                      <Input value={soferForm.writing_level} onChange={(e) => setSoferForm((f) => ({ ...f, writing_level: e.target.value }))} className="mt-1" />
+                      <label className="text-xs text-muted-foreground">תיאור רמה (טקסט)</label>
+                      <Input value={soferForm.writing_level} onChange={(e) => setSoferForm((f) => ({ ...f, writing_level: e.target.value }))} className="mt-1" placeholder="מהודר, תיוג..." />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">קיבולת יומית (עמודים)</label>
@@ -861,7 +1059,11 @@ export default function ContactDetailClient({
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4 text-sm">
                   <div><span className="text-xs text-muted-foreground">סגנון כתיבה</span><p className="font-medium">{soferProfile?.writing_style ?? "—"}</p></div>
-                  <div><span className="text-xs text-muted-foreground">רמת כתב</span><p className="font-medium">{soferProfile?.writing_level ?? "—"}</p></div>
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">רמת כתב (כוכבים)</span>
+                    <StarRating value={soferProfile?.handwriting_quality} readOnly size="md" />
+                  </div>
+                  <div className="sm:col-span-2"><span className="text-xs text-muted-foreground">תיאור רמה</span><p className="font-medium">{soferProfile?.writing_level ?? "—"}</p></div>
                   <div><span className="text-xs text-muted-foreground">קיבולת יומית</span><p className="font-medium">{soferProfile?.daily_page_capacity ?? "—"} עמ׳</p></div>
                   <div><span className="text-xs text-muted-foreground">הערות תמחור</span><p className="font-medium">{soferProfile?.pricing_notes ?? "—"}</p></div>
                   {soferProfile?.writing_constraints && (

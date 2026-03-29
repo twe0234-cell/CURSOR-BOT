@@ -66,7 +66,7 @@ export default function NavBar() {
 
         {/* Navigation */}
         <nav
-          className="flex min-w-0 flex-1 items-center justify-end gap-0.5 sm:gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-thin py-1"
+          className="flex min-w-0 flex-1 items-center justify-end gap-0.5 sm:gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-hide py-1"
           aria-label="ניווט ראשי"
         >
           {navItems.map(({ href, label, icon: Icon }) => {

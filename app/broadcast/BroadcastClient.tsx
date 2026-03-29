@@ -19,7 +19,7 @@ import {
   type BroadcastLog,
   type QueueItem,
 } from "./actions";
-import { SendIcon, VariableIcon, SmileIcon, CheckCircleIcon, XCircleIcon, HistoryIcon, Trash2 } from "lucide-react";
+import { SendIcon, VariableIcon, SmileIcon, HistoryIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isImageFile } from "@/lib/upload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -291,7 +291,8 @@ export default function BroadcastClient({
         errors,
         [...selectedTags],
         finalScribe,
-        internalNotes.trim() || undefined
+        internalNotes.trim() || undefined,
+        messageText.trim()
       );
       toast.success(
         `שידור הושלם! נשלח בהצלחה: ${sent}, נכשלו: ${failed}`,
@@ -314,26 +315,15 @@ export default function BroadcastClient({
     });
   };
 
-  const formatDate = (s: string) => {
+  const formatDateTime = (s: string) => {
     const d = new Date(s);
-    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  };
-
-  const renderLogDetails = (item: QueueItem) => {
-    const details = item.log_details as Array<{ chatId?: string; ok?: boolean; error?: string; response?: unknown }> | null;
-    if (!details || !Array.isArray(details)) return null;
-    const failed = details.filter((d) => !d.ok);
-    if (failed.length === 0) return null;
-    return (
-      <ul className="mt-2 space-y-1 text-xs text-red-600 max-h-32 overflow-y-auto">
-        {failed.map((d, i) => (
-          <li key={i} className="break-words">
-            {d.chatId && <span className="font-mono">{d.chatId}: </span>}
-            {d.error ?? (typeof d.response === "object" ? JSON.stringify(d.response) : String(d.response))}
-          </li>
-        ))}
-      </ul>
-    );
+    return d.toLocaleString("he-IL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   return (
@@ -558,88 +548,72 @@ export default function BroadcastClient({
               {queueItems.length === 0 && logs.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">אין עדיין שידורים</p>
               ) : (
-                <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
-                  {/* Cron / queue broadcasts */}
+                <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                  {queueItems.length > 0 && (
+                    <p className="text-xs font-medium text-muted-foreground">תור רקע (סיכום)</p>
+                  )}
                   {queueItems.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                      className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto] gap-2 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm"
                     >
-                      <span className="text-xs text-muted-foreground w-28 shrink-0">{formatDate(item.created_at)}</span>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium shrink-0",
-                          item.status === "completed" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                        )}
-                      >
-                        {item.status === "completed" ? "הושלם" : "נכשל"}
+                      <span className="text-muted-foreground tabular-nums">{formatDateTime(item.created_at)}</span>
+                      <span className="text-slate-600 truncate" title={item.payload?.tags?.join(", ") ?? ""}>
+                        {item.payload?.tags?.length ? `תגיות: ${item.payload.tags.join(", ")}` : "שידור מתוזמן"}
                       </span>
-                      {item.result && (
-                        <>
-                          <span className="flex items-center gap-1 text-green-600 text-sm">
-                            <CheckCircleIcon className="size-3.5" />
-                            {item.result.sent ?? 0}
-                          </span>
-                          <span className="flex items-center gap-1 text-red-500 text-sm">
-                            <XCircleIcon className="size-3.5" />
-                            {item.result.failed ?? 0}
-                          </span>
-                        </>
-                      )}
-                      <span className="text-xs text-slate-400 truncate flex-1">{item.payload?.tags?.join(", ") ?? ""}</span>
+                      <span className="text-green-700 font-medium tabular-nums">
+                        ✓ {item.result?.sent ?? 0}
+                      </span>
+                      <span className="text-red-600 font-medium tabular-nums">
+                        ✗ {item.result?.failed ?? 0}
+                      </span>
                     </div>
                   ))}
-                  {/* Client-side broadcast logs */}
-                  {logs.map((log) => (
-                    <div
-                      key={`log-${log.id}`}
-                      className="flex items-center gap-3 rounded-lg border border-slate-100 bg-white px-4 py-3 group"
-                    >
-                      <span className="text-xs text-muted-foreground w-28 shrink-0">{formatDate(log.created_at)}</span>
-                      <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                        <CheckCircleIcon className="size-3.5" />
-                        {log.sent}
-                      </span>
-                      <span className="flex items-center gap-1 text-red-500 text-sm font-medium">
-                        <XCircleIcon className="size-3.5" />
-                        {log.failed}
-                      </span>
-                      {log.scribe_code && (
-                        <span className="text-xs bg-slate-100 rounded px-1.5 py-0.5 font-mono shrink-0">
-                          {log.scribe_code}
+                  {logs.length > 0 && (
+                    <p className="text-xs font-medium text-muted-foreground pt-2">שידורים ידניים</p>
+                  )}
+                  {logs.map((log) => {
+                    const snippet =
+                      log.message_snippet?.trim() ||
+                      log.internal_notes?.trim() ||
+                      (log.tags.length ? `תגיות: ${log.tags.join(", ")}` : "—");
+                    return (
+                      <div
+                        key={`log-${log.id}`}
+                        className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto_auto] gap-2 items-center rounded-lg border border-teal-100 bg-white px-4 py-3 text-sm shadow-sm"
+                      >
+                        <span className="text-muted-foreground tabular-nums shrink-0">
+                          {formatDateTime(log.created_at)}
                         </span>
-                      )}
-                      {log.tags.length > 0 && (
-                        <span className="text-xs text-slate-400 truncate flex-1">{log.tags.join(", ")}</span>
-                      )}
-                      {log.errors.length > 0 && (
-                        <details className="text-xs shrink-0">
-                          <summary className="cursor-pointer text-red-400">{log.errors.length} שגיאות</summary>
-                          <ul className="absolute z-10 mt-1 rounded border bg-white p-2 shadow-md space-y-1 text-red-600 max-w-xs">
-                            {log.errors.slice(0, 5).map((e, i) => (
-                              <li key={i} className="break-words">{e}</li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50"
-                        title="מחק רשומה"
-                        onClick={async () => {
-                          const res = await deleteBroadcastLog(log.id);
-                          if (res.success) {
-                            setLogs((prev) => prev.filter((l) => l.id !== log.id));
-                          } else {
-                            toast.error("שגיאה במחיקה: " + res.error);
-                          }
-                        }}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+                        <p className="text-slate-800 min-w-0 line-clamp-2" title={snippet}>
+                          {snippet}
+                        </p>
+                        <span className="text-green-700 font-semibold tabular-nums whitespace-nowrap">
+                          הצלחות: {log.sent}
+                        </span>
+                        <span className="text-red-600 font-semibold tabular-nums whitespace-nowrap">
+                          כשלונות: {log.failed}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-red-200 text-red-700 hover:bg-red-50"
+                          type="button"
+                          onClick={async () => {
+                            const res = await deleteBroadcastLog(log.id);
+                            if (res.success) {
+                              setLogs((prev) => prev.filter((l) => l.id !== log.id));
+                              toast.success("נמחק");
+                            } else {
+                              toast.error("שגיאה במחיקה: " + res.error);
+                            }
+                          }}
+                        >
+                          🗑️ מחיקה
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

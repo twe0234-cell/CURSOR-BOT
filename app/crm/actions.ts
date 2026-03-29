@@ -23,6 +23,8 @@ export type {
   ActionResult,
   CreateCrmContactInput,
   UpdateCrmContactInput,
+  AddHistoryEntryInput,
+  AddHistoryEntryResult,
 } from "@/src/services/crm.service";
 
 // ─── Read-only actions (no cache invalidation needed) ────────────────────────
@@ -99,9 +101,26 @@ export async function updateCrmContact(
   return result;
 }
 
+export async function updateContactTags(contactId: string, tags: string[]) {
+  const result = await crm.updateContactTags(contactId, tags);
+  if (result.success) {
+    revalidatePath("/crm");
+    revalidatePath(`/crm/${contactId}`);
+  }
+  return result;
+}
 
 export async function addContactHistoryNote(contactId: string, body: string, follow_up_date?: string | null) {
   const result = await crm.addContactHistoryNote(contactId, body, follow_up_date);
+  if (result.success) {
+    revalidatePath("/crm");
+    revalidatePath(`/crm/${contactId}`);
+  }
+  return result;
+}
+
+export async function addHistoryEntry(contactId: string, input: crm.AddHistoryEntryInput) {
+  const result = await crm.addHistoryEntry(contactId, input);
   if (result.success) {
     revalidatePath("/crm");
     revalidatePath(`/crm/${contactId}`);

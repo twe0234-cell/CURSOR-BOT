@@ -18,6 +18,7 @@ import {
   createTorahProject,
   fetchCrmContactsForSelect,
 } from "./actions";
+import { createCrmContact } from "@/app/crm/actions";
 import type { TorahProjectWithNames, TorahProjectStatus } from "@/src/lib/types/torah";
 import {
   TORAH_PROJECT_STATUS_LABELS,
@@ -51,7 +52,7 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{value} / {max} ירייות אושרו</span>
+        <span>{value} / {max} יריעות אושרו</span>
         <span>{pct}%</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -76,6 +77,11 @@ type FormState = {
   client_id: string;
   target_date: string;
   total_agreed_price: string;
+  columns_per_day: string;
+  qa_weeks_buffer: string;
+  gavra_qa_count: string;
+  computer_qa_count: string;
+  requires_tagging: boolean;
 };
 
 const emptyForm = (): FormState => ({
@@ -85,6 +91,11 @@ const emptyForm = (): FormState => ({
   client_id: "",
   target_date: "",
   total_agreed_price: "",
+  columns_per_day: "0",
+  qa_weeks_buffer: "3",
+  gavra_qa_count: "1",
+  computer_qa_count: "1",
+  requires_tagging: false,
 });
 
 function NewProjectDialog({
@@ -99,7 +110,9 @@ function NewProjectDialog({
   const [form, setForm] = useState<FormState>(emptyForm());
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
-  const [clientSearch, setClientSearch] = useState("");
+  const [newClientOpen, setNewClientOpen] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -110,13 +123,40 @@ function NewProjectDialog({
 
   const handleClose = () => {
     setForm(emptyForm());
-    setClientSearch("");
+    setNewClientName("");
+    setNewClientOpen(false);
     onOpenChange(false);
   };
 
-  const filteredClients = clientSearch.trim()
-    ? clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
-    : clients;
+  async function handleCreateClient() {
+    const name = newClientName.trim();
+    if (!name) {
+      toast.error("הזן שם לקוח");
+      return;
+    }
+    setCreatingClient(true);
+    try {
+      const res = await createCrmContact({ name, type: "End_Customer" });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      const clientId = res.id;
+      if (!clientId) {
+        toast.error("לא התקבל מזהה איש קשר");
+        return;
+      }
+      setClients((prev) =>
+        [...prev, { id: clientId, name }].sort((a, b) => a.name.localeCompare(b.name, "he"))
+      );
+      setForm((f) => ({ ...f, client_id: clientId }));
+      toast.success("לקוח נוצר ונבחר");
+      setNewClientName("");
+      setNewClientOpen(false);
+    } finally {
+      setCreatingClient(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -132,12 +172,17 @@ function NewProjectDialog({
         client_id: form.client_id || null,
         target_date: form.target_date || null,
         total_agreed_price: form.total_agreed_price === "" ? 0 : Number(form.total_agreed_price),
+        columns_per_day: form.columns_per_day === "" ? 0 : Number(form.columns_per_day),
+        qa_weeks_buffer: form.qa_weeks_buffer === "" ? 3 : Number(form.qa_weeks_buffer),
+        gavra_qa_count: form.gavra_qa_count === "" ? 1 : Number(form.gavra_qa_count),
+        computer_qa_count: form.computer_qa_count === "" ? 1 : Number(form.computer_qa_count),
+        requires_tagging: form.requires_tagging,
       });
       if (!res.success) {
         toast.error(res.error);
         return;
       }
-      toast.success("פרויקט נוצר — 62 ירייות נוצרו בהצלחה");
+      toast.success("פרויקט נוצר — 62 יריעות נוצרו בהצלחה");
       handleClose();
       onCreated();
     } finally {
@@ -146,6 +191,7 @@ function NewProjectDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="sm:max-w-lg rounded-2xl">
         <DialogHeader>
@@ -186,17 +232,26 @@ function NewProjectDialog({
           {/* Client (all CRM contacts) */}
           <div>
             <p className="text-xs text-muted-foreground mb-1">לקוח מזמין (אופציונלי)</p>
-            <div className="relative">
+            <div className="flex gap-2 items-end">
               <select
                 value={form.client_id}
                 onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">— ללא לקוח —</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-10 shrink-0 whitespace-nowrap px-3 text-sm font-semibold border-2 border-dashed border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                onClick={() => setNewClientOpen(true)}
+              >
+                ➕ לקוח חדש
+              </Button>
             </div>
           </div>
 
@@ -229,13 +284,90 @@ function NewProjectDialog({
             />
           </div>
 
+          <div className="border-t border-slate-100 pt-3 space-y-3">
+            <p className="text-xs font-medium text-slate-700">הגדרות תהליך</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">קצב סופר — עמודות ליום</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  inputMode="decimal"
+                  value={form.columns_per_day}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      columns_per_day: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">מאגר שבועות ל‑QA לפני היעד</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.qa_weeks_buffer}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      qa_weeks_buffer: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">מספר הגהות גו״ר (אדם)</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.gavra_qa_count}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      gavra_qa_count: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.computer_qa_count}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      computer_qa_count: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_tagging}
+                onChange={(e) => setForm((f) => ({ ...f, requires_tagging: e.target.checked }))}
+                className="size-4 rounded border-input"
+              />
+              נדרש תיוג חיצוני
+            </label>
+          </div>
+
           <div className="flex gap-2 pt-2">
             <Button
               type="submit"
               disabled={loading}
               className="bg-sky-600 hover:bg-sky-700 flex-1"
             >
-              {loading ? "יוצר פרויקט..." : "צור פרויקט + 62 ירייות"}
+              {loading ? "יוצר פרויקט..." : "צור פרויקט + 62 יריעות"}
             </Button>
             <Button type="button" variant="outline" onClick={handleClose}>
               ביטול
@@ -244,6 +376,38 @@ function NewProjectDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+      <Dialog open={newClientOpen} onOpenChange={setNewClientOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">לקוח חדש</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input
+              autoFocus
+              placeholder="שם מלא"
+              value={newClientName}
+              onChange={(e) => setNewClientName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleCreateClient())}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setNewClientOpen(false)}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-sky-600 hover:bg-sky-700"
+                disabled={creatingClient}
+                onClick={handleCreateClient}
+              >
+                {creatingClient ? "יוצר..." : "צור ובחר"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -302,7 +466,7 @@ function ProjectCard({ project }: { project: TorahProjectWithNames }) {
 
         {/* Sheet count footer */}
         <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs text-muted-foreground">
-          <span>{project.sheets_created} / {TORAH_SHEET_COUNT} ירייות במערכת</span>
+          <span>{project.sheets_created} / {TORAH_SHEET_COUNT} יריעות במערכת</span>
           <span className="text-sky-500 font-medium group-hover:underline">פרטים ←</span>
         </div>
       </CardContent>
@@ -341,7 +505,7 @@ export default function TorahClient({ initialProjects }: Props) {
             פרויקטי ספרי תורה
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ניהול מעקב כתיבה — ירייה לירייה
+            ניהול מעקב כתיבה — יריעה ליריעה
           </p>
         </div>
         <Button
@@ -375,7 +539,7 @@ export default function TorahClient({ initialProjects }: Props) {
                   ? Math.round((sheetsApprovedTotal / sheetsPossible) * 100)
                   : 0}%
               </p>
-              <p className="text-xs text-muted-foreground mt-1">ירייות אושרו (כולל)</p>
+              <p className="text-xs text-muted-foreground mt-1">יריעות אושרו (כולל)</p>
             </CardContent>
           </Card>
         </div>

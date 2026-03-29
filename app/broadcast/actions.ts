@@ -231,10 +231,17 @@ export type BroadcastLog = {
   tags: string[];
   scribe_code: string | null;
   internal_notes: string | null;
+  message_snippet: string | null;
   created_at: string;
   status?: string;
   log_details?: unknown;
 };
+
+function broadcastMessageSnippet(text: string, maxLen = 120): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen)}…`;
+}
 
 export type QueueItem = {
   id: string;
@@ -255,10 +262,10 @@ export async function fetchBroadcastLogs(): Promise<
 
     const { data, error } = await supabase
       .from("broadcast_logs")
-      .select("id, sent, failed, errors, tags, scribe_code, internal_notes, created_at")
+      .select("id, sent, failed, errors, tags, scribe_code, internal_notes, message_snippet, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
 
     if (error) return { success: false, error: error.message };
     const logs = (data ?? []).map((r) => ({
@@ -269,6 +276,7 @@ export async function fetchBroadcastLogs(): Promise<
       tags: (r.tags ?? []) as string[],
       scribe_code: r.scribe_code ?? null,
       internal_notes: r.internal_notes ?? null,
+      message_snippet: (r as { message_snippet?: string | null }).message_snippet ?? null,
       created_at: r.created_at ?? "",
     }));
     return { success: true, logs };
@@ -523,6 +531,7 @@ export async function dispatchBroadcast(
       tags,
       scribe_code: scribeCode?.trim() || null,
       internal_notes: internalNotes?.trim() || null,
+      message_snippet: broadcastMessageSnippet(messageText),
     });
 
     revalidatePath("/broadcast");
@@ -546,12 +555,18 @@ export async function insertBroadcastLog(
   errors: string[],
   tags: string[],
   scribeCode?: string,
-  internalNotes?: string
+  internalNotes?: string,
+  messageTextForSnippet?: string
 ): Promise<InsertLogResult> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
+
+    const snippet =
+      messageTextForSnippet != null && messageTextForSnippet.trim()
+        ? broadcastMessageSnippet(messageTextForSnippet)
+        : null;
 
     const { error } = await supabase.from("broadcast_logs").insert({
       user_id: user.id,
@@ -561,6 +576,7 @@ export async function insertBroadcastLog(
       tags,
       scribe_code: scribeCode?.trim() || null,
       internal_notes: internalNotes?.trim() || null,
+      message_snippet: snippet,
     });
 
     if (error) return { success: false, error: error.message };

@@ -23,7 +23,15 @@ import {
   computeDealFinancialsByType,
   validatePaymentAmount,
   calculateTorahProjectFinancials,
+  computeTorahScribePace,
+  shouldSendTorahScribeDelayAlert,
+  TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS,
+  buildTorahScribeDelayWhatsAppMessage,
 } from "./crm.logic";
+import {
+  columnsCountForTorahSheetNumber,
+  TORAH_SHEET_COUNT,
+} from "@/src/lib/types/torah";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. getDealFinancials
@@ -719,13 +727,17 @@ describe("calculateTorahProjectFinancials", () => {
     expect(r.pricePerColumn).toBe(100);
   });
 
-  it("62 sheets × 4 columns = 248 columns for a full scroll", () => {
-    const sheets = Array.from({ length: 62 }, () => ({
-      columns_count: 4,
-      status: "not_started",
-    }));
-    const r = calculateTorahProjectFinancials(6200, sheets);
-    expect(r.totalColumns).toBe(248);
+  it("62 sheets with STaM layout (3 cols on 1,61,62) = 245 columns", () => {
+    let sum = 0;
+    const sheets = Array.from({ length: TORAH_SHEET_COUNT }, (_, i) => {
+      const n = i + 1;
+      const columns_count = columnsCountForTorahSheetNumber(n);
+      sum += columns_count;
+      return { columns_count, status: "not_started" as const };
+    });
+    expect(sum).toBe(245);
+    const r = calculateTorahProjectFinancials(6125, sheets);
+    expect(r.totalColumns).toBe(245);
     expect(r.pricePerColumn).toBe(25);
   });
 
@@ -776,5 +788,115 @@ describe("calculateTorahProjectFinancials", () => {
       actualDebt: 0,
       futureCommitment: 5000,
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeTorahScribePace — scribe receiving / pace tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computeTorahScribePace", () => {
+  const sheets62 = () =>
+    Array.from({ length: 62 }, (_, i) => ({
+      columns_count: i === 0 || i === 60 || i === 61 ? 3 : 4,
+      status: "not_started" as const,
+    }));
+
+  it("returns unknown when startDate is missing and target not past", () => {
+    const r = computeTorahScribePace({
+      startDate: null,
+      targetDate: "2030-01-01",
+      columnsPerDay: 2,
+      sheets: sheets62(),
+      referenceDate: "2026-06-01",
+    });
+    expect(r.status).toBe("unknown");
+    expect(r.delayDays).toBe(0);
+  });
+
+  it("returns unknown when columnsPerDay is zero", () => {
+    const r = computeTorahScribePace({
+      startDate: "2026-01-01",
+      targetDate: "2026-12-01",
+      columnsPerDay: 0,
+      sheets: sheets62(),
+      referenceDate: "2026-06-01",
+    });
+    expect(r.status).toBe("unknown");
+  });
+
+  it("is on_track when actual meets expected for elapsed days", () => {
+    const sheets = sheets62();
+    sheets[0]!.status = "written";
+    sheets[1]!.status = "written";
+    const r = computeTorahScribePace({
+      startDate: "2026-01-01",
+      targetDate: "2027-01-01",
+      columnsPerDay: 2,
+      sheets,
+      referenceDate: "2026-01-02",
+    });
+    expect(r.daysElapsed).toBe(1);
+    expect(r.expectedColumns).toBe(2);
+    expect(r.actualColumns).toBe(7);
+    expect(r.status).toBe("on_track");
+    expect(r.delayDays).toBe(0);
+  });
+
+  it("is delayed when behind schedule", () => {
+    const sheets = sheets62();
+    const r = computeTorahScribePace({
+      startDate: "2026-01-01",
+      targetDate: "2027-01-01",
+      columnsPerDay: 10,
+      sheets,
+      referenceDate: "2026-01-11",
+    });
+    expect(r.daysElapsed).toBe(10);
+    expect(r.expectedColumns).toBe(100);
+    expect(r.actualColumns).toBe(0);
+    expect(r.status).toBe("delayed");
+    expect(r.deficitColumns).toBe(100);
+    expect(r.delayDays).toBe(10);
+  });
+
+  it("caps expected columns at total scroll columns", () => {
+    const sheets = sheets62();
+    for (const s of sheets) s.status = "written";
+    const r = computeTorahScribePace({
+      startDate: "2026-01-01",
+      targetDate: "2030-01-01",
+      columnsPerDay: 50,
+      sheets,
+      referenceDate: "2026-12-31",
+    });
+    expect(r.totalColumns).toBe(245);
+    expect(r.expectedColumns).toBe(245);
+    expect(r.status).toBe("on_track");
+  });
+
+  it("is delayed past target when scroll incomplete", () => {
+    const sheets = sheets62();
+    const r = computeTorahScribePace({
+      startDate: "2026-01-01",
+      targetDate: "2026-06-01",
+      columnsPerDay: 1,
+      sheets,
+      referenceDate: "2026-06-15",
+    });
+    expect(r.status).toBe("delayed");
+    expect(r.delayDays).toBeGreaterThanOrEqual(1);
+    expect(r.deficitColumns).toBe(245);
+  });
+
+  it("shouldSendTorahScribeDelayAlert respects threshold", () => {
+    expect(shouldSendTorahScribeDelayAlert(TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS)).toBe(false);
+    expect(shouldSendTorahScribeDelayAlert(TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS + 0.001)).toBe(true);
+  });
+
+  it("buildTorahScribeDelayWhatsAppMessage includes names", () => {
+    const m = buildTorahScribeDelayWhatsAppMessage("משה", "ס\"ת לשבת חתן");
+    expect(m).toContain("משה");
+    expect(m).toContain("ס\"ת לשבת חתן");
   });
 });

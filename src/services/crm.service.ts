@@ -15,12 +15,24 @@ import { logError, logInfo } from "@/lib/logger";
 import { toErrorMessage, handleSupabaseError } from "@/src/lib/errors";
 import { INVENTORY_ACTIVE_STATUSES } from "@/lib/inventory/status";
 import { classifyDealBalance } from "@/src/services/crm.logic";
+import type {
+  AddHistoryEntryInput,
+  CrmContactHistoryEntry,
+} from "@/src/lib/types/crm";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+export type { CrmContactHistoryEntry, AddHistoryEntryInput } from "@/src/lib/types/crm";
+
+export type AddHistoryEntryResult =
+  | { success: true; entry: CrmContactHistoryEntry }
+  | { success: false; error: string };
+
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
-export type ActionResult = { success: true } | { success: false; error: string };
+export type ActionResult =
+  | { success: true; id?: string }
+  | { success: false; error: string };
 
 export type CrmContact = {
   id: string;
@@ -35,6 +47,7 @@ export type CrmContact = {
   certification: string | null;
   phone_type: string | null;
   created_at: string;
+  city?: string | null;
 };
 
 export type ContactDetailResult = {
@@ -58,6 +71,7 @@ export type ContactDetailResult = {
     channel: string;
     content: string | null;
     timestamp: string;
+    direction: string | null;
   }>;
   totalOwed: number;
   totalDue: number;
@@ -87,6 +101,7 @@ export type UpdateCrmContactInput = Partial<{
   certification: string;
   phone_type: string;
   handwriting_image_url: string | null;
+  city: string | null;
 }>;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -131,6 +146,7 @@ function mapContact(r: {
     certification: r.certification ?? null,
     phone_type: r.phone_type ?? null,
     created_at: r.created_at ?? "",
+    city: (r as { city?: string | null }).city ?? null,
   };
 }
 
@@ -501,23 +517,36 @@ export async function createCrmContact(
     const { supabase, user } = await getAuthClient();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { error } = await supabase.from("crm_contacts").insert({
-      user_id: user.id,
-      name: input.name.trim(),
-      type: input.type ?? "Other",
-      preferred_contact: input.preferred_contact ?? "WhatsApp",
-      wa_chat_id: input.wa_chat_id?.trim() || null,
-      email: input.email?.trim() || null,
-      phone: input.phone?.trim() || null,
-      tags: (input.tags ?? []).filter(Boolean),
-      sku: generateSku(crmSkuPrefix),
-    });
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .insert({
+        user_id: user.id,
+        name: input.name.trim(),
+        type: input.type ?? "Other",
+        preferred_contact: input.preferred_contact ?? "WhatsApp",
+        wa_chat_id: input.wa_chat_id?.trim() || null,
+        email: input.email?.trim() || null,
+        phone: input.phone?.trim() || null,
+        tags: (input.tags ?? []).filter(Boolean),
+        sku: generateSku(crmSkuPrefix),
+      })
+      .select("id")
+      .single();
 
     if (error) return { success: false, error: handleSupabaseError(error) };
-    return { success: true };
+    return { success: true, id: data?.id as string | undefined };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }
+}
+
+/** עדכון תגיות בלבד (ציר זמן / סינון). */
+export async function updateContactTags(
+  contactId: string,
+  tags: string[]
+): Promise<ActionResult> {
+  const cleaned = tags.map((t) => t.trim()).filter(Boolean);
+  return updateCrmContact(contactId, { tags: cleaned });
 }
 
 /**
@@ -555,6 +584,9 @@ export async function updateCrmContact(
       const u = input.handwriting_image_url;
       payload.handwriting_image_url = u && String(u).trim() ? String(u).trim() : null;
     }
+    if (input.city !== undefined) {
+      payload.city = input.city?.trim() ? input.city.trim() : null;
+    }
 
     const { error } = await supabase
       .from("crm_contacts")
@@ -569,6 +601,95 @@ export async function updateCrmContact(
   }
 }
 
+function mapContactHistoryRow(raw: Record<string, unknown>): CrmContactHistoryEntry {
+  const meta = raw.metadata;
+  const metadata =
+    typeof meta === "object" && meta !== null && !Array.isArray(meta)
+      ? (meta as Record<string, unknown>)
+      : {};
+  return {
+    id: String(raw.id ?? ""),
+    body: String(raw.body ?? ""),
+    created_at: String(raw.created_at ?? ""),
+    follow_up_date: (raw.follow_up_date as string | null) ?? null,
+    direction: (raw.direction as CrmContactHistoryEntry["direction"]) ?? "internal",
+    source: (raw.source as CrmContactHistoryEntry["source"]) ?? "manual",
+    external_reference_id: (raw.external_reference_id as string | null) ?? null,
+    metadata,
+  };
+}
+
+/**
+ * Inserts a row into `crm_contact_history` (unified timeline).
+ * Defaults: direction=internal, source=manual (user-facing notes).
+ */
+export async function addHistoryEntry(
+  contactId: string,
+  input: AddHistoryEntryInput
+): Promise<AddHistoryEntryResult> {
+  try {
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const text = input.body.trim();
+    if (!text) return { success: false, error: "הזן תוכן להערה" };
+
+    const direction = input.direction ?? "internal";
+    const source = input.source ?? "manual";
+    const metadata = input.metadata ?? {};
+
+    const { data: row } = await supabase
+      .from("crm_contacts")
+      .select("id")
+      .eq("id", contactId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!row) return { success: false, error: "איש קשר לא נמצא" };
+
+    const { data: inserted, error } = await supabase
+      .from("crm_contact_history")
+      .insert({
+        user_id: user.id,
+        contact_id: contactId,
+        body: text,
+        ...(input.follow_up_date ? { follow_up_date: input.follow_up_date } : {}),
+        direction,
+        source,
+        external_reference_id: input.external_reference_id?.trim() || null,
+        metadata,
+      })
+      .select(
+        "id, body, created_at, follow_up_date, direction, source, external_reference_id, metadata"
+      )
+      .maybeSingle();
+
+    if (error) {
+      if (
+        error.message?.includes("crm_contact_history") ||
+        error.code === "42P01"
+      ) {
+        return {
+          success: false,
+          error: "יש להריץ מיגרציה 048 (crm_contact_history) ב-Supabase",
+        };
+      }
+      if (error.code === "23505") {
+        return {
+          success: false,
+          error: "הודעה זו כבר סונכרנה (מזהה חיצוני קיים)",
+        };
+      }
+      return { success: false, error: handleSupabaseError(error) };
+    }
+
+    if (!inserted) return { success: false, error: "לא נשמרה רשומה" };
+
+    return { success: true, entry: mapContactHistoryRow(inserted as Record<string, unknown>) };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
 /**
  * Adds a manual timestamped note to `crm_contact_history`.
  * Validates contact ownership before inserting.
@@ -578,47 +699,14 @@ export async function addContactHistoryNote(
   body: string,
   follow_up_date?: string | null
 ): Promise<ActionResult> {
-  try {
-    const { supabase, user } = await getAuthClient();
-    if (!user) return { success: false, error: "יש להתחבר" };
-
-    const text = body.trim();
-    if (!text) return { success: false, error: "הזן תוכן להערה" };
-
-    // Verify contact ownership
-    const { data: row } = await supabase
-      .from("crm_contacts")
-      .select("id")
-      .eq("id", contactId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!row) return { success: false, error: "איש קשר לא נמצא" };
-
-    const { error } = await supabase.from("crm_contact_history").insert({
-      user_id: user.id,
-      contact_id: contactId,
-      body: text,
-      ...(follow_up_date ? { follow_up_date } : {}),
-    });
-
-    if (error) {
-      // Give a clear migration hint if the table doesn't exist yet
-      if (
-        error.message?.includes("crm_contact_history") ||
-        error.code === "42P01"
-      ) {
-        return {
-          success: false,
-          error: "יש להריץ מיגרציה 042 (crm_contact_history) ב-Supabase",
-        };
-      }
-      return { success: false, error: handleSupabaseError(error) };
-    }
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: toErrorMessage(err) };
-  }
+  const res = await addHistoryEntry(contactId, {
+    body,
+    follow_up_date: follow_up_date ?? null,
+    direction: "internal",
+    source: "manual",
+  });
+  if (!res.success) return { success: false, error: res.error };
+  return { success: true };
 }
 
 /** Adds a manual Debt/Credit entry to `crm_transactions` for a contact. */
@@ -689,7 +777,7 @@ export async function fetchContactDetail(
     const { data: contact, error: contactErr } = await supabase
       .from("crm_contacts")
       .select(
-        "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at"
+        "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at, city"
       )
       .eq("id", id)
       .eq("user_id", user.id)
@@ -711,7 +799,7 @@ export async function fetchContactDetail(
         .order("created_at", { ascending: false }),
       supabase
         .from("crm_communication_logs")
-        .select("id, channel, content, timestamp")
+        .select("id, channel, content, timestamp, direction")
         .eq("contact_id", id)
         .order("timestamp", { ascending: false })
         .limit(10),
@@ -746,6 +834,7 @@ export async function fetchContactDetail(
         channel: l.channel ?? "",
         content: l.content ?? null,
         timestamp: l.timestamp ?? "",
+        direction: (l.direction as string | null) ?? null,
       })),
       totalOwed,
       totalDue,
@@ -814,13 +903,15 @@ async function fetchCrmActivity(supabase: SupabaseClient, contactId: string) {
       .order("created_at", { ascending: false }),
     supabase
       .from("crm_communication_logs")
-      .select("id, channel, content, timestamp")
+      .select("id, channel, content, timestamp, direction")
       .eq("contact_id", contactId)
       .order("timestamp", { ascending: false })
       .limit(50),
     supabase
       .from("crm_contact_history")
-      .select("id, body, created_at, follow_up_date")
+      .select(
+        "id, body, created_at, follow_up_date, direction, source, external_reference_id, metadata"
+      )
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
       .limit(200),
@@ -1211,10 +1302,11 @@ export type ContactDetailPageData = {
     created_at: string;
     handwriting_image_url: string | null;
   };
-  contactHistory: Array<{ id: string; body: string; created_at: string; follow_up_date: string | null }>;
+  contactHistory: CrmContactHistoryEntry[];
   soferProfile: {
     writing_style: string | null;
     writing_level: string | null;
+    handwriting_quality: number | null;
     daily_page_capacity: number | null;
     pricing_notes: string | null;
     writing_constraints: string | null;
@@ -1278,6 +1370,7 @@ export type ContactDetailPageData = {
     channel: string;
     content: string | null;
     timestamp: string;
+    direction: string | null;
   }>;
 };
 
@@ -1293,6 +1386,7 @@ export async function upsertSoferProfile(
   fields: {
     writing_style?: string | null;
     writing_level?: string | null;
+    handwriting_quality?: number | null;
     daily_page_capacity?: number | null;
     pricing_notes?: string | null;
     writing_constraints?: string | null;
@@ -1330,7 +1424,9 @@ export async function loadContactDetailPage(
     fetchErpData(supabase, id, user.id),
     supabase
       .from("crm_sofer_profiles")
-      .select("writing_style, writing_level, daily_page_capacity, pricing_notes, writing_constraints, past_writings")
+      .select(
+        "writing_style, writing_level, handwriting_quality, daily_page_capacity, pricing_notes, writing_constraints, past_writings"
+      )
       .eq("contact_id", id)
       .maybeSingle(),
   ]);
@@ -1411,16 +1507,17 @@ export async function loadContactDetailPage(
         created_at: c.created_at ?? "",
         handwriting_image_url: c.handwriting_image_url ?? null,
       },
-      contactHistory: contactHistoryRows.map((h) => ({
-        id: h.id as string,
-        body: (h.body as string) ?? "",
-        created_at: (h.created_at as string) ?? "",
-        follow_up_date: (h.follow_up_date as string | null) ?? null,
-      })),
+      contactHistory: contactHistoryRows.map((h) =>
+        mapContactHistoryRow(h as Record<string, unknown>)
+      ),
       soferProfile: soferProfile
         ? {
             writing_style: soferProfile.writing_style ?? null,
             writing_level: soferProfile.writing_level ?? null,
+            handwriting_quality:
+              soferProfile.handwriting_quality != null
+                ? Number(soferProfile.handwriting_quality)
+                : null,
             daily_page_capacity: soferProfile.daily_page_capacity ? Number(soferProfile.daily_page_capacity) : null,
             pricing_notes: soferProfile.pricing_notes ?? null,
             writing_constraints: soferProfile.writing_constraints ?? null,
@@ -1461,6 +1558,7 @@ export async function loadContactDetailPage(
         channel: l.channel ?? "",
         content: l.content ?? null,
         timestamp: l.timestamp ?? "",
+        direction: (l.direction as string | null) ?? null,
       })),
     },
   };

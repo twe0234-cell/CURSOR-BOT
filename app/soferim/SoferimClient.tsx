@@ -24,7 +24,9 @@ import {
   createScribeContactAndProfile,
   updateSoferLastContact,
   fetchScribeContactsForSelect,
+  updateScribeContactCity,
 } from "./actions";
+import { StarRating } from "@/components/ui/StarRating";
 
 type Props = {
   initialRows: SoferDirectoryRow[];
@@ -34,13 +36,25 @@ export default function SoferimClient({ initialRows }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [filterLevel, setFilterLevel] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
 
-  const visibleRows = filterLevel
-    ? rows.filter((r) => (r.writing_level ?? "").includes(filterLevel))
-    : rows;
+  const cityOptions = [...new Set(rows.map((r) => (r.city ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "he")
+  );
+
+  const visibleRows = rows.filter((r) => {
+    if (filterLevel && !(r.writing_level ?? "").toLowerCase().includes(filterLevel.toLowerCase())) {
+      return false;
+    }
+    if (filterCity && (r.city ?? "").trim() !== filterCity) return false;
+    return true;
+  });
+
+  const totalScribes = rows.length;
+  const withProfile = rows.filter((r) => r.has_profile).length;
   const [modalOpen, setModalOpen] = useState(false);
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"existing" | "new">("existing");
@@ -51,6 +65,8 @@ export default function SoferimClient({ initialRows }: Props) {
     contact_id: "",
     new_name: "",
     new_phone: "",
+    city: "",
+    handwriting_quality: null as number | null,
     writing_style: "",
     writing_level: "",
     daily_page_capacity: "",
@@ -65,6 +81,8 @@ export default function SoferimClient({ initialRows }: Props) {
       contact_id: "",
       new_name: "",
       new_phone: "",
+      city: "",
+      handwriting_quality: null,
       writing_style: "",
       writing_level: "",
       daily_page_capacity: "",
@@ -84,6 +102,8 @@ export default function SoferimClient({ initialRows }: Props) {
       contact_id: row.contact_id,
       new_name: "",
       new_phone: "",
+      city: row.city ?? "",
+      handwriting_quality: row.handwriting_quality,
       writing_style: row.writing_style ?? "",
       writing_level: row.writing_level ?? "",
       daily_page_capacity: row.daily_page_capacity != null ? String(row.daily_page_capacity) : "",
@@ -122,10 +142,15 @@ export default function SoferimClient({ initialRows }: Props) {
           return;
         }
         const res = await createScribeContactAndProfile(
-          { name: form.new_name.trim(), phone: form.new_phone.trim() || null },
+          {
+            name: form.new_name.trim(),
+            phone: form.new_phone.trim() || null,
+            city: form.city.trim() || null,
+          },
           {
             writing_style: form.writing_style || null,
             writing_level: form.writing_level || null,
+            handwriting_quality: form.handwriting_quality,
             sample_image_url: resolvedSampleUrl,
             daily_page_capacity: form.daily_page_capacity ? Number(form.daily_page_capacity) : null,
             pricing_notes: form.pricing_notes || null,
@@ -147,15 +172,23 @@ export default function SoferimClient({ initialRows }: Props) {
           contact_id: form.contact_id,
           writing_style: form.writing_style || null,
           writing_level: form.writing_level || null,
+          handwriting_quality: form.handwriting_quality,
           sample_image_url: resolvedSampleUrl,
           daily_page_capacity: form.daily_page_capacity ? Number(form.daily_page_capacity) : null,
           pricing_notes: form.pricing_notes || null,
         });
         if (!res.success) toast.error(res.error);
         else {
-          toast.success("התיק נשמר");
-          setModalOpen(false);
-          router.refresh();
+          const cityRes = await updateScribeContactCity(
+            form.contact_id,
+            form.city.trim() || null
+          );
+          if (!cityRes.success) toast.error(cityRes.error);
+          else {
+            toast.success("התיק נשמר");
+            setModalOpen(false);
+            router.refresh();
+          }
         }
       }
     } catch (err) {
@@ -190,11 +223,23 @@ export default function SoferimClient({ initialRows }: Props) {
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           <Input
-            placeholder="סנן לפי רמת כתב..."
+            placeholder="סנן לפי תיאור רמה..."
             value={filterLevel}
             onChange={(e) => setFilterLevel(e.target.value)}
             className="w-44 h-9 text-sm"
           />
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm min-w-[8rem]"
+          >
+            <option value="">כל הערים</option>
+            {cityOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
           <Button
             onClick={openModal}
             className="bg-sky-600 hover:bg-sky-700 text-white shrink-0"
@@ -203,6 +248,27 @@ export default function SoferimClient({ initialRows }: Props) {
             צור תיק סופר
           </Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3 mb-8">
+        <Card className="rounded-xl border-sky-100 bg-white shadow-sm">
+          <CardContent className="pt-5">
+            <p className="text-xs text-muted-foreground font-medium">סה״כ סופרים ב־CRM</p>
+            <p className="text-3xl font-bold text-sky-700 tabular-nums">{totalScribes}</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border-emerald-100 bg-white shadow-sm">
+          <CardContent className="pt-5">
+            <p className="text-xs text-muted-foreground font-medium">עם תיק מקצועי</p>
+            <p className="text-3xl font-bold text-emerald-700 tabular-nums">{withProfile}</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border-amber-100 bg-white shadow-sm">
+          <CardContent className="pt-5">
+            <p className="text-xs text-muted-foreground font-medium">בתצוגה (אחרי סינון)</p>
+            <p className="text-3xl font-bold text-amber-800 tabular-nums">{visibleRows.length}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -246,14 +312,15 @@ export default function SoferimClient({ initialRows }: Props) {
                     <h2 className="font-semibold text-sky-800 truncate">{row.name}</h2>
                     <p className="text-sm text-muted-foreground truncate">
                       {row.phone ?? "—"}
+                      {row.city ? ` · ${row.city}` : ""}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-muted-foreground text-xs">רמת כתב</span>
-                    <p className="font-medium">{row.writing_level ?? "—"}</p>
+                    <span className="text-muted-foreground text-xs block mb-1">רמת כתב (כוכבים)</span>
+                    <StarRating value={row.handwriting_quality} readOnly size="sm" />
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">סגנון</span>
@@ -344,6 +411,14 @@ export default function SoferimClient({ initialRows }: Props) {
                     </option>
                   ))}
                 </select>
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-1">עיר</p>
+                  <Input
+                    value={form.city}
+                    onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                    placeholder="למשל: ירושלים"
+                  />
+                </div>
               </div>
             ) : (
               <>
@@ -365,6 +440,14 @@ export default function SoferimClient({ initialRows }: Props) {
                     className="text-left"
                   />
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">עיר</p>
+                  <Input
+                    value={form.city}
+                    onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                    placeholder="למשל: בני ברק"
+                  />
+                </div>
               </>
             )}
 
@@ -377,7 +460,25 @@ export default function SoferimClient({ initialRows }: Props) {
               />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-1">רמת כתב</p>
+              <p className="text-sm text-muted-foreground mb-1">רמת כתב (כוכבים)</p>
+              <div className="flex flex-wrap items-center gap-3 mt-1">
+                <StarRating
+                  value={form.handwriting_quality}
+                  onChange={(v) => setForm((f) => ({ ...f, handwriting_quality: v }))}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => setForm((f) => ({ ...f, handwriting_quality: null }))}
+                >
+                  נקה
+                </Button>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">תיאור רמה (טקסט)</p>
               <Input
                 value={form.writing_level}
                 onChange={(e) => setForm((f) => ({ ...f, writing_level: e.target.value }))}

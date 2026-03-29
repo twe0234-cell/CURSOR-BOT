@@ -1,8 +1,16 @@
 // ============================================================
 // Torah Projects Engine — TypeScript types
 // Mirrors supabase/migrations/044_torah_projects_engine.sql
-// and 045_torah_projects_per_column_pricing.sql (total_agreed_price, columns_count)
+// 045 — total_agreed_price, columns_count
+// 046 — amount_paid_by_client, amount_paid_to_scribe
+// 047 — workflow: columns_per_day, qa_weeks_buffer, gavra_qa_count, computer_qa_count, requires_tagging
 // ============================================================
+
+/** Standard STaM Sefer Torah layout: sheets 1, 61, 62 → 3 columns; all others → 4 (245 columns total). */
+export function columnsCountForTorahSheetNumber(sheetNumber: number): number {
+  if (sheetNumber === 1 || sheetNumber === 61 || sheetNumber === 62) return 3;
+  return 4;
+}
 
 // ── Enum-like string literals ────────────────────────────────
 
@@ -39,10 +47,24 @@ export interface TorahProject {
   target_date: string | null;   // ISO date "YYYY-MM-DD"
   /** Total contract price (₪); financial split is per-column across sheets */
   total_agreed_price: number;
+  /** Cash received from client (₪) */
+  amount_paid_by_client: number;
+  /** Cash paid to scribe (₪) */
+  amount_paid_to_scribe: number;
+  /** Scribe writing pace — columns per day (0 = not set) */
+  columns_per_day: number;
+  /** Weeks of QA buffer before target date */
+  qa_weeks_buffer: number;
+  /** Required human (gavra) proofread rounds */
+  gavra_qa_count: number;
+  /** Required computer proofread rounds */
+  computer_qa_count: number;
+  /** External tagging (תיוג) required */
+  requires_tagging: boolean;
   created_at: string;           // ISO timestamptz
 }
 
-/** torah_sheets row — one row per physical ירייה (sheet), 1–62 */
+/** torah_sheets row — one row per physical יריעה (sheet), 1–62 */
 export interface TorahSheet {
   id: string;
   project_id: string;

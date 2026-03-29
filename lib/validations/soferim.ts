@@ -4,6 +4,10 @@ export const soferProfileUpsertSchema = z.object({
   contact_id: z.string().uuid("מזהה איש קשר לא תקין"),
   writing_style: z.string().max(500).optional().nullable(),
   writing_level: z.string().max(500).optional().nullable(),
+  handwriting_quality: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().min(0).max(5).optional().nullable()
+  ),
   sample_image_url: z
     .string()
     .max(2000)
@@ -20,4 +24,5 @@ export const soferProfileUpsertSchema = z.object({
 export const newScribeContactSchema = z.object({
   name: z.string().min(1, "נדרש שם").max(200),
   phone: z.string().max(50).optional().nullable(),
+  city: z.string().max(120).optional().nullable(),
 });

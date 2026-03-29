@@ -70,7 +70,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [sortKey, setSortKey] = useState<"sku" | "product_category" | "script_type" | "status" | "target_price">("sku");
+  const [sortKey, setSortKey] = useState<
+    "scribe_name" | "product_category" | "script_type" | "status" | "target_price"
+  >("product_category");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredActive = items
@@ -80,7 +82,17 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
     .filter((i) => isInventorySoldStatus(i.status))
     .filter((i) => !categoryFilter || (i.product_category ?? "") === categoryFilter);
 
-  const sortItems = <T extends { sku?: string | null; product_category?: string | null; script_type?: string | null; status?: string | null; target_price?: number | null }>(arr: T[]) => {
+  const sortItems = <
+    T extends {
+      scribe_name?: string | null;
+      product_category?: string | null;
+      script_type?: string | null;
+      status?: string | null;
+      target_price?: number | null;
+    },
+  >(
+    arr: T[]
+  ) => {
     return [...arr].sort((a, b) => {
       let va: string | number = "";
       let vb: string | number = "";
@@ -336,9 +348,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12"></TableHead>
-                  <TableHead className="w-28 text-slate-400 text-xs font-normal">
-                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline">
-                      מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
+                  <TableHead className="min-w-[100px]">
+                    <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
                   <TableHead>
@@ -380,11 +392,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                         <div className="w-10 h-10" />
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-sky-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
-                      <span className="hidden md:block">
-                        <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
-                      </span>
+                    <TableCell className="truncate max-w-[140px] text-sm text-slate-700">
+                      {item.scribe_name?.trim() || "—"}
                     </TableCell>
                     <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
@@ -442,9 +451,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12"></TableHead>
-                  <TableHead className="w-28 text-slate-400 text-xs font-normal">
-                    <button type="button" onClick={() => { setSortKey("sku"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline">
-                      מק״ט {sortKey === "sku" && (sortDir === "asc" ? "↑" : "↓")}
+                  <TableHead className="min-w-[100px]">
+                    <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                      סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
                   <TableHead>
@@ -486,11 +495,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                         <div className="w-10 h-10" />
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-slate-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <span className="md:hidden">{item.sku ?? item.id.slice(0, 8)}</span>
-                      <span className="hidden md:block">
-                        <BarcodePrint value={item.sku ?? item.id.slice(0, 8)} />
-                      </span>
+                    <TableCell className="truncate max-w-[140px] text-sm text-slate-600">
+                      {item.scribe_name?.trim() || "—"}
                     </TableCell>
                     <TableCell className="truncate max-w-[120px] text-slate-600">{item.product_category ?? "—"}</TableCell>
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
@@ -530,6 +536,14 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
           </DialogHeader>
           <FormProvider {...form} key={editingId ?? "create"}>
             <form onSubmit={handleSave} className="space-y-6">
+              {editingId ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col items-center gap-2">
+                  <p className="text-xs font-medium text-slate-500">מק״ט והדפסת תווית (Nimbot B1)</p>
+                  <BarcodePrint
+                    value={items.find((i) => i.id === editingId)?.sku ?? editingId.slice(0, 8)}
+                  />
+                </div>
+              ) : null}
               <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">

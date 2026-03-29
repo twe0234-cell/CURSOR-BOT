@@ -499,3 +499,125 @@ export function calculateTorahProjectFinancials(
     futureCommitment,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Torah scribe pace (קליטת יריעות / מעקב קצב)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Alert when strictly later than this many effective days behind pace. */
+export const TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS = 2;
+
+export type TorahScribePaceStatus = "on_track" | "delayed" | "unknown";
+
+export type TorahScribePaceResult = {
+  status: TorahScribePaceStatus;
+  /** Effective days behind promised pace (0 if on track or unknown). */
+  delayDays: number;
+  deficitColumns: number;
+  expectedColumns: number;
+  actualColumns: number;
+  totalColumns: number;
+  daysElapsed: number;
+};
+
+function torahCalendarDaysBetween(startIso: string, endIso: string): number {
+  const a = Date.parse(`${startIso}T12:00:00Z`);
+  const b = Date.parse(`${endIso}T12:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.max(0, Math.floor((b - a) / 86400000));
+}
+
+/**
+ * Compares actual column progress vs expected progress from `startDate`, `columnsPerDay`,
+ * and optional `targetDate` (past target without full scroll ⇒ delayed).
+ *
+ * Pure: pass `referenceDate` (YYYY-MM-DD) in tests; defaults to UTC \"today\".
+ */
+export function computeTorahScribePace(input: {
+  startDate: string | null;
+  targetDate: string | null;
+  columnsPerDay: number;
+  sheets: { columns_count: number; status: string }[];
+  referenceDate?: string;
+}): TorahScribePaceResult {
+  const ref = input.referenceDate ?? new Date().toISOString().slice(0, 10);
+  const pace = Number(input.columnsPerDay);
+  const paceOk = Number.isFinite(pace) && pace > 0;
+
+  const totalColumns = input.sheets.reduce(
+    (sum, sh) => sum + (sh.columns_count || 4),
+    0
+  );
+  const actualColumns = input.sheets
+    .filter((sh) => sh.status !== "not_started")
+    .reduce((sum, sh) => sum + (sh.columns_count || 4), 0);
+
+  const zero = (): TorahScribePaceResult => ({
+    status: "unknown",
+    delayDays: 0,
+    deficitColumns: 0,
+    expectedColumns: 0,
+    actualColumns,
+    totalColumns,
+    daysElapsed: 0,
+  });
+
+  const pastTargetIncomplete =
+    Boolean(input.targetDate && ref > input.targetDate && actualColumns < totalColumns - 1e-6);
+
+  if (!input.startDate || !paceOk) {
+    if (pastTargetIncomplete) {
+      return {
+        status: "delayed",
+        delayDays: 1,
+        deficitColumns: Math.max(0, totalColumns - actualColumns),
+        expectedColumns: totalColumns,
+        actualColumns,
+        totalColumns,
+        daysElapsed: 0,
+      };
+    }
+    return zero();
+  }
+
+  const daysElapsed = torahCalendarDaysBetween(input.startDate, ref);
+  let expectedColumns = Math.min(totalColumns, daysElapsed * pace);
+
+  if (pastTargetIncomplete) {
+    expectedColumns = totalColumns;
+  }
+
+  const deficitColumns = Math.max(0, expectedColumns - actualColumns);
+  let delayDays = paceOk && deficitColumns > 1e-6 ? deficitColumns / pace : 0;
+  let status: TorahScribePaceStatus =
+    deficitColumns > 1e-6 || pastTargetIncomplete ? "delayed" : "on_track";
+
+  if (pastTargetIncomplete) {
+    delayDays = Math.max(delayDays, 1);
+    status = "delayed";
+  }
+
+  return {
+    status,
+    delayDays,
+    deficitColumns,
+    expectedColumns,
+    actualColumns,
+    totalColumns,
+    daysElapsed,
+  };
+}
+
+/** Whether WhatsApp delay alert should fire (strictly more than threshold days). */
+export function shouldSendTorahScribeDelayAlert(delayDays: number): boolean {
+  return delayDays > TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS;
+}
+
+export function buildTorahScribeDelayWhatsAppMessage(
+  scribeName: string,
+  projectTitle: string
+): string {
+  const name = scribeName.trim() || "סופר";
+  const title = projectTitle.trim() || "הפרויקט";
+  return `שלום ${name}, שים לב שקצב הכתיבה הנוכחי חורג מהיעד לספר \"${title}\". נשמח לתאם המשך עבודה.`;
+}

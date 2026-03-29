@@ -7,6 +7,8 @@ import type {
   TorahProjectWithNames,
   TorahSheetStatus,
 } from "@/src/lib/types/torah";
+import { columnsCountForTorahSheetNumber } from "@/src/lib/types/torah";
+import { runTorahCalendarSync } from "@/src/lib/google/calendar";
 
 // ── Validation schema ─────────────────────────────────────────
 
@@ -23,6 +25,23 @@ const createTorahProjectSchema = z.object({
     (v) => (v === "" || v === null || v === undefined ? 0 : v),
     z.coerce.number().nonnegative()
   ),
+  columns_per_day: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? 0 : v),
+    z.coerce.number().nonnegative()
+  ),
+  qa_weeks_buffer: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? 3 : v),
+    z.coerce.number().int().nonnegative()
+  ),
+  gavra_qa_count: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? 1 : v),
+    z.coerce.number().int().nonnegative()
+  ),
+  computer_qa_count: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? 1 : v),
+    z.coerce.number().int().nonnegative()
+  ),
+  requires_tagging: z.boolean().optional().default(false),
 });
 
 type CreateTorahProjectInput = z.input<typeof createTorahProjectSchema>;
@@ -87,6 +106,11 @@ export async function createTorahProject(
         start_date: new Date().toISOString().slice(0, 10),
         target_date: v.target_date ?? null,
         total_agreed_price: v.total_agreed_price ?? 0,
+        columns_per_day: v.columns_per_day ?? 0,
+        qa_weeks_buffer: Math.max(0, Math.floor(v.qa_weeks_buffer ?? 3)),
+        gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
+        computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
+        requires_tagging: v.requires_tagging ?? false,
       })
       .select("id")
       .single();
@@ -104,7 +128,7 @@ export async function createTorahProject(
       return {
         project_id: projectId,
         sheet_number: num,
-        columns_count: 4,
+        columns_count: columnsCountForTorahSheetNumber(num),
         sku: `${prefix}-S${String(num).padStart(2, "0")}`,
         status: "not_started" as TorahSheetStatus,
       };
@@ -117,11 +141,19 @@ export async function createTorahProject(
     if (sheetsErr) {
       // Project was created; log but still return success so user can retry sheets
       console.error("[createTorahProject] sheets insert error:", sheetsErr.message);
-      return { success: false, error: `פרויקט נוצר אך ירייות נכשלו: ${sheetsErr.message}` };
+      return { success: false, error: `פרויקט נוצר אך יריעות נכשלו: ${sheetsErr.message}` };
     }
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);
+
+    void runTorahCalendarSync(supabase, user.id, {
+      projectId,
+      title: v.title.trim(),
+      targetDate: v.target_date ?? null,
+      qaWeeksBuffer: Math.max(0, Math.floor(v.qa_weeks_buffer ?? 3)),
+    });
+
     return { success: true, projectId };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -204,6 +236,13 @@ export async function fetchTorahProjects(): Promise<
         start_date: (r.start_date as string | null) ?? null,
         target_date: (r.target_date as string | null) ?? null,
         total_agreed_price: Number(r.total_agreed_price ?? 0),
+        amount_paid_by_client: Number(r.amount_paid_by_client ?? 0),
+        amount_paid_to_scribe: Number(r.amount_paid_to_scribe ?? 0),
+        columns_per_day: Number(r.columns_per_day ?? 0),
+        qa_weeks_buffer: Number(r.qa_weeks_buffer ?? 3),
+        gavra_qa_count: Number(r.gavra_qa_count ?? 1),
+        computer_qa_count: Number(r.computer_qa_count ?? 1),
+        requires_tagging: Boolean(r.requires_tagging),
         created_at: r.created_at as string,
         scribe_name: nameMap.get(r.scribe_id as string) ?? null,
         client_name: r.client_id ? (nameMap.get(r.client_id as string) ?? null) : null,

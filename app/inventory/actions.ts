@@ -39,6 +39,8 @@ export type InventoryItem = {
   megillah_type: string | null;
   is_public?: boolean;
   public_slug?: string | null;
+  /** שם סופר (מ־crm_contacts) — מתמלא ב־fetchInventory בלבד */
+  scribe_name?: string | null;
 };
 
 const MEDIA_BUCKET = "media";
@@ -167,7 +169,29 @@ export async function fetchInventory(): Promise<
 
     const items = (data ?? []).map((r) => mapInventoryRow(r, pitumCols, megillahCol));
 
-    return { success: true, items };
+    const scribeIds = [
+      ...new Set(
+        items.map((i) => i.scribe_id).filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const nameByScribe = new Map<string, string>();
+    if (scribeIds.length > 0) {
+      const { data: contacts } = await supabase
+        .from("crm_contacts")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .in("id", scribeIds);
+      for (const c of contacts ?? []) {
+        nameByScribe.set(String(c.id), String((c as { name?: string }).name ?? ""));
+      }
+    }
+
+    const itemsWithScribe = items.map((i) => ({
+      ...i,
+      scribe_name: i.scribe_id ? nameByScribe.get(i.scribe_id) ?? null : null,
+    }));
+
+    return { success: true, items: itemsWithScribe };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
     return { success: false, error: msg };

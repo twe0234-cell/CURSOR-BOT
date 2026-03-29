@@ -46,7 +46,7 @@ export default async function HomePage() {
     { href: "/inventory", label: "מלאי", icon: Package, desc: "נהל מלאי מוצרים" },
     { href: "/sales", label: "מכירות ותזרים", icon: Wallet, desc: "מכירות והוצאות" },
     { href: "/investments", label: "תיק השקעות", icon: TrendingUp, desc: "פרויקטי כתיבה" },
-    { href: "/torah", label: "פרויקטי ס״ת", icon: BookOpen, desc: "מעקב ירייות, הגהה וסטטוס" },
+    { href: "/torah", label: "פרויקטי ס״ת", icon: BookOpen, desc: "מעקב יריעות, הגהה וסטטוס" },
     { href: "/settings", label: "הגדרות", icon: Settings, desc: "Green API, Gmail והגדרות" },
   ];
 
@@ -78,7 +78,7 @@ export default async function HomePage() {
               <p className="text-sm font-medium text-emerald-800">פרויקטי ספר תורה פעילים</p>
               <p className="text-2xl font-bold text-emerald-700">{torahStats.activeProjects} פרויקטים</p>
               <p className="text-xs text-emerald-600 mt-0.5">
-                {torahStats.approvedSheets} / {torahStats.totalSheets} ירייות אושרו · {torahStats.progressPct}% התקדמות
+                {torahStats.approvedSheets} / {torahStats.totalSheets} יריעות אושרו · {torahStats.progressPct}% התקדמות
               </p>
             </div>
             <div className="shrink-0 text-left">

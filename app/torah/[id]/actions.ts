@@ -8,6 +8,8 @@ import type {
   TorahSheetGridRow,
   TorahSheetStatus,
 } from "@/src/lib/types/torah";
+import { computeTorahScribePace, type TorahScribePaceResult } from "@/src/services/crm.logic";
+import { runTorahCalendarSync } from "@/src/lib/google/calendar";
 
 const SHEET_STATUS_TUPLE = [
   "not_started",
@@ -77,6 +79,13 @@ export async function fetchProjectWithSheets(
       start_date: (row.start_date as string | null) ?? null,
       target_date: (row.target_date as string | null) ?? null,
       total_agreed_price: Number(row.total_agreed_price ?? 0),
+      amount_paid_by_client: Number(row.amount_paid_by_client ?? 0),
+      amount_paid_to_scribe: Number(row.amount_paid_to_scribe ?? 0),
+      columns_per_day: Number(row.columns_per_day ?? 0),
+      qa_weeks_buffer: Number(row.qa_weeks_buffer ?? 3),
+      gavra_qa_count: Number(row.gavra_qa_count ?? 1),
+      computer_qa_count: Number(row.computer_qa_count ?? 1),
+      requires_tagging: Boolean(row.requires_tagging),
       created_at: row.created_at as string,
       scribe_name: nameMap.get(row.scribe_id as string) ?? null,
       client_name: row.client_id ? (nameMap.get(row.client_id as string) ?? null) : null,
@@ -159,6 +168,129 @@ const batchStatusSchema = z.object({
   status: sheetStatusEnum,
 });
 
+const RECEIVABLE_SHEET_STATUSES = new Set<TorahSheetStatus>(["not_started", "needs_fixing"]);
+
+const receiveSheetsSchema = z.object({
+  sheetIds: z.array(z.string().uuid()).min(1, "בחר לפחות יריעה אחת"),
+});
+
+export type ReceiveSheetsFromScribeResult =
+  | { success: true; updated: number; pace: TorahScribePaceResult }
+  | { success: false; error: string };
+
+/**
+ * קליטת יריעות מהסופר — מעבר ל־written, רישום בהיסטוריית איש קשר, חישוב סטטוס קצב.
+ */
+export async function receiveSheetsFromScribe(
+  projectId: string,
+  sheetIds: string[]
+): Promise<ReceiveSheetsFromScribeResult> {
+  try {
+    const parsed = receiveSheetsSchema.safeParse({ sheetIds });
+    if (!parsed.success) {
+      const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+      return { success: false, error: (first as string) ?? "שגיאת ולידציה" };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: proj, error: pErr } = await supabase
+      .from("torah_projects")
+      .select("id, scribe_id, start_date, target_date, columns_per_day")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (pErr || !proj) return { success: false, error: "הפרויקט לא נמצא" };
+
+    const { data: selectedRows, error: selErr } = await supabase
+      .from("torah_sheets")
+      .select("id, status, sheet_number")
+      .in("id", parsed.data.sheetIds)
+      .eq("project_id", projectId);
+
+    if (selErr) return { success: false, error: selErr.message };
+    if (!selectedRows || selectedRows.length !== parsed.data.sheetIds.length) {
+      return { success: false, error: "לא כל היריעות שייכות לפרויקט" };
+    }
+
+    for (const row of selectedRows) {
+      const st = row.status as TorahSheetStatus;
+      if (!RECEIVABLE_SHEET_STATUSES.has(st)) {
+        return {
+          success: false,
+          error: "ניתן לקלוט רק יריעות בסטטוס «טרם התחיל» או «לתיקון»",
+        };
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("torah_sheets")
+      .update({ status: "written" })
+      .in("id", parsed.data.sheetIds)
+      .eq("project_id", projectId);
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    const { data: allSheetRows, error: allErr } = await supabase
+      .from("torah_sheets")
+      .select("columns_count, status")
+      .eq("project_id", projectId)
+      .order("sheet_number", { ascending: true });
+
+    if (allErr) return { success: false, error: allErr.message };
+
+    const sheetsForPace = (allSheetRows ?? []).map((s) => ({
+      columns_count: Number(s.columns_count ?? 4),
+      status: String(s.status),
+    }));
+
+    const pace = computeTorahScribePace({
+      startDate: (proj.start_date as string | null) ?? null,
+      targetDate: (proj.target_date as string | null) ?? null,
+      columnsPerDay: Number(proj.columns_per_day ?? 0),
+      sheets: sheetsForPace,
+    });
+
+    const nums = [...selectedRows]
+      .map((r) => Number(r.sheet_number))
+      .sort((a, b) => a - b);
+    const paceHe =
+      pace.status === "on_track"
+        ? "בעקבות היעד"
+        : pace.status === "delayed"
+          ? `באיחור (בערך ${Math.max(1, Math.ceil(pace.delayDays))} ימי עבודה)`
+          : "לא מחושב (חסר תאריך התחלה או קצב עמודות/יום)";
+
+    const historyBody = `קליטת יריעות מהסופר — יריעות: ${nums.join(", ")}\nסטטוס קצב: ${paceHe}`;
+
+    const { error: histErr } = await supabase.from("crm_contact_history").insert({
+      user_id: user.id,
+      contact_id: proj.scribe_id as string,
+      body: historyBody,
+      direction: "internal",
+      source: "system",
+      metadata: { kind: "torah_receive_sheets", project_id: projectId } as Record<string, unknown>,
+    });
+
+    if (histErr) {
+      return { success: false, error: `היריעות עודכנו אך יומן CRM נכשל: ${histErr.message}` };
+    }
+
+    revalidatePath("/torah");
+    revalidatePath(`/torah/${projectId}`);
+    revalidatePath(`/crm/${proj.scribe_id as string}`);
+
+    return { success: true, updated: parsed.data.sheetIds.length, pace };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function batchUpdateSheetStatuses(
   sheetIds: string[],
   status: TorahSheetStatus,
@@ -189,6 +321,139 @@ export async function batchUpdateSheetStatuses(
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);
     return { success: true, updated: (data ?? []).length };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+const updateTorahProjectSchema = z.object({
+  title: z.string().min(1, "שם חובה").max(200),
+  target_date: z
+    .union([z.string(), z.literal(""), z.null()])
+    .transform((v) => (v === "" || v == null ? null : v)),
+  total_agreed_price: z.coerce.number().nonnegative(),
+  columns_per_day: z.coerce.number().nonnegative(),
+  qa_weeks_buffer: z.coerce.number().int().nonnegative(),
+  gavra_qa_count: z.coerce.number().int().nonnegative(),
+  computer_qa_count: z.coerce.number().int().nonnegative(),
+  requires_tagging: z.boolean(),
+});
+
+export type UpdateTorahProjectInput = z.infer<typeof updateTorahProjectSchema>;
+
+export async function updateTorahProject(
+  projectId: string,
+  input: UpdateTorahProjectInput
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const parsed = updateTorahProjectSchema.safeParse(input);
+    if (!parsed.success) {
+      const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+      return { success: false, error: (first as string) ?? "שגיאת ולידציה" };
+    }
+    const v = parsed.data;
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("torah_projects")
+      .update({
+        title: v.title.trim(),
+        target_date: v.target_date,
+        total_agreed_price: v.total_agreed_price,
+        columns_per_day: v.columns_per_day,
+        qa_weeks_buffer: Math.max(0, Math.floor(v.qa_weeks_buffer)),
+        gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count)),
+        computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count)),
+        requires_tagging: v.requires_tagging,
+      })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/torah");
+    revalidatePath(`/torah/${projectId}`);
+
+    void runTorahCalendarSync(supabase, user.id, {
+      projectId,
+      title: v.title.trim(),
+      targetDate: v.target_date,
+      qaWeeksBuffer: Math.max(0, Math.floor(v.qa_weeks_buffer)),
+    });
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+const updateProjectPaymentsSchema = z.object({
+  clientPaid: z.coerce.number().nonnegative(),
+  scribePaid: z.coerce.number().nonnegative(),
+});
+
+export async function updateProjectPayments(
+  projectId: string,
+  body: { clientPaid: number; scribePaid: number }
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const parsed = updateProjectPaymentsSchema.safeParse(body);
+    if (!parsed.success) {
+      const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+      return { success: false, error: (first as string) ?? "שגיאת ולידציה" };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("torah_projects")
+      .update({
+        amount_paid_by_client: parsed.data.clientPaid,
+        amount_paid_to_scribe: parsed.data.scribePaid,
+      })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/torah");
+    revalidatePath(`/torah/${projectId}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** מחיקת פרויקט ס״ת (יריעות ושקיות QA נמחקות ב־CASCADE). */
+export async function deleteTorahProject(
+  projectId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("torah_projects")
+      .delete()
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/torah");
+    return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckSquare, Square, Layers, PackageCheck, PlusCircle, RotateCcw } from "lucide-react";
+import { CheckSquare, Square, Layers, PackageCheck, PlusCircle, RotateCcw, Pencil, Inbox, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,20 @@ import {
   TORAH_SHEET_STATUS_LABELS,
   TORAH_PROJECT_STATUS_LABELS,
 } from "@/src/lib/types/torah";
-import { calculateTorahProjectFinancials } from "@/src/services/crm.logic";
-import { updateSheet, batchUpdateSheetStatuses } from "./actions";
+import {
+  calculateTorahProjectFinancials,
+  computeTorahScribePace,
+} from "@/src/services/crm.logic";
+import {
+  updateSheet,
+  batchUpdateSheetStatuses,
+  updateTorahProject,
+  updateProjectPayments,
+  receiveSheetsFromScribe,
+  deleteTorahProject,
+} from "./actions";
+import { createCrmContact } from "@/app/crm/actions";
+import { applyNumericTransform } from "@/lib/numericInput";
 import { createQaBatch, returnQaBatch, fetchQaBatches, type QaBatchRow } from "./qa-actions";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +95,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
   const [editStatus, setEditStatus] = useState<TorahSheetStatus>("not_started");
   const [editCols, setEditCols] = useState<string>("4");
   const [saving, setSaving] = useState(false);
+  const [receivingSaving, setReceivingSaving] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<TorahSheetStatus>("written");
 
   // QA state
@@ -96,7 +109,42 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
   const [returningId, setReturningId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
 
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(project.title);
+  const [editTarget, setEditTarget] = useState(project.target_date ?? "");
+  const [editTotalAgreed, setEditTotalAgreed] = useState(String(project.total_agreed_price));
+  const [editColumnsPerDay, setEditColumnsPerDay] = useState(String(project.columns_per_day));
+  const [editQaWeeks, setEditQaWeeks] = useState(String(project.qa_weeks_buffer));
+  const [editGavraQa, setEditGavraQa] = useState(String(project.gavra_qa_count));
+  const [editComputerQa, setEditComputerQa] = useState(String(project.computer_qa_count));
+  const [editRequiresTagging, setEditRequiresTagging] = useState(project.requires_tagging);
+  const [editSaving, setEditSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const [paymentsOpen, setPaymentsOpen] = useState(false);
+  const [payClientStr, setPayClientStr] = useState(String(project.amount_paid_by_client));
+  const [payScribeStr, setPayScribeStr] = useState(String(project.amount_paid_to_scribe));
+  const [paySaving, setPaySaving] = useState(false);
+
+  const [newMagiahOpen, setNewMagiahOpen] = useState(false);
+  const [newMagiahName, setNewMagiahName] = useState("");
+  const [creatingMagiah, setCreatingMagiah] = useState(false);
+
   useEffect(() => { setSheets(initialSheets); }, [initialSheets]);
+
+  useEffect(() => {
+    setEditTitle(project.title);
+    setEditTarget(project.target_date ?? "");
+    setEditTotalAgreed(String(project.total_agreed_price));
+    setEditColumnsPerDay(String(project.columns_per_day));
+    setEditQaWeeks(String(project.qa_weeks_buffer));
+    setEditGavraQa(String(project.gavra_qa_count));
+    setEditComputerQa(String(project.computer_qa_count));
+    setEditRequiresTagging(project.requires_tagging);
+    setPayClientStr(String(project.amount_paid_by_client));
+    setPayScribeStr(String(project.amount_paid_to_scribe));
+  }, [project]);
 
   const loadBatches = useCallback(async () => {
     const res = await fetchQaBatches(projectId);
@@ -119,6 +167,17 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
   const financials = useMemo(
     () => calculateTorahProjectFinancials(project.total_agreed_price, sheets),
     [project.total_agreed_price, sheets]
+  );
+
+  const scribePace = useMemo(
+    () =>
+      computeTorahScribePace({
+        startDate: project.start_date,
+        targetDate: project.target_date,
+        columnsPerDay: project.columns_per_day,
+        sheets,
+      }),
+    [project.start_date, project.target_date, project.columns_per_day, sheets]
   );
 
   const eligibleSheets = useMemo(
@@ -176,6 +235,37 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
     } finally { setSaving(false); }
   }
 
+  async function handleReceiveFromScribe() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) {
+      toast.error("לא נבחרו יריעות");
+      return;
+    }
+    setReceivingSaving(true);
+    try {
+      const res = await receiveSheetsFromScribe(projectId, ids);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      setSheets((prev) =>
+        prev.map((s) => (ids.includes(s.id) ? { ...s, status: "written" as const } : s))
+      );
+      const paceLabel =
+        res.pace.status === "delayed"
+          ? "קצב: באיחור"
+          : res.pace.status === "on_track"
+            ? "קצב: בעקבות היעד"
+            : "קצב: לא מוגדר";
+      toast.success(`קולטו ${res.updated} יריעות — ${paceLabel}`);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      router.refresh();
+    } finally {
+      setReceivingSaving(false);
+    }
+  }
+
   // ── QA handlers ─────────────────────────────────────────
 
   async function handleCreateBatch() {
@@ -194,6 +284,87 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
       await loadBatches();
       router.refresh();
     } finally { setBatchSaving(false); }
+  }
+
+  async function handleSaveProjectEdit() {
+    setEditSaving(true);
+    try {
+      const res = await updateTorahProject(projectId, {
+        title: editTitle.trim(),
+        target_date: editTarget === "" ? null : editTarget,
+        total_agreed_price: editTotalAgreed === "" ? 0 : Number(editTotalAgreed),
+        columns_per_day: editColumnsPerDay === "" ? 0 : Number(editColumnsPerDay),
+        qa_weeks_buffer:
+          editQaWeeks === "" ? 0 : Math.max(0, Math.floor(Number(editQaWeeks))),
+        gavra_qa_count:
+          editGavraQa === "" ? 0 : Math.max(0, Math.floor(Number(editGavraQa))),
+        computer_qa_count:
+          editComputerQa === "" ? 0 : Math.max(0, Math.floor(Number(editComputerQa))),
+        requires_tagging: editRequiresTagging,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("הפרויקט עודכן");
+      setEditProjectOpen(false);
+      router.refresh();
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleSavePayments() {
+    setPaySaving(true);
+    try {
+      const res = await updateProjectPayments(projectId, {
+        clientPaid: payClientStr === "" ? 0 : Number(payClientStr),
+        scribePaid: payScribeStr === "" ? 0 : Number(payScribeStr),
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("תשלומים עודכנו");
+      setPaymentsOpen(false);
+      router.refresh();
+    } finally {
+      setPaySaving(false);
+    }
+  }
+
+  async function handleCreateMagiah() {
+    const name = newMagiahName.trim();
+    if (!name) {
+      toast.error("הזן שם מגיה");
+      return;
+    }
+    setCreatingMagiah(true);
+    try {
+      const res = await createCrmContact({
+        name,
+        type: "Other",
+        tags: ["Magiah", "מגיה"],
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      const magiahId = res.id;
+      if (!magiahId) {
+        toast.error("לא התקבל מזהה איש קשר");
+        return;
+      }
+      setContacts((prev) =>
+        [...prev, { id: magiahId, name }].sort((a, b) => a.name.localeCompare(b.name, "he"))
+      );
+      setBatchMagiahId(magiahId);
+      toast.success("מגיה נוצר ונבחר");
+      setNewMagiahName("");
+      setNewMagiahOpen(false);
+    } finally {
+      setCreatingMagiah(false);
+    }
   }
 
   async function handleReturnBatch(batchId: string) {
@@ -232,12 +403,52 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 truncate">{project.title}</h1>
             <p className="text-xs text-muted-foreground mt-1 font-mono truncate">{project.id}</p>
-            <p className="text-sm text-slate-600 mt-3">
+            <p className="text-sm text-slate-600 mt-3 flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground">סטטוס פרויקט:</span>{" "}
               {TORAH_PROJECT_STATUS_LABELS[project.status]}
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                  scribePace.status === "on_track" && "bg-emerald-100 text-emerald-800",
+                  scribePace.status === "delayed" && "bg-red-100 text-red-800",
+                  scribePace.status === "unknown" && "bg-slate-100 text-slate-600"
+                )}
+                title={
+                  scribePace.status === "unknown"
+                    ? "הגדר קצב סופר ותאריך התחלה לחישוב"
+                    : `עמודות בפועל ${scribePace.actualColumns} / צפוי ${Math.round(scribePace.expectedColumns)} (סה״כ ${scribePace.totalColumns})`
+                }
+              >
+                סטטוס קצב:{" "}
+                {scribePace.status === "on_track"
+                  ? "בעקבות היעד"
+                  : scribePace.status === "delayed"
+                    ? "באיחור לעומת הקצב"
+                    : "לא מחושב"}
+              </span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50"
+              title="מחק פרויקט"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-lg"
+              onClick={() => setEditProjectOpen(true)}
+            >
+              <Pencil className="size-3.5 ml-1" />
+              ערוך פרויקט
+            </Button>
             <Button
               type="button"
               variant={bulkMode ? "default" : "outline"}
@@ -251,6 +462,39 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
             </Button>
           </div>
         </div>
+
+        {/* Cash tracking */}
+        <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-8 text-sm">
+              <p>
+                <span className="text-muted-foreground">שולם מהלקוח: </span>
+                <strong className="tabular-nums text-slate-900">
+                  {formatShekels(project.amount_paid_by_client)}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">שולם לסופר: </span>
+                <strong className="tabular-nums text-slate-900">
+                  {formatShekels(project.amount_paid_to_scribe)}
+                </strong>
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 self-start sm:self-auto"
+              onClick={() => {
+                setPayClientStr(String(project.amount_paid_by_client));
+                setPayScribeStr(String(project.amount_paid_to_scribe));
+                setPaymentsOpen(true);
+              }}
+            >
+              עדכן
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Meta cards */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
@@ -416,18 +660,36 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                           </p>
                           {b.notes && <p className="text-xs text-slate-500 italic">{b.notes}</p>}
                         </div>
-                        {b.status === "sent" && (
+                        <div className="flex flex-wrap gap-2 shrink-0">
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-lg shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                            disabled={returningId === b.id}
-                            onClick={() => handleReturnBatch(b.id)}
+                            className="rounded-lg"
+                            onClick={() =>
+                              window.open(
+                                `/torah/${projectId}/print-batch/${b.id}`,
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
                           >
-                            <RotateCcw className="size-3.5 ml-1" />
-                            {returningId === b.id ? "מעדכן..." : "סמן כחזר מהגהה"}
+                            🖨️ הדפס מדבקה
                           </Button>
-                        )}
+                          {b.status === "sent" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              disabled={returningId === b.id}
+                              onClick={() => handleReturnBatch(b.id)}
+                            >
+                              <RotateCcw className="size-3.5 ml-1" />
+                              {returningId === b.id ? "מעדכן..." : "סמן כחזר מהגהה"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -437,6 +699,225 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">מחיקת פרויקט</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            למחוק לצמיתות את «{project.title}» ואת כל 62 היריעות והשקיות? פעולה זו אינה הפיכה.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
+              ביטול
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true);
+                try {
+                  const res = await deleteTorahProject(projectId);
+                  if (!res.success) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success("הפרויקט נמחק");
+                  router.push("/torah");
+                  router.refresh();
+                } finally {
+                  setDeleting(false);
+                  setDeleteOpen(false);
+                }
+              }}
+            >
+              {deleting ? "מוחק..." : "מחק"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit project dialog ──────────────────────────── */}
+      <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>עריכת פרויקט</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">כותרת</p>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">תאריך יעד</p>
+              <Input type="date" value={editTarget} onChange={(e) => setEditTarget(e.target.value)} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">מחיר מוסכם כולל (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={editTotalAgreed}
+                onChange={(e) => setEditTotalAgreed(applyNumericTransform(e.target.value))}
+              />
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <p className="text-xs font-medium text-slate-700">הגדרות תהליך</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">קצב סופר — עמודות ליום</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={editColumnsPerDay}
+                    onChange={(e) => setEditColumnsPerDay(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">מאגר שבועות ל‑QA לפני היעד</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editQaWeeks}
+                    onChange={(e) => setEditQaWeeks(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות גו״ר (אדם)</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editGavraQa}
+                    onChange={(e) => setEditGavraQa(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editComputerQa}
+                    onChange={(e) => setEditComputerQa(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editRequiresTagging}
+                  onChange={(e) => setEditRequiresTagging(e.target.checked)}
+                  className="size-4 rounded border-input"
+                />
+                נדרש תיוג חיצוני
+              </label>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                className="flex-1 bg-sky-600 hover:bg-sky-700"
+                disabled={editSaving || !editTitle.trim()}
+                onClick={handleSaveProjectEdit}
+              >
+                {editSaving ? "שומר..." : "שמור"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setEditProjectOpen(false)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Project payments dialog ─────────────────────────── */}
+      <Dialog open={paymentsOpen} onOpenChange={setPaymentsOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">תשלומי פרויקט</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">שולם מהלקוח (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={payClientStr}
+                onChange={(e) => setPayClientStr(applyNumericTransform(e.target.value))}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">שולם לסופר (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={payScribeStr}
+                onChange={(e) => setPayScribeStr(applyNumericTransform(e.target.value))}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPaymentsOpen(false)}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-sky-600 hover:bg-sky-700"
+                disabled={paySaving}
+                onClick={handleSavePayments}
+              >
+                {paySaving ? "שומר..." : "שמור"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Magiah dialog ─────────────────────────────── */}
+      <Dialog open={newMagiahOpen} onOpenChange={setNewMagiahOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">מגיה חדש</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input
+              autoFocus
+              placeholder="שם מלא"
+              value={newMagiahName}
+              onChange={(e) => setNewMagiahName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreateMagiah();
+                }
+              }}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setNewMagiahOpen(false)}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700"
+                disabled={creatingMagiah}
+                onClick={handleCreateMagiah}
+              >
+                {creatingMagiah ? "יוצר..." : "צור ובחר"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Single-sheet dialog ──────────────────────────── */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
@@ -488,16 +969,27 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
           <div className="space-y-4 pt-2">
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">מגיה</p>
-              <select
-                value={batchMagiahId}
-                onChange={(e) => setBatchMagiahId(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">— בחר מגיה —</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex gap-2 items-end">
+                <select
+                  value={batchMagiahId}
+                  onChange={(e) => setBatchMagiahId(e.target.value)}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">— בחר מגיה —</option>
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 shrink-0 whitespace-nowrap px-2.5 text-xs"
+                  onClick={() => setNewMagiahOpen(true)}
+                >
+                  ➕ מגיה חדש
+                </Button>
+              </div>
             </div>
 
             <div>
@@ -575,7 +1067,17 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
             <p className="text-center text-sm text-slate-600 sm:text-right">
               נבחרו <strong>{selectedIds.size}</strong> יריעות
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap sm:justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                className="whitespace-nowrap border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                disabled={receivingSaving || saving}
+                onClick={handleReceiveFromScribe}
+              >
+                <Inbox className="size-4 ml-1" />
+                {receivingSaving ? "מקליט..." : "קלוט יריעות מהסופר"}
+              </Button>
               <select
                 value={bulkStatus}
                 onChange={(e) => setBulkStatus(e.target.value as TorahSheetStatus)}

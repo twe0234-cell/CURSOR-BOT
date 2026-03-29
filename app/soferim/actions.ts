@@ -14,8 +14,10 @@ export type SoferDirectoryRow = {
   contact_id: string;
   name: string;
   phone: string | null;
+  city: string | null;
   writing_style: string | null;
   writing_level: string | null;
+  handwriting_quality: number | null;
   sample_image_url: string | null;
   last_contact_date: string | null;
   daily_page_capacity: number | null;
@@ -35,7 +37,7 @@ export async function fetchSoferimDirectory(): Promise<
 
     const { data: contacts, error: cErr } = await supabase
       .from("crm_contacts")
-      .select("id, name, phone")
+      .select("id, name, phone, city")
       .eq("user_id", user.id)
       .eq("type", "Scribe")
       .order("name");
@@ -48,7 +50,7 @@ export async function fetchSoferimDirectory(): Promise<
     const { data: profiles, error: pErr } = await supabase
       .from("crm_sofer_profiles")
       .select(
-        "contact_id, writing_style, writing_level, sample_image_url, last_contact_date, daily_page_capacity, pricing_notes"
+        "contact_id, writing_style, writing_level, handwriting_quality, sample_image_url, last_contact_date, daily_page_capacity, pricing_notes"
       )
       .in("contact_id", ids);
 
@@ -58,12 +60,16 @@ export async function fetchSoferimDirectory(): Promise<
 
     const rows: SoferDirectoryRow[] = (contacts ?? []).map((c) => {
       const p = pmap.get(c.id);
+      const raw = c as { city?: string | null };
       return {
         contact_id: c.id,
         name: c.name ?? "",
         phone: c.phone ?? null,
+        city: raw.city?.trim() ? String(raw.city).trim() : null,
         writing_style: p?.writing_style ?? null,
         writing_level: p?.writing_level ?? null,
+        handwriting_quality:
+          p?.handwriting_quality != null ? Number(p.handwriting_quality) : null,
         sample_image_url: p?.sample_image_url ?? null,
         last_contact_date: p?.last_contact_date ?? null,
         daily_page_capacity:
@@ -188,6 +194,10 @@ export async function upsertSoferProfile(
         contact_id: v.contact_id,
         writing_style: v.writing_style ?? null,
         writing_level: v.writing_level ?? null,
+        handwriting_quality:
+          v.handwriting_quality != null && !Number.isNaN(v.handwriting_quality)
+            ? v.handwriting_quality
+            : null,
         sample_image_url: sampleUrl,
         daily_page_capacity: v.daily_page_capacity ?? null,
         pricing_notes: v.pricing_notes ?? null,
@@ -227,6 +237,7 @@ export async function createScribeContactAndProfile(
         user_id: user.id,
         name: parsedContact.data.name,
         phone: parsedContact.data.phone ?? null,
+        city: parsedContact.data.city?.trim() || null,
         type: "Scribe",
         preferred_contact: "WhatsApp",
         sku: generateSku(crmSkuPrefix),
@@ -248,6 +259,35 @@ export async function createScribeContactAndProfile(
     revalidatePath("/soferim");
     revalidatePath("/crm");
     return { success: true, contact_id: inserted.id };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function updateScribeContactCity(
+  contactId: string,
+  city: string | null
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("crm_contacts")
+      .update({
+        city: city?.trim() ? city.trim() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", contactId)
+      .eq("user_id", user.id)
+      .eq("type", "Scribe");
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/soferim");
+    return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
   }

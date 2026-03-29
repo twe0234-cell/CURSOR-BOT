@@ -12,7 +12,7 @@ ALTER TABLE public.torah_sheets
   ADD COLUMN IF NOT EXISTS columns_count INTEGER NOT NULL DEFAULT 4;
 
 COMMENT ON COLUMN public.torah_sheets.columns_count IS
-  'Number of columns on this ירייה (typically 4; some sheets have 3 or 2).';
+  'Number of columns on this יריעה (typically 4; some sheets have 3 or 2).';
 
 ALTER TABLE public.torah_sheets
   DROP CONSTRAINT IF EXISTS torah_sheets_columns_count_check;
