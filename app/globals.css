@@ -433,7 +433,10 @@ html, body {
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 100% 60% at 100% -15%, oklch(0.73 0.13 80 / 7%), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 0% 100%, oklch(0.26 0.068 265 / 4%), transparent 50%),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-heebo), system-ui, sans-serif;
 }
