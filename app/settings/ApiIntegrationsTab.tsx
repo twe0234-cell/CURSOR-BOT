@@ -15,6 +15,7 @@ import { PencilIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon } from "l
 type Props = {
   defaultGreenApiId: string;
   defaultGreenApiToken: string;
+  defaultWaMarketGroupId: string;
   defaultAllowedTags: string[];
   gmailConnected?: boolean;
   gmailEmail?: string | null;
@@ -28,12 +29,14 @@ function maskToken(token: string): string {
 export default function ApiIntegrationsTab({
   defaultGreenApiId,
   defaultGreenApiToken,
+  defaultWaMarketGroupId,
   defaultAllowedTags,
   gmailConnected = false,
   gmailEmail = null,
 }: Props) {
   const [greenApiId, setGreenApiId] = useState(defaultGreenApiId);
   const [greenApiToken, setGreenApiToken] = useState(defaultGreenApiToken);
+  const [waMarketGroupId, setWaMarketGroupId] = useState(defaultWaMarketGroupId);
   const [allowedTags, setAllowedTags] = useState<string[]>(
     Array.isArray(defaultAllowedTags) ? defaultAllowedTags : []
   );
@@ -43,6 +46,10 @@ export default function ApiIntegrationsTab({
   const [credentialsEditOpen, setCredentialsEditOpen] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(true);
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    setWaMarketGroupId(defaultWaMarketGroupId);
+  }, [defaultWaMarketGroupId]);
 
   useEffect(() => {
     const gmail = searchParams.get("gmail");
@@ -69,7 +76,12 @@ export default function ApiIntegrationsTab({
     setMessage(null);
     setLoading(true);
     try {
-      const result = await saveUserSettings(greenApiId, greenApiToken, allowedTags);
+      const result = await saveUserSettings(
+        greenApiId,
+        greenApiToken,
+        allowedTags,
+        waMarketGroupId
+      );
       if (result.success) {
         setMessage({ type: "success", text: "ההגדרות נשמרו בהצלחה" });
         setCredentialsEditOpen(false);
@@ -159,6 +171,27 @@ export default function ApiIntegrationsTab({
                 onChange={(e) => setGreenApiToken(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 placeholder="הזן את ה-API Token"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="wa_market_group_id"
+                className="mb-2 block text-sm font-medium text-slate-700"
+                title="The group ID usually ends with @g.us"
+              >
+                קבוצת וואטסאפ למאגר (Chat ID)
+                <span className="mr-1 text-xs font-normal text-muted-foreground">
+                  — The group ID usually ends with @g.us
+                </span>
+              </label>
+              <input
+                id="wa_market_group_id"
+                type="text"
+                value={waMarketGroupId}
+                onChange={(e) => setWaMarketGroupId(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                dir="ltr"
+                placeholder="למשל xxxxx@g.us"
               />
             </div>
             <div>

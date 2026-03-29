@@ -136,3 +136,134 @@ export async function sendTorahStatusUpdate(projectId: string): Promise<TorahSta
     return { success: false, error: msg };
   }
 }
+
+function formatShekelsHe(amount: number): string {
+  return new Intl.NumberFormat("he-IL", { maximumFractionDigits: 2 }).format(amount);
+}
+
+/** WhatsApp לסופר — תשלום התקבל (Green API). */
+export async function notifyScribePayment(
+  scribeId: string,
+  amount: number,
+  projectId: string
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      logWarn("Notification", "notifyScribePayment: no user session", { scribeId, projectId });
+      return;
+    }
+
+    const { data: contact } = await supabase
+      .from("crm_contacts")
+      .select("name, wa_chat_id")
+      .eq("id", scribeId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { data: project } = await supabase
+      .from("torah_projects")
+      .select("title")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const name = ((contact?.name as string) ?? "").trim() || "שלום";
+    const title = ((project?.title as string) ?? "").trim() || "הפרויקט";
+    const amountStr = formatShekelsHe(amount);
+    const message = `שלום ${name}, התקבל תשלום על סך ${amountStr} ₪ עבור פרויקט ${title}. בהצלחה והמשך עבודה פורייה!`;
+
+    const rawChat = (contact?.wa_chat_id as string | null)?.trim();
+    if (!rawChat) {
+      logInfo("Notification", "notifyScribePayment: no WhatsApp on contact", { scribeId, projectId });
+      return;
+    }
+
+    const chatId = normalizeWhatsAppChatId(rawChat);
+    if (!chatId) {
+      logWarn("Notification", "notifyScribePayment: invalid WhatsApp id", { scribeId });
+      return;
+    }
+
+    const creds = await getGreenCreds(supabase, user.id);
+    if (!creds) {
+      logInfo("Notification", "notifyScribePayment: Green API not configured", { projectId });
+      return;
+    }
+
+    await sleep(greenApiDispatchSpacingDelayMs());
+    const apiUrl = `${GREEN_API_URL}/waInstance${creds.id}/sendMessage/${creds.token}`;
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, message }),
+    });
+    const errBody = await res.text();
+    const interpreted = interpretGreenApiSendResult(res.ok, errBody);
+    if (!interpreted.ok) {
+      logWarn("Notification", "notifyScribePayment: Green API failed", {
+        projectId,
+        error: interpreted.error,
+      });
+      return;
+    }
+
+    logInfo("Notification", "notifyScribePayment: WhatsApp sent", { projectId, chatId });
+  } catch (e) {
+    logError("Notification", "notifyScribePayment failed", { error: String(e) });
+  }
+}
+
+/** כוונת קבלה במייל — שלב Gmail יגיע בהמשך. */
+export async function notifyClientPayment(
+  clientId: string,
+  amount: number,
+  projectId: string
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      logWarn("Notification", "notifyClientPayment: no user session", { clientId, projectId });
+      return;
+    }
+
+    const { data: contact } = await supabase
+      .from("crm_contacts")
+      .select("email")
+      .eq("id", clientId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { data: project } = await supabase
+      .from("torah_projects")
+      .select("title")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const title = ((project?.title as string) ?? "").trim() || "—";
+
+    const email = ((contact?.email as string) ?? "").trim();
+    if (!email) {
+      logInfo("Notification", "notifyClientPayment: no email on contact", { clientId, projectId, title });
+      return;
+    }
+
+    console.log("Would send email receipt to:", email);
+
+    logInfo("Notification", "notifyClientPayment: receipt intent logged", {
+      projectId,
+      title,
+      amount,
+      hasEmail: true,
+    });
+  } catch (e) {
+    logError("Notification", "notifyClientPayment failed", { error: String(e) });
+  }
+}

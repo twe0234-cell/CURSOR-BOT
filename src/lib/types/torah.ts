@@ -5,6 +5,7 @@
 // 046 — amount_paid_by_client, amount_paid_to_scribe
 // 047 — workflow: columns_per_day, qa_weeks_buffer, gavra_qa_count, computer_qa_count, requires_tagging
 // 052 — contract: price_per_column, qa_agreed_types (jsonb), includes_accessories, parchment_type
+// 057 — client_contract_url, scribe_contract_url; parchment_type unrestricted (calculator-driven)
 // ============================================================
 
 /** Parse qa_agreed_types JSON from DB */
@@ -82,6 +83,10 @@ export interface TorahProject {
   includes_accessories: boolean;
   /** סוג קלף בחוזה */
   parchment_type: string | null;
+  /** קישור חיצוני לחוזה לקוח */
+  client_contract_url: string | null;
+  /** קישור חיצוני לחוזה סופר */
+  scribe_contract_url: string | null;
   created_at: string;           // ISO timestamptz
 }
 

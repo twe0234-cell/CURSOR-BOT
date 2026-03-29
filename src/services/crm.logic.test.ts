@@ -27,6 +27,9 @@ import {
   shouldSendTorahScribeDelayAlert,
   TORAH_SCRIBE_PACE_ALERT_THRESHOLD_DAYS,
   buildTorahScribeDelayWhatsAppMessage,
+  summarizeTorahLedger,
+  estimateTorahProjectProfitability,
+  sumTorahLedgerPayments,
 } from "./crm.logic";
 import {
   columnsCountForTorahSheetNumber,
@@ -898,5 +901,54 @@ describe("computeTorahScribePace", () => {
     const m = buildTorahScribeDelayWhatsAppMessage("משה", "ס\"ת לשבת חתן");
     expect(m).toContain("משה");
     expect(m).toContain("ס\"ת לשבת חתן");
+  });
+});
+
+describe("sumTorahLedgerPayments", () => {
+  it("sums only client_payment and scribe_payment", () => {
+    const s = sumTorahLedgerPayments([
+      { transaction_type: "client_payment", amount: 1000 },
+      { transaction_type: "client_payment", amount: 500 },
+      { transaction_type: "scribe_payment", amount: 300 },
+      { transaction_type: "fix_deduction", amount: 999 },
+    ]);
+    expect(s.totalClientPayments).toBe(1500);
+    expect(s.totalScribePayments).toBe(300);
+  });
+});
+
+describe("summarizeTorahLedger / estimateTorahProjectProfitability", () => {
+  it("sums fix, qa, other expenses", () => {
+    const s = summarizeTorahLedger([
+      { transaction_type: "fix_deduction", amount: 100 },
+      { transaction_type: "qa_expense", amount: 50 },
+      { transaction_type: "other_expense", amount: 25 },
+      { transaction_type: "client_payment", amount: 999 },
+    ]);
+    expect(s.totalFixDeduction).toBe(100);
+    expect(s.totalQaExpense).toBe(50);
+    expect(s.totalOtherExpense).toBe(25);
+  });
+
+  it("estimateTorahProjectProfitability subtracts effective scribe and expenses", () => {
+    const p = estimateTorahProjectProfitability({
+      amountPaidByClient: 10000,
+      amountPaidToScribe: 6000,
+      ledgerLines: [
+        { transaction_type: "fix_deduction", amount: 500 },
+        { transaction_type: "qa_expense", amount: 200 },
+        { transaction_type: "other_expense", amount: 100 },
+      ],
+    });
+    expect(p).toBe(10000 - (6000 - 500) - 200 - 100);
+  });
+
+  it("effective scribe does not go below zero", () => {
+    const p = estimateTorahProjectProfitability({
+      amountPaidByClient: 1000,
+      amountPaidToScribe: 100,
+      ledgerLines: [{ transaction_type: "fix_deduction", amount: 500 }],
+    });
+    expect(p).toBe(1000 - 0);
   });
 });

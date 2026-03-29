@@ -12,21 +12,13 @@ import {
   normalizeQaAgreed,
 } from "@/src/lib/types/torah";
 import { runTorahCalendarSync } from "@/src/lib/google/calendar";
-import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
-
-const torahContractParchment = TORAH_CONTRACT_PARCHMENT_TYPES as unknown as readonly [
-  string,
-  ...string[],
-];
-
-const optTorahParchment = z
-  .union([
-    z.enum(torahContractParchment),
-    z.literal(""),
-    z.null(),
-    z.undefined(),
-  ])
-  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
+const optTorahParchmentText = z
+  .union([z.string(), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === "" || v === undefined || v === null) return null;
+    const t = String(v).trim();
+    return t === "" ? null : t.slice(0, 200);
+  });
 
 // ── Validation schema ─────────────────────────────────────────
 
@@ -65,7 +57,7 @@ const createTorahProjectSchema = z.object({
     z.coerce.number().nonnegative()
   ),
   includes_accessories: z.boolean().optional().default(false),
-  parchment_type: optTorahParchment,
+  parchment_type: optTorahParchmentText,
 });
 
 type CreateTorahProjectInput = z.input<typeof createTorahProjectSchema>;
@@ -283,6 +275,12 @@ export async function fetchTorahProjects(): Promise<
         ),
         parchment_type:
           ((r as { parchment_type?: string | null }).parchment_type as string | null) ??
+          null,
+        client_contract_url:
+          ((r as { client_contract_url?: string | null }).client_contract_url as string | null) ??
+          null,
+        scribe_contract_url:
+          ((r as { scribe_contract_url?: string | null }).scribe_contract_url as string | null) ??
           null,
         created_at: r.created_at as string,
         scribe_name: nameMap.get(r.scribe_id as string) ?? null,

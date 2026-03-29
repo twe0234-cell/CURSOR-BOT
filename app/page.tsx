@@ -40,6 +40,9 @@ export default async function HomePage() {
   const monthlyRealizedProfit = plRes.success ? plRes.data : [];
   const torahStats = torahRes.success ? torahRes.stats : null;
 
+  const formatTorahShekel = (n: number) =>
+    `${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })} ₪`;
+
   const quickLinks = [
     { href: "/broadcast", label: "דיוור", icon: Radio, desc: "שליחת הודעות WhatsApp לנמענים" },
     { href: "/audience", label: "נמענים", icon: Users, desc: "נהל רשימת נמענים WhatsApp" },
@@ -73,20 +76,40 @@ export default async function HomePage() {
 
       {torahStats && torahStats.activeProjects > 0 && (
         <Link href="/torah" className="block mt-8 group/torah">
-          <div className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-5 flex items-center gap-5 sm:gap-6 card-interactive hover:border-accent/25">
-            <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10 shrink-0 transition-colors group-hover/torah:bg-primary/15 group-hover/torah:ring-accent/20">
-              <BookOpen className="size-7" strokeWidth={2.25} />
+          <div className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-5 flex flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-6 card-interactive hover:border-accent/25">
+            <div className="flex items-start gap-4 sm:gap-5 flex-1 min-w-0">
+              <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10 shrink-0 transition-colors group-hover/torah:bg-primary/15 group-hover/torah:ring-accent/20">
+                <BookOpen className="size-7" strokeWidth={2.25} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">פרויקטי ספר תורה פעילים</p>
+                <p className="text-2xl font-bold text-primary mt-0.5">{torahStats.activeProjects} פרויקטים</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {torahStats.approvedSheets} / {torahStats.totalSheets} יריעות אושרו · {torahStats.progressPct}% התקדמות
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] sm:text-xs text-muted-foreground border-t border-primary/10 pt-3">
+                  <span>צפי חוזים</span>
+                  <span className="tabular-nums font-medium text-foreground text-left sm:text-right">
+                    {formatTorahShekel(torahStats.totalContractValue)}
+                  </span>
+                  <span>שולם מלקוחות</span>
+                  <span className="tabular-nums font-medium text-foreground text-left sm:text-right">
+                    {formatTorahShekel(torahStats.totalClientPaid)}
+                  </span>
+                  <span>יתרה מלקוח</span>
+                  <span className="tabular-nums font-medium text-foreground text-left sm:text-right">
+                    {formatTorahShekel(torahStats.totalClientRemaining)}
+                  </span>
+                  <span>הערכת רווחיות</span>
+                  <span className="tabular-nums font-semibold text-accent text-left sm:text-right">
+                    {formatTorahShekel(torahStats.aggregateProfitabilityEstimate)}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">פרויקטי ספר תורה פעילים</p>
-              <p className="text-2xl font-bold text-primary mt-0.5">{torahStats.activeProjects} פרויקטים</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {torahStats.approvedSheets} / {torahStats.totalSheets} יריעות אושרו · {torahStats.progressPct}% התקדמות
-              </p>
-            </div>
-            <div className="shrink-0 text-left">
+            <div className="shrink-0 flex sm:flex-col items-center justify-center gap-2 sm:min-w-[5.5rem] border-t sm:border-t-0 sm:border-s border-primary/10 pt-3 sm:pt-0 sm:ps-6">
               <div className="text-3xl font-bold text-accent tabular-nums">{torahStats.progressPct}%</div>
-              <div className="w-20 h-2 rounded-full bg-muted mt-1 overflow-hidden ring-1 ring-border/40">
+              <div className="w-full max-w-[8rem] sm:max-w-none sm:w-20 h-2 rounded-full bg-muted overflow-hidden ring-1 ring-border/40">
                 <div
                   className="h-full rounded-full bg-gradient-to-l from-accent to-primary/80"
                   style={{ width: `${torahStats.progressPct}%` }}

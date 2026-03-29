@@ -19,7 +19,9 @@ export default async function SettingsPage() {
 
   const { data: settings } = await supabase
     .from("user_settings")
-    .select("green_api_id, green_api_token, allowed_tags, gmail_refresh_token, gmail_email")
+    .select(
+      "green_api_id, green_api_token, allowed_tags, gmail_refresh_token, gmail_email, wa_market_group_id"
+    )
     .eq("user_id", user.id)
     .single();
 
@@ -59,6 +61,7 @@ export default async function SettingsPage() {
             <ApiIntegrationsTab
               defaultGreenApiId={settings?.green_api_id ?? ""}
               defaultGreenApiToken={settings?.green_api_token ?? ""}
+              defaultWaMarketGroupId={settings?.wa_market_group_id ?? ""}
               defaultAllowedTags={allowedTags}
               gmailConnected={!!settings?.gmail_refresh_token}
               gmailEmail={settings?.gmail_email ?? null}

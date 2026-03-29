@@ -494,4 +494,27 @@ body {
     page-break-inside: avoid;
     break-inside: avoid;
   }
+
+  .print-torah-roll-toolbar {
+    display: none !important;
+  }
+
+  .print-torah-roll-page {
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    display: block !important;
+  }
+
+  /* גליל 62 מדבקות — מדבקה אחת לעמוד */
+  .torah-roll-label-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .torah-roll-label-break:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }

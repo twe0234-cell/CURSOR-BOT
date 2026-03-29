@@ -1,13 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckSquare, Square, Layers, PackageCheck, PlusCircle, RotateCcw, Pencil, Inbox, Trash2 } from "lucide-react";
+import {
+  CheckSquare,
+  Square,
+  Layers,
+  PackageCheck,
+  PlusCircle,
+  RotateCcw,
+  Pencil,
+  Inbox,
+  Trash2,
+  ExternalLink,
+  FileText,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -25,10 +46,14 @@ import {
   computeTorahScribePace,
 } from "@/src/services/crm.logic";
 import {
+  getTorahColumnsForSheet,
+  uniqueParshiyotOnSheet,
+} from "@/src/lib/constants/torahPages";
+import { TorahFinancialsTab } from "./TorahFinancialsTab";
+import {
   updateSheet,
   batchUpdateSheetStatuses,
   updateTorahProject,
-  updateProjectPayments,
   receiveSheetsFromScribe,
   deleteTorahProject,
 } from "./actions";
@@ -59,6 +84,29 @@ const SHEET_CELL_STYLES: Record<TorahSheetStatus, string> = {
   sewn: "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600",
 };
 
+/** ריחוף — פרשות ייחודיות ביריעה (מיפוי עמודים) */
+function SheetGridCellWithTooltip({
+  sheetNumber,
+  children,
+}: {
+  sheetNumber: number;
+  children: ReactNode;
+}) {
+  const parshiyot = uniqueParshiyotOnSheet(sheetNumber);
+  const tip = parshiyot.length > 0 ? parshiyot.join(" · ") : "—";
+  return (
+    <span className="group relative block aspect-square min-h-[2.5rem] w-full">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-[60] mb-1.5 w-max max-w-[min(17rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[10px] leading-snug text-white shadow-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <span className="font-semibold text-slate-300">פרשות:</span> {tip}
+      </span>
+    </span>
+  );
+}
+
 const LEGEND: { status: TorahSheetStatus; label: string }[] = [
   { status: "not_started", label: TORAH_SHEET_STATUS_LABELS.not_started },
   { status: "written", label: TORAH_SHEET_STATUS_LABELS.written },
@@ -79,13 +127,19 @@ type Props = {
   projectId: string;
   project: TorahProjectDetailView;
   initialSheets: TorahSheetGridRow[];
+  parchmentLabels: string[];
 };
 
 // ─────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────
 
-export default function TorahDetailClient({ projectId, project, initialSheets }: Props) {
+export default function TorahDetailClient({
+  projectId,
+  project,
+  initialSheets,
+  parchmentLabels,
+}: Props) {
   const router = useRouter();
   const [sheets, setSheets] = useState<TorahSheetGridRow[]>(initialSheets);
 
@@ -123,17 +177,18 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
     String(project.price_per_column ?? 0)
   );
   const [editParchmentType, setEditParchmentType] = useState(project.parchment_type ?? "");
+  const [editClientContractUrl, setEditClientContractUrl] = useState(
+    project.client_contract_url ?? ""
+  );
+  const [editScribeContractUrl, setEditScribeContractUrl] = useState(
+    project.scribe_contract_url ?? ""
+  );
   const [editIncludesAccessories, setEditIncludesAccessories] = useState(
     project.includes_accessories
   );
   const [editSaving, setEditSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const [paymentsOpen, setPaymentsOpen] = useState(false);
-  const [payClientStr, setPayClientStr] = useState(String(project.amount_paid_by_client));
-  const [payScribeStr, setPayScribeStr] = useState(String(project.amount_paid_to_scribe));
-  const [paySaving, setPaySaving] = useState(false);
 
   const [newMagiahOpen, setNewMagiahOpen] = useState(false);
   const [newMagiahName, setNewMagiahName] = useState("");
@@ -152,10 +207,26 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
     setEditRequiresTagging(project.requires_tagging);
     setEditPricePerColumn(String(project.price_per_column ?? 0));
     setEditParchmentType(project.parchment_type ?? "");
+    setEditClientContractUrl(project.client_contract_url ?? "");
+    setEditScribeContractUrl(project.scribe_contract_url ?? "");
     setEditIncludesAccessories(project.includes_accessories);
-    setPayClientStr(String(project.amount_paid_by_client));
-    setPayScribeStr(String(project.amount_paid_to_scribe));
   }, [project]);
+
+  const parchmentSelectOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of parchmentLabels) {
+      const t = p.trim();
+      if (t && !seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    if (out.length === 0) {
+      for (const p of TORAH_CONTRACT_PARCHMENT_TYPES) out.push(p);
+    }
+    return out;
+  }, [parchmentLabels]);
 
   const loadBatches = useCallback(async () => {
     const res = await fetchQaBatches(projectId);
@@ -315,6 +386,8 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
         price_per_column: editPricePerColumn === "" ? 0 : Number(editPricePerColumn),
         includes_accessories: editIncludesAccessories,
         parchment_type: editParchmentType.trim() || null,
+        client_contract_url: editClientContractUrl.trim() || null,
+        scribe_contract_url: editScribeContractUrl.trim() || null,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -325,25 +398,6 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
       router.refresh();
     } finally {
       setEditSaving(false);
-    }
-  }
-
-  async function handleSavePayments() {
-    setPaySaving(true);
-    try {
-      const res = await updateProjectPayments(projectId, {
-        clientPaid: payClientStr === "" ? 0 : Number(payClientStr),
-        scribePaid: payScribeStr === "" ? 0 : Number(payScribeStr),
-      });
-      if (!res.success) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("תשלומים עודכנו");
-      setPaymentsOpen(false);
-      router.refresh();
-    } finally {
-      setPaySaving(false);
     }
   }
 
@@ -446,6 +500,34 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                     : "לא מחושב"}
               </span>
             </p>
+            {(project.client_contract_url || project.scribe_contract_url) && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                {project.client_contract_url && (
+                  <a
+                    href={project.client_contract_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-800 hover:underline"
+                  >
+                    <FileText className="size-3.5 shrink-0" />
+                    חוזה לקוח
+                    <ExternalLink className="size-3 opacity-70" />
+                  </a>
+                )}
+                {project.scribe_contract_url && (
+                  <a
+                    href={project.scribe_contract_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-800 hover:underline"
+                  >
+                    <FileText className="size-3.5 shrink-0" />
+                    חוזה סופר
+                    <ExternalLink className="size-3 opacity-70" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Button
@@ -458,6 +540,14 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
             >
               <Trash2 className="size-4" />
             </Button>
+            <Link
+              href={`/torah/${projectId}/print-labels`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              🖨️ הדפס גליל מדבקות
+            </Link>
             <Button
               type="button"
               variant="outline"
@@ -482,36 +572,21 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
           </div>
         </div>
 
-        {/* Cash tracking */}
+        {/* Cash tracking — מקור אמת: יומן תנועות (לשונית פיננסים) */}
         <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-8 text-sm">
-              <p>
-                <span className="text-muted-foreground">שולם מהלקוח: </span>
-                <strong className="tabular-nums text-slate-900">
-                  {formatShekels(project.amount_paid_by_client)}
-                </strong>
-              </p>
-              <p>
-                <span className="text-muted-foreground">שולם לסופר: </span>
-                <strong className="tabular-nums text-slate-900">
-                  {formatShekels(project.amount_paid_to_scribe)}
-                </strong>
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 self-start sm:self-auto"
-              onClick={() => {
-                setPayClientStr(String(project.amount_paid_by_client));
-                setPayScribeStr(String(project.amount_paid_to_scribe));
-                setPaymentsOpen(true);
-              }}
-            >
-              עדכן
-            </Button>
+          <CardContent className="p-4 flex flex-col gap-2 sm:flex-row sm:gap-8 text-sm">
+            <p>
+              <span className="text-muted-foreground">שולם מהלקוח: </span>
+              <strong className="tabular-nums text-slate-900">
+                {formatShekels(project.amount_paid_by_client)}
+              </strong>
+            </p>
+            <p>
+              <span className="text-muted-foreground">שולם לסופר: </span>
+              <strong className="tabular-nums text-slate-900">
+                {formatShekels(project.amount_paid_to_scribe)}
+              </strong>
+            </p>
           </CardContent>
         </Card>
 
@@ -564,9 +639,10 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
           defaultValue="sheets"
           onValueChange={(v) => { if (v === "qa" && !batchesLoaded) { loadBatches(); loadContacts(); } }}
         >
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex flex-wrap h-auto gap-1">
             <TabsTrigger value="sheets">לוח יריעות</TabsTrigger>
             <TabsTrigger value="qa">מערכת הגהות</TabsTrigger>
+            <TabsTrigger value="financials">פיננסים ותקציב</TabsTrigger>
           </TabsList>
 
           {/* ── TAB 1: Sheet grid ────────────────────────── */}
@@ -596,29 +672,30 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                   const row = sheetByNumber.get(n) ?? null;
                   const selected = row ? selectedIds.has(row.id) : false;
                   return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => handleCellClick(row, n)}
-                      className={cn(
-                        "relative flex aspect-square min-h-[2.5rem] flex-col items-center justify-center rounded-md border text-[10px] sm:text-xs font-semibold transition-all",
-                        row
-                          ? SHEET_CELL_STYLES[row.status]
-                          : "border-dashed border-slate-300 bg-slate-50 text-slate-400",
-                        selected && "ring-2 ring-sky-600 ring-offset-2 z-10",
-                        bulkMode && row && "cursor-cell"
-                      )}
-                    >
-                      {bulkMode && row && selected && (
-                        <span className="absolute top-0.5 right-0.5 size-2.5 rounded-full bg-sky-600 ring-2 ring-white" aria-hidden />
-                      )}
-                      <span>{n}</span>
-                      {row && row.columns_count < 4 && (
-                        <span className="mt-0.5 rounded bg-black/20 px-0.5 text-[8px] sm:text-[9px] leading-tight">
-                          {row.columns_count} עמ&apos;
-                        </span>
-                      )}
-                    </button>
+                    <SheetGridCellWithTooltip key={n} sheetNumber={n}>
+                      <button
+                        type="button"
+                        onClick={() => handleCellClick(row, n)}
+                        className={cn(
+                          "relative flex h-full min-h-[2.5rem] w-full flex-col items-center justify-center rounded-md border text-[10px] sm:text-xs font-semibold transition-all",
+                          row
+                            ? SHEET_CELL_STYLES[row.status]
+                            : "border-dashed border-slate-300 bg-slate-50 text-slate-400",
+                          selected && "ring-2 ring-sky-600 ring-offset-2 z-10",
+                          bulkMode && row && "cursor-cell"
+                        )}
+                      >
+                        {bulkMode && row && selected && (
+                          <span className="absolute top-0.5 right-0.5 size-2.5 rounded-full bg-sky-600 ring-2 ring-white" aria-hidden />
+                        )}
+                        <span>{n}</span>
+                        {row && row.columns_count < 4 && (
+                          <span className="mt-0.5 rounded bg-black/20 px-0.5 text-[8px] sm:text-[9px] leading-tight">
+                            {row.columns_count} עמ&apos;
+                          </span>
+                        )}
+                      </button>
+                    </SheetGridCellWithTooltip>
                   );
                 })}
               </div>
@@ -716,6 +793,10 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="financials">
+            <TorahFinancialsTab projectId={projectId} project={project} />
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -804,7 +885,11 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="">— לא צוין —</option>
-                  {TORAH_CONTRACT_PARCHMENT_TYPES.map((p) => (
+                  {editParchmentType &&
+                    !parchmentSelectOptions.includes(editParchmentType) && (
+                      <option value={editParchmentType}>{editParchmentType} (ערך קיים)</option>
+                    )}
+                  {parchmentSelectOptions.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
@@ -820,9 +905,53 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                 />
                 כולל אביזרים בחוזה
               </label>
+              <div className="grid gap-3 sm:grid-cols-1">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">קישור חוזה לקוח (URL)</p>
+                  <Input
+                    dir="ltr"
+                    className="font-mono text-xs"
+                    value={editClientContractUrl}
+                    onChange={(e) => setEditClientContractUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                  {project.client_contract_url && (
+                    <a
+                      href={project.client_contract_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-sky-600 hover:underline"
+                    >
+                      <ExternalLink className="size-3" />
+                      פתח קישור שמור
+                    </a>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">קישור חוזה סופר (URL)</p>
+                  <Input
+                    dir="ltr"
+                    className="font-mono text-xs"
+                    value={editScribeContractUrl}
+                    onChange={(e) => setEditScribeContractUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                  {project.scribe_contract_url && (
+                    <a
+                      href={project.scribe_contract_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-sky-600 hover:underline"
+                    >
+                      <ExternalLink className="size-3" />
+                      פתח קישור שמור
+                    </a>
+                  )}
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">הגהות גו״ר מוסכמות</p>
+                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות גברא שסוכמו</p>
                   <Input
                     type="number"
                     min={0}
@@ -832,7 +961,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                   />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">הגהות מחשב מוסכמות</p>
+                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב שסוכמו</p>
                   <Input
                     type="number"
                     min={0}
@@ -867,7 +996,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                   />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">מאגר שבועות ל‑QA לפני היעד</p>
+                  <p className="text-xs text-muted-foreground mb-1">מספר שבועות נדרש להכנה</p>
                   <Input
                     type="number"
                     min={0}
@@ -890,51 +1019,6 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
               </Button>
               <Button type="button" variant="outline" onClick={() => setEditProjectOpen(false)}>
                 ביטול
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Project payments dialog ─────────────────────────── */}
-      <Dialog open={paymentsOpen} onOpenChange={setPaymentsOpen}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">תשלומי פרויקט</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">שולם מהלקוח (₪)</p>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={payClientStr}
-                onChange={(e) => setPayClientStr(applyNumericTransform(e.target.value))}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">שולם לסופר (₪)</p>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={payScribeStr}
-                onChange={(e) => setPayScribeStr(applyNumericTransform(e.target.value))}
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={() => setPaymentsOpen(false)}>
-                ביטול
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="bg-sky-600 hover:bg-sky-700"
-                disabled={paySaving}
-                onClick={handleSavePayments}
-              >
-                {paySaving ? "שומר..." : "שמור"}
               </Button>
             </div>
           </div>
@@ -980,7 +1064,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
 
       {/* ── Single-sheet dialog ──────────────────────────── */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               יריעה {editing?.sheet_number}
@@ -990,6 +1074,38 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {editing && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-sky-900">
+                  מיפוי עמודות ביריעה — פרשות:{" "}
+                  {uniqueParshiyotOnSheet(editing.sheet_number).join(" · ") || "—"}
+                </p>
+                <div className="rounded-lg border border-sky-100/80 bg-white/90 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50">
+                        <TableHead className="text-right text-xs font-semibold w-[4.5rem]">
+                          מספר עמוד
+                        </TableHead>
+                        <TableHead className="text-right text-xs font-semibold">פרשה</TableHead>
+                        <TableHead className="text-right text-xs font-semibold">מילה ראשונה</TableHead>
+                        <TableHead className="text-right text-xs font-semibold">מילה אחרונה</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {getTorahColumnsForSheet(editing.sheet_number).map((c) => (
+                        <TableRow key={`${c.sheet}-${c.column}`}>
+                          <TableCell className="tabular-nums text-xs font-medium">{c.column}</TableCell>
+                          <TableCell className="text-xs">{c.parsha}</TableCell>
+                          <TableCell className="text-xs text-slate-700">{c.firstWord}</TableCell>
+                          <TableCell className="text-xs text-slate-700">{c.lastWord}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
             <div>
               <p className="text-xs text-muted-foreground mb-1">סטטוס</p>
               <select

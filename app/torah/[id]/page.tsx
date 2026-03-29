@@ -2,12 +2,16 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { fetchProjectWithSheets } from "./actions";
 import TorahDetailClient from "./TorahDetailClient";
+import { fetchTorahParchmentLabelsFromCalculator } from "@/src/lib/torah/parchmentFromCalculator";
 
 type Props = { params: Promise<{ id: string }> };
 
 export default async function TorahProjectDetailPage({ params }: Props) {
   const { id } = await params;
-  const res = await fetchProjectWithSheets(id);
+  const [res, parchmentLabels] = await Promise.all([
+    fetchProjectWithSheets(id),
+    fetchTorahParchmentLabelsFromCalculator(),
+  ]);
 
   if (!res.success) {
     if (res.code === "NOT_FOUND") notFound();
@@ -25,7 +29,12 @@ export default async function TorahProjectDetailPage({ params }: Props) {
           ← חזרה לרשימת פרויקטים
         </Link>
       </div>
-      <TorahDetailClient projectId={id} project={res.project} initialSheets={res.sheets} />
+      <TorahDetailClient
+        projectId={id}
+        project={res.project}
+        initialSheets={res.sheets}
+        parchmentLabels={parchmentLabels}
+      />
     </div>
   );
 }

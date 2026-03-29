@@ -70,7 +70,14 @@ export default function NavBar() {
         </Link>
 
         <nav
-          className="flex min-w-0 flex-1 items-center justify-end gap-0 sm:gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-hide py-0.5"
+          className={cn(
+            "flex min-w-0 flex-1 items-center justify-end gap-0 sm:gap-0.5 overflow-x-auto overscroll-x-contain py-0.5",
+            "scroll-pl-2 scroll-pr-2",
+            "[scrollbar-width:thin]",
+            "[scrollbar-color:var(--border)_transparent]",
+            "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-0",
+            "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-thumb]:hover:bg-border"
+          )}
           aria-label="ניווט ראשי"
         >
           {navItems.map(({ href, label, icon: Icon }) => {

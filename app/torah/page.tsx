@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
 import TorahClient from "./TorahClient";
 import { fetchTorahProjects } from "./actions";
+import { fetchTorahParchmentLabelsFromCalculator } from "@/src/lib/torah/parchmentFromCalculator";
 
 export const metadata = { title: "פרויקטי ספרי תורה" };
 
@@ -12,8 +13,13 @@ export default async function TorahPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const result = await fetchTorahProjects();
+  const [result, parchmentLabels] = await Promise.all([
+    fetchTorahProjects(),
+    fetchTorahParchmentLabelsFromCalculator(),
+  ]);
   const projects = result.success ? result.projects : [];
 
-  return <TorahClient initialProjects={projects} />;
+  return (
+    <TorahClient initialProjects={projects} parchmentLabels={parchmentLabels} />
+  );
 }

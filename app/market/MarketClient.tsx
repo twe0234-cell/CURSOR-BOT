@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon } from "lucide-react";
@@ -27,6 +27,7 @@ import {
   createMarketTorahBook,
   updateMarketTorahBook,
   deleteMarketTorahBook,
+  triggerMarketWhatsAppSync,
 } from "./actions";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
@@ -99,6 +100,7 @@ const emptyForm = () => ({
 
 export default function MarketClient({ initialRows }: Props) {
   const router = useRouter();
+  const [waSyncPending, startWaSync] = useTransition();
   const [rows, setRows] = useState(initialRows);
   useEffect(() => {
     setRows(initialRows);
@@ -331,17 +333,42 @@ export default function MarketClient({ initialRows }: Props) {
     </span>
   );
 
+  const runWaMarketSync = () => {
+    startWaSync(async () => {
+      const r = await triggerMarketWhatsAppSync();
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
+      const errHint =
+        r.errors.length > 0 ? ` (${r.errors.length} אזהרות ביומן)` : "";
+      toast.success(`סנכרון הושלם: נקלטו ${r.imported} רשומות${errHint}`);
+      router.refresh();
+    });
+  };
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
-          <ScrollText className="size-7 text-amber-500" />
-          מאגר ספרי תורה
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). אם נבחר סוחר הוא
-          הבעלים; אחרת הבעלים הוא הסופר.
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
+            <ScrollText className="size-7 text-amber-500" />
+            מאגר ספרי תורה
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). אם נבחר סוחר הוא
+            הבעלים; אחרת הבעלים הוא הסופר.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="default"
+          className="shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md"
+          disabled={waSyncPending}
+          onClick={runWaMarketSync}
+        >
+          {waSyncPending ? "מסנכרן…" : "🔄 סנכרן מקבוצת וואטסאפ"}
+        </Button>
       </div>
 
       <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">

@@ -501,6 +501,84 @@ export function calculateTorahProjectFinancials(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Torah ledger (תנועות פיננסיות בפרויקט ס״ת)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TorahLedgerLine = {
+  transaction_type: string;
+  amount: number;
+};
+
+/** סכומי תשלום מלקוח / לסופר מתנועות יומן בלבד (מקור אמת). */
+export function sumTorahLedgerPayments(transactions: TorahLedgerLine[]): {
+  totalClientPayments: number;
+  totalScribePayments: number;
+} {
+  let totalClientPayments = 0;
+  let totalScribePayments = 0;
+  for (const t of transactions) {
+    const a = Number(t.amount);
+    if (!Number.isFinite(a) || a < 0) continue;
+    if (t.transaction_type === "client_payment") totalClientPayments += a;
+    else if (t.transaction_type === "scribe_payment") totalScribePayments += a;
+  }
+  return { totalClientPayments, totalScribePayments };
+}
+
+/**
+ * סיכומים מתנועות היומן.
+ * ניכוי תיקון מקטין את "נטו תשלום לסופר" לצורך הערכת רווחיות.
+ */
+export function summarizeTorahLedger(transactions: TorahLedgerLine[]): {
+  totalFixDeduction: number;
+  totalQaExpense: number;
+  totalOtherExpense: number;
+} {
+  let fix = 0;
+  let qa = 0;
+  let other = 0;
+  for (const t of transactions) {
+    const a = Number(t.amount);
+    if (!Number.isFinite(a) || a < 0) continue;
+    switch (t.transaction_type) {
+      case "fix_deduction":
+        fix += a;
+        break;
+      case "qa_expense":
+        qa += a;
+        break;
+      case "other_expense":
+        other += a;
+        break;
+      default:
+        break;
+    }
+  }
+  return {
+    totalFixDeduction: fix,
+    totalQaExpense: qa,
+    totalOtherExpense: other,
+  };
+}
+
+/**
+ * הערכת רווחיות: כסף מלקוח פחות תשלומי סופר (אחרי ניכוי תיקונים) פחות הוצאות QA ואחרות.
+ */
+export function estimateTorahProjectProfitability(input: {
+  amountPaidByClient: number;
+  amountPaidToScribe: number;
+  ledgerLines: TorahLedgerLine[];
+}): number {
+  const { totalFixDeduction, totalQaExpense, totalOtherExpense } = summarizeTorahLedger(
+    input.ledgerLines
+  );
+  const client = Number(input.amountPaidByClient) || 0;
+  const scribe = Number(input.amountPaidToScribe) || 0;
+  const effectiveScribe = Math.max(0, scribe - totalFixDeduction);
+  return client - effectiveScribe - totalQaExpense - totalOtherExpense;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Torah scribe pace (קליטת יריעות / מעקב קצב)
 // ─────────────────────────────────────────────────────────────────────────────
 

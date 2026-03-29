@@ -2,6 +2,10 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { INVENTORY_ACTIVE_STATUSES } from "@/lib/inventory/status";
+import {
+  estimateTorahProjectProfitability,
+  type TorahLedgerLine,
+} from "@/src/services/crm.logic";
 
 export type DashboardKpis = {
   /** עלות מלאי קיים - SUM total_cost where status != 'sold' */
@@ -307,11 +311,33 @@ export type TorahDashboardStats = {
   totalSheets: number;
   approvedSheets: number;
   progressPct: number;
+  /** סה״כ מחיר מוסכם בפרויקטים פעילים */
+  totalContractValue: number;
+  /** סה״כ ששולם מלקוחות (מסונכרן מיומן ב-DB) */
+  totalClientPaid: number;
+  /** סה״כ ששולם לסופרים */
+  totalScribePaid: number;
+  /** צפי יתרה מלקוח (חוזה − שולם) */
+  totalClientRemaining: number;
+  /** הערכת רווחיות מצטברת (לוגיקת crm.logic + כל תנועות היומן) */
+  aggregateProfitabilityEstimate: number;
 };
 
 export async function fetchTorahDashboardStats(): Promise<
   { success: true; stats: TorahDashboardStats } | { success: false; error: string }
 > {
+  const empty: TorahDashboardStats = {
+    activeProjects: 0,
+    totalSheets: 0,
+    approvedSheets: 0,
+    progressPct: 0,
+    totalContractValue: 0,
+    totalClientPaid: 0,
+    totalScribePaid: 0,
+    totalClientRemaining: 0,
+    aggregateProfitabilityEstimate: 0,
+  };
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -319,7 +345,7 @@ export async function fetchTorahDashboardStats(): Promise<
 
     const { data: projects, error: pErr } = await supabase
       .from("torah_projects")
-      .select("id, status")
+      .select("id, status, total_agreed_price, amount_paid_by_client, amount_paid_to_scribe")
       .eq("user_id", user.id)
       .in("status", ["contract", "writing", "qa"]);
 
@@ -329,7 +355,7 @@ export async function fetchTorahDashboardStats(): Promise<
     const activeProjects = activeIds.length;
 
     if (activeIds.length === 0) {
-      return { success: true, stats: { activeProjects: 0, totalSheets: 0, approvedSheets: 0, progressPct: 0 } };
+      return { success: true, stats: empty };
     }
 
     const { data: sheets } = await supabase
@@ -343,9 +369,59 @@ export async function fetchTorahDashboardStats(): Promise<
     ).length;
     const progressPct = totalSheets > 0 ? Math.round((approvedSheets / totalSheets) * 100) : 0;
 
-    return { success: true, stats: { activeProjects, totalSheets, approvedSheets, progressPct } };
+    const { data: txRows } = await supabase
+      .from("torah_project_transactions")
+      .select("project_id, transaction_type, amount")
+      .in("project_id", activeIds);
+
+    const linesByProject = new Map<string, TorahLedgerLine[]>();
+    for (const t of txRows ?? []) {
+      const pid = t.project_id as string;
+      if (!linesByProject.has(pid)) linesByProject.set(pid, []);
+      linesByProject.get(pid)!.push({
+        transaction_type: String(t.transaction_type),
+        amount: Number(t.amount ?? 0),
+      });
+    }
+
+    let totalContractValue = 0;
+    let totalClientPaid = 0;
+    let totalScribePaid = 0;
+    let aggregateProfitabilityEstimate = 0;
+
+    for (const p of projects ?? []) {
+      const id = p.id as string;
+      const agreed = Number(p.total_agreed_price ?? 0);
+      const clientPaid = Number(p.amount_paid_by_client ?? 0);
+      const scribePaid = Number(p.amount_paid_to_scribe ?? 0);
+      totalContractValue += agreed;
+      totalClientPaid += clientPaid;
+      totalScribePaid += scribePaid;
+      aggregateProfitabilityEstimate += estimateTorahProjectProfitability({
+        amountPaidByClient: clientPaid,
+        amountPaidToScribe: scribePaid,
+        ledgerLines: linesByProject.get(id) ?? [],
+      });
+    }
+
+    const totalClientRemaining = Math.max(0, totalContractValue - totalClientPaid);
+
+    return {
+      success: true,
+      stats: {
+        activeProjects,
+        totalSheets,
+        approvedSheets,
+        progressPct,
+        totalContractValue,
+        totalClientPaid,
+        totalScribePaid,
+        totalClientRemaining,
+        aggregateProfitabilityEstimate,
+      },
+    };
   } catch {
-    return { success: true, stats: { activeProjects: 0, totalSheets: 0, approvedSheets: 0, progressPct: 0 } };
+    return { success: true, stats: empty };
   }
 }
 

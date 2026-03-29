@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { BookOpen, Plus, ScrollText, CalendarDays, UserRound, Users } from "lucide-react";
@@ -109,10 +109,12 @@ function NewProjectDialog({
   open,
   onOpenChange,
   onCreated,
+  parchmentLabels,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated: () => void;
+  parchmentLabels: string[];
 }) {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [loading, setLoading] = useState(false);
@@ -127,6 +129,22 @@ function NewProjectDialog({
       if (r.success) setClients(r.contacts);
     });
   }, [open]);
+
+  const parchmentOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of parchmentLabels) {
+      const t = p.trim();
+      if (t && !seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    if (out.length === 0) {
+      for (const p of TORAH_CONTRACT_PARCHMENT_TYPES) out.push(p);
+    }
+    return out;
+  }, [parchmentLabels]);
 
   const handleClose = () => {
     setForm(emptyForm());
@@ -320,7 +338,7 @@ function NewProjectDialog({
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">— לא צוין —</option>
-                {TORAH_CONTRACT_PARCHMENT_TYPES.map((p) => (
+                {parchmentOptions.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
@@ -338,7 +356,7 @@ function NewProjectDialog({
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">הגהות גו״ר מוסכמות בחוזה</p>
+                <p className="text-xs text-muted-foreground mb-1">מספר הגהות גברא שסוכמו</p>
                 <Input
                   type="number"
                   min={0}
@@ -353,7 +371,7 @@ function NewProjectDialog({
                 />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">הגהות מחשב מוסכמות בחוזה</p>
+                <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב שסוכמו</p>
                 <Input
                   type="number"
                   min={0}
@@ -400,7 +418,7 @@ function NewProjectDialog({
                 />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">מאגר שבועות ל‑QA לפני היעד</p>
+                <p className="text-xs text-muted-foreground mb-1">מספר שבועות נדרש להכנה</p>
                 <Input
                   type="number"
                   min={0}
@@ -534,9 +552,10 @@ function ProjectCard({ project }: { project: TorahProjectWithNames }) {
 
 type Props = {
   initialProjects: TorahProjectWithNames[];
+  parchmentLabels: string[];
 };
 
-export default function TorahClient({ initialProjects }: Props) {
+export default function TorahClient({ initialProjects, parchmentLabels }: Props) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -626,6 +645,7 @@ export default function TorahClient({ initialProjects }: Props) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreated={handleCreated}
+        parchmentLabels={parchmentLabels}
       />
     </div>
   );

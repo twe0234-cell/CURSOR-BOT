@@ -91,3 +91,70 @@ export function fileNameForImageUrl(url: string): string {
   }
   return "image.jpg";
 }
+
+const GREEN_API_BASE = "https://api.green-api.com";
+
+export type GreenChatHistoryMessage = {
+  type?: string;
+  typeMessage?: string;
+  idMessage?: string;
+  textMessage?: string;
+  caption?: string;
+  downloadUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  extendedTextMessage?: { text?: string } | null;
+};
+
+/**
+ * היסטוריית צ׳אט (עד count הודעות, מהחדש לישן).
+ * @see https://green-api.com/en/docs/api/journals/GetChatHistory/
+ */
+export async function greenApiGetChatHistory(
+  instanceId: string,
+  apiToken: string,
+  chatId: string,
+  count: number
+): Promise<{ ok: true; messages: GreenChatHistoryMessage[] } | { ok: false; error: string }> {
+  const url = `${GREEN_API_BASE}/waInstance${instanceId}/getChatHistory/${apiToken}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, count }),
+    });
+    const body = await res.text();
+    if (!res.ok) {
+      return { ok: false, error: extractJsonErrorMessage(body) };
+    }
+    const data = JSON.parse(body) as unknown;
+    if (!Array.isArray(data)) {
+      return { ok: false, error: "תגובת getChatHistory לא במבנה מערך" };
+    }
+    return { ok: true, messages: data as GreenChatHistoryMessage[] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
+  }
+}
+
+export async function greenApiSendChatMessage(
+  instanceId: string,
+  apiToken: string,
+  chatId: string,
+  message: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const url = `${GREEN_API_BASE}/waInstance${instanceId}/sendMessage/${apiToken}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, message }),
+    });
+    const body = await res.text();
+    const interpreted = interpretGreenApiSendResult(res.ok, body);
+    if (!interpreted.ok) return { ok: false, error: interpreted.error };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
+  }
+}

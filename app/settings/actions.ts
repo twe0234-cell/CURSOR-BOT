@@ -10,7 +10,8 @@ export type SettingsActionResult =
 export async function saveUserSettings(
   greenApiId: string,
   greenApiToken: string,
-  allowedTags?: string[]
+  allowedTags?: string[],
+  waMarketGroupId?: string | null
 ): Promise<SettingsActionResult> {
   try {
     const supabase = await createClient();
@@ -20,10 +21,23 @@ export async function saveUserSettings(
       return { success: false, error: "יש להתחבר כדי לשמור הגדרות" };
     }
 
+    let waGroup: string | null;
+    if (waMarketGroupId !== undefined) {
+      waGroup = String(waMarketGroupId ?? "").trim() || null;
+    } else {
+      const { data: existing } = await supabase
+        .from("user_settings")
+        .select("wa_market_group_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      waGroup = (existing?.wa_market_group_id as string | null) ?? null;
+    }
+
     const payload: Record<string, unknown> = {
       user_id: user.id,
       green_api_id: String(greenApiId ?? "").trim(),
       green_api_token: String(greenApiToken ?? "").trim(),
+      wa_market_group_id: waGroup,
       updated_at: new Date().toISOString(),
     };
 
