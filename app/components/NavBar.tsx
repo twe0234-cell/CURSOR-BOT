@@ -48,8 +48,8 @@ export default function NavBar() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 overflow-x-hidden glass border-b border-[var(--glass-border)] animate-slide-down">
-      <div className="w-full max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4 min-w-0">
+    <header className="sticky top-0 z-50 glass border-b border-[var(--glass-border)] animate-slide-down min-w-0">
+      <div className="w-full max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between gap-2 px-3 sm:px-4 min-w-0">
 
         {/* Logo */}
         <Link
@@ -65,7 +65,10 @@ export default function NavBar() {
         </Link>
 
         {/* Navigation */}
-        <nav className="flex items-center gap-0.5 sm:gap-0.5 overflow-x-auto scrollbar-hide">
+        <nav
+          className="flex min-w-0 flex-1 items-center justify-end gap-0.5 sm:gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-thin py-1"
+          aria-label="ניווט ראשי"
+        >
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive =
               pathname === href ||
@@ -91,7 +94,7 @@ export default function NavBar() {
                 )}
               >
                 <Icon className="size-3.5 sm:size-4 shrink-0" />
-                <span className="hidden lg:inline">{label}</span>
+                <span className="hidden sm:inline">{label}</span>
 
                 {/* Active gold underline pip */}
                 {isActive && (
@@ -110,7 +113,7 @@ export default function NavBar() {
             className="flex items-center gap-1.5 rounded-lg px-2 sm:px-2.5 py-2 text-xs sm:text-sm font-medium text-muted-foreground shrink-0 transition-all duration-250 hover:bg-destructive/8 hover:text-destructive hover:-translate-y-px"
           >
             <LogOut className="size-3.5 sm:size-4 shrink-0" />
-            <span className="hidden lg:inline">התנתקות</span>
+            <span className="hidden sm:inline">התנתקות</span>
           </button>
         </nav>
       </div>

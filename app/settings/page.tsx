@@ -33,18 +33,18 @@ export default async function SettingsPage() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-x-hidden">
-      <h1 className="mb-6 text-3xl sm:text-4xl font-bold text-teal-800">הגדרות</h1>
+      <h1 className="mb-6 text-3xl sm:text-4xl font-bold text-foreground">הגדרות</h1>
 
       <div className="mb-8">
         <BrandingSection currentLogoUrl={sysSettings?.logo_url ?? null} />
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
-          <TabsTrigger value="profile" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsList className="mb-6 rounded-xl bg-muted p-1">
+          <TabsTrigger value="profile" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground">
             פרופיל עסק
           </TabsTrigger>
-          <TabsTrigger value="api" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <TabsTrigger value="api" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground">
             חיבורי API
           </TabsTrigger>
         </TabsList>

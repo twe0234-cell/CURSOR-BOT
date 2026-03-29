@@ -41,7 +41,7 @@ export default function ApiIntegrationsTab({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [credentialsEditOpen, setCredentialsEditOpen] = useState(false);
-  const [gmailOpen, setGmailOpen] = useState(false);
+  const [gmailOpen, setGmailOpen] = useState(true);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -103,12 +103,12 @@ export default function ApiIntegrationsTab({
         </div>
       )}
 
-      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <KeyIcon className="size-5 text-teal-600" />
+            <KeyIcon className="size-5 text-accent" />
             <div>
-              <p className="font-semibold text-teal-800">Green API</p>
+              <p className="font-semibold text-foreground">Green API</p>
               <p className="text-sm text-muted-foreground">
                 Instance: {greenApiId ? maskToken(greenApiId) : "—"} · Token: {greenApiToken ? maskToken(greenApiToken) : "—"}
               </p>
@@ -177,7 +177,7 @@ export default function ApiIntegrationsTab({
               {allowedTags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {allowedTags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-sm">
+                    <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-2 py-0.5 text-sm">
                       {tag}
                       <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-600">×</button>
                     </span>
@@ -193,20 +193,20 @@ export default function ApiIntegrationsTab({
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-2xl border border-teal-100 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <button
           type="button"
           onClick={() => setGmailOpen((o) => !o)}
-          className="flex w-full items-center justify-between p-4 text-right hover:bg-slate-50 transition-colors"
+          className="flex w-full items-center justify-between p-4 text-right hover:bg-muted/50 transition-colors"
         >
-          <span className="flex items-center gap-2 text-lg font-semibold text-teal-800">
-            <MailIcon className="size-5 text-teal-600" />
+          <span className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <MailIcon className="size-5 text-accent" />
             חיבור Gmail (דיוור אימייל)
           </span>
           {gmailOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
         </button>
         {gmailOpen && (
-          <div className="border-t border-teal-100 p-6 space-y-4">
+          <div className="border-t border-border p-6 space-y-4">
             <p className="text-sm text-muted-foreground">
               לשליחת אימיילים דרך Gmail – התגובות יגיעו לתיבת הדואר, והמערכת תעקוב אחר פתיחות, קליקים ובקשות הסרה.
             </p>
