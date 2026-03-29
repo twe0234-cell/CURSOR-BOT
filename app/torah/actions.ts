@@ -7,8 +7,26 @@ import type {
   TorahProjectWithNames,
   TorahSheetStatus,
 } from "@/src/lib/types/torah";
-import { columnsCountForTorahSheetNumber } from "@/src/lib/types/torah";
+import {
+  columnsCountForTorahSheetNumber,
+  normalizeQaAgreed,
+} from "@/src/lib/types/torah";
 import { runTorahCalendarSync } from "@/src/lib/google/calendar";
+import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
+
+const torahContractParchment = TORAH_CONTRACT_PARCHMENT_TYPES as unknown as readonly [
+  string,
+  ...string[],
+];
+
+const optTorahParchment = z
+  .union([
+    z.enum(torahContractParchment),
+    z.literal(""),
+    z.null(),
+    z.undefined(),
+  ])
+  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
 
 // ── Validation schema ─────────────────────────────────────────
 
@@ -42,6 +60,12 @@ const createTorahProjectSchema = z.object({
     z.coerce.number().int().nonnegative()
   ),
   requires_tagging: z.boolean().optional().default(false),
+  price_per_column: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? 0 : v),
+    z.coerce.number().nonnegative()
+  ),
+  includes_accessories: z.boolean().optional().default(false),
+  parchment_type: optTorahParchment,
 });
 
 type CreateTorahProjectInput = z.input<typeof createTorahProjectSchema>;
@@ -111,6 +135,13 @@ export async function createTorahProject(
         gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
         computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
         requires_tagging: v.requires_tagging ?? false,
+        price_per_column: v.price_per_column ?? 0,
+        includes_accessories: v.includes_accessories ?? false,
+        parchment_type: v.parchment_type ?? null,
+        qa_agreed_types: {
+          gavra: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
+          computer: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
+        },
       })
       .select("id")
       .single();
@@ -243,6 +274,16 @@ export async function fetchTorahProjects(): Promise<
         gavra_qa_count: Number(r.gavra_qa_count ?? 1),
         computer_qa_count: Number(r.computer_qa_count ?? 1),
         requires_tagging: Boolean(r.requires_tagging),
+        price_per_column: Number((r as { price_per_column?: number }).price_per_column ?? 0),
+        qa_agreed_types: normalizeQaAgreed(
+          (r as { qa_agreed_types?: unknown }).qa_agreed_types
+        ),
+        includes_accessories: Boolean(
+          (r as { includes_accessories?: boolean }).includes_accessories
+        ),
+        parchment_type:
+          ((r as { parchment_type?: string | null }).parchment_type as string | null) ??
+          null,
         created_at: r.created_at as string,
         scribe_name: nameMap.get(r.scribe_id as string) ?? null,
         client_name: r.client_id ? (nameMap.get(r.client_id as string) ?? null) : null,

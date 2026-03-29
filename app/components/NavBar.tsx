@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/client";
@@ -84,7 +85,7 @@ export default function NavBar() {
                 title={label}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold shrink-0",
+                  "group/nav-item relative flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold shrink-0",
                   "transition-all duration-200 ease-out",
                   "ring-1 ring-transparent hover:ring-border/50",
                   "hover:-translate-y-px",
@@ -100,10 +101,21 @@ export default function NavBar() {
                       ]
                 )}
               >
-                <Icon
-                  className="size-3.5 sm:size-4 shrink-0 opacity-90"
-                  strokeWidth={isActive ? 2.25 : 2}
-                />
+                <motion.span
+                  className="inline-flex shrink-0"
+                  whileHover={{ scale: 1.1 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                >
+                  <Icon
+                    className={cn(
+                      "size-3.5 sm:size-4 shrink-0 opacity-90 transition-colors duration-200",
+                      isActive
+                        ? "text-primary-foreground"
+                        : "text-muted-foreground group-hover/nav-item:text-gold"
+                    )}
+                    strokeWidth={isActive ? 2.25 : 2}
+                  />
+                </motion.span>
                 <span className="hidden min-[420px]:inline sm:inline max-w-[5.5rem] sm:max-w-none truncate">
                   {label}
                 </span>
@@ -124,9 +136,15 @@ export default function NavBar() {
             type="button"
             onClick={handleSignOut}
             title="התנתקות"
-            className="flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold text-muted-foreground shrink-0 transition-all duration-200 hover:bg-destructive/10 hover:text-destructive hover:ring-1 hover:ring-destructive/15 hover:-translate-y-px"
+            className="group/nav-out flex items-center gap-1 sm:gap-1.5 rounded-lg px-1.5 sm:px-2.5 py-2 text-[11px] sm:text-sm font-semibold text-muted-foreground shrink-0 transition-all duration-200 hover:bg-destructive/10 hover:text-destructive hover:ring-1 hover:ring-destructive/15 hover:-translate-y-px"
           >
-            <LogOut className="size-3.5 sm:size-4 shrink-0" />
+            <motion.span
+              className="inline-flex shrink-0"
+              whileHover={{ scale: 1.08 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            >
+              <LogOut className="size-3.5 sm:size-4 shrink-0 transition-colors group-hover/nav-out:text-destructive" />
+            </motion.span>
             <span className="hidden min-[420px]:inline sm:inline">התנתקות</span>
           </button>
         </nav>

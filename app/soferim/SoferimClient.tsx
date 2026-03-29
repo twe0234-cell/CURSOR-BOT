@@ -66,6 +66,7 @@ export default function SoferimClient({ initialRows }: Props) {
     new_name: "",
     new_phone: "",
     city: "",
+    community: "",
     handwriting_quality: null as number | null,
     writing_style: "",
     writing_level: "",
@@ -82,6 +83,7 @@ export default function SoferimClient({ initialRows }: Props) {
       new_name: "",
       new_phone: "",
       city: "",
+      community: "",
       handwriting_quality: null,
       writing_style: "",
       writing_level: "",
@@ -103,6 +105,7 @@ export default function SoferimClient({ initialRows }: Props) {
       new_name: "",
       new_phone: "",
       city: row.city ?? "",
+      community: row.community ?? "",
       handwriting_quality: row.handwriting_quality,
       writing_style: row.writing_style ?? "",
       writing_level: row.writing_level ?? "",
@@ -135,27 +138,42 @@ export default function SoferimClient({ initialRows }: Props) {
       const resolvedSampleUrl =
         sampleUrl ?? (form.existing_sample_url.trim() || null);
 
+      const profilePayload = {
+        writing_style: form.writing_style || null,
+        writing_level: form.writing_level || null,
+        community: form.community.trim() || null,
+        handwriting_quality: form.handwriting_quality,
+        sample_image_url: resolvedSampleUrl,
+        daily_page_capacity: form.daily_page_capacity ? Number(form.daily_page_capacity) : null,
+        pricing_notes: form.pricing_notes || null,
+      };
+
       if (mode === "new") {
         if (!form.new_name.trim()) {
           toast.error("נדרש שם לסופר חדש");
           setLoading(false);
           return;
         }
-        const res = await createScribeContactAndProfile(
-          {
-            name: form.new_name.trim(),
-            phone: form.new_phone.trim() || null,
-            city: form.city.trim() || null,
-          },
-          {
-            writing_style: form.writing_style || null,
-            writing_level: form.writing_level || null,
-            handwriting_quality: form.handwriting_quality,
-            sample_image_url: resolvedSampleUrl,
-            daily_page_capacity: form.daily_page_capacity ? Number(form.daily_page_capacity) : null,
-            pricing_notes: form.pricing_notes || null,
+        const tryCreate = async (forceDuplicate: boolean) =>
+          createScribeContactAndProfile(
+            {
+              name: form.new_name.trim(),
+              phone: form.new_phone.trim() || null,
+              city: form.city.trim() || null,
+              ...(forceDuplicate ? { force_duplicate: true } : {}),
+            },
+            profilePayload
+          );
+
+        let res = await tryCreate(false);
+        if (!res.success && "isDuplicate" in res && res.isDuplicate) {
+          const ok = window.confirm(res.error);
+          if (ok) res = await tryCreate(true);
+          else {
+            setLoading(false);
+            return;
           }
-        );
+        }
         if (!res.success) toast.error(res.error);
         else {
           toast.success("תיק סופר נוצר");
@@ -170,12 +188,7 @@ export default function SoferimClient({ initialRows }: Props) {
         }
         const res = await upsertSoferProfile({
           contact_id: form.contact_id,
-          writing_style: form.writing_style || null,
-          writing_level: form.writing_level || null,
-          handwriting_quality: form.handwriting_quality,
-          sample_image_url: resolvedSampleUrl,
-          daily_page_capacity: form.daily_page_capacity ? Number(form.daily_page_capacity) : null,
-          pricing_notes: form.pricing_notes || null,
+          ...profilePayload,
         });
         if (!res.success) toast.error(res.error);
         else {
@@ -314,6 +327,9 @@ export default function SoferimClient({ initialRows }: Props) {
                       {row.phone ?? "—"}
                       {row.city ? ` · ${row.city}` : ""}
                     </p>
+                    {row.community ? (
+                      <p className="text-xs text-muted-foreground truncate">קהילה: {row.community}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -419,6 +435,14 @@ export default function SoferimClient({ initialRows }: Props) {
                     placeholder="למשל: ירושלים"
                   />
                 </div>
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-1">קהילה</p>
+                  <Input
+                    value={form.community}
+                    onChange={(e) => setForm((f) => ({ ...f, community: e.target.value }))}
+                    placeholder="מוסד / קהילה"
+                  />
+                </div>
               </div>
             ) : (
               <>
@@ -446,6 +470,14 @@ export default function SoferimClient({ initialRows }: Props) {
                     value={form.city}
                     onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
                     placeholder="למשל: בני ברק"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">קהילה</p>
+                  <Input
+                    value={form.community}
+                    onChange={(e) => setForm((f) => ({ ...f, community: e.target.value }))}
+                    placeholder="מוסד / קהילה"
                   />
                 </div>
               </>

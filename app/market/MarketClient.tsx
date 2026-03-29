@@ -36,6 +36,11 @@ import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // of 175. Use formatDisplayK (below) for values that are already in K.
 import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
 import { applyNumericTransform } from "@/lib/numericInput";
+import {
+  STAM_SEFER_TORAH_SIZES,
+  MARKET_PARCHMENT_TYPES,
+  STAM_SCRIPT_TYPES,
+} from "@/src/lib/stam/catalog";
 
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -74,11 +79,14 @@ function SkuBadge({ sku }: { sku: string | null }) {
   );
 }
 
+const selectClass =
+  "h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
 const emptyForm = () => ({
   sofer_id: "",
   dealer_id: null as string | null,
-  style: "",
-  size_cm: "",
+  script_type: "",
+  torah_size: "",
   parchment_type: "",
   influencer_style: "",
   asking_price: "",
@@ -99,8 +107,7 @@ export default function MarketClient({ initialRows }: Props) {
   // ── Filters ──────────────────────────────────────────────────────────────
   const [filterText, setFilterText] = useState("");
   const [filterParchment, setFilterParchment] = useState("");
-  const [filterSizeMin, setFilterSizeMin] = useState("");
-  const [filterSizeMax, setFilterSizeMax] = useState("");
+  const [filterTorahSize, setFilterTorahSize] = useState("");
 
   const parchmentOptions = [...new Set(
     rows.map((r) => r.parchment_type).filter(Boolean) as string[]
@@ -109,13 +116,12 @@ export default function MarketClient({ initialRows }: Props) {
   const filteredRows = rows.filter((row) => {
     if (filterText) {
       const q = filterText.toLowerCase();
-      const hit = [row.sofer_name, row.dealer_name, row.external_sofer_name, row.style]
+      const hit = [row.sofer_name, row.dealer_name, row.external_sofer_name, row.script_type]
         .some((v) => v?.toLowerCase().includes(q));
       if (!hit) return false;
     }
     if (filterParchment && row.parchment_type !== filterParchment) return false;
-    if (filterSizeMin !== "" && (row.size_cm == null || row.size_cm < Number(filterSizeMin))) return false;
-    if (filterSizeMax !== "" && (row.size_cm == null || row.size_cm > Number(filterSizeMax))) return false;
+    if (filterTorahSize && row.torah_size !== filterTorahSize) return false;
     return true;
   });
   // ─────────────────────────────────────────────────────────────────────────
@@ -136,8 +142,8 @@ export default function MarketClient({ initialRows }: Props) {
     setEditForm({
       sofer_id: editRow.sofer_id ?? "",
       dealer_id: editRow.dealer_id ?? null,
-      style: editRow.style ?? "",
-      size_cm: editRow.size_cm != null ? String(editRow.size_cm) : "",
+      script_type: editRow.script_type ?? "",
+      torah_size: editRow.torah_size ?? "",
       parchment_type: editRow.parchment_type ?? "",
       influencer_style: editRow.influencer_style ?? "",
       asking_price: editRow.asking_price != null ? String(editRow.asking_price) : "",
@@ -244,8 +250,8 @@ export default function MarketClient({ initialRows }: Props) {
       const res = await createMarketTorahBook({
         sofer_id: form.sofer_id || null,
         dealer_id: form.dealer_id || null,
-        style: form.style.trim() || null,
-        size_cm: form.size_cm,
+        script_type: form.script_type.trim() || null,
+        torah_size: form.torah_size.trim() || null,
         parchment_type: form.parchment_type.trim() || null,
         influencer_style: form.influencer_style.trim() || null,
         asking_price: form.asking_price,
@@ -292,8 +298,8 @@ export default function MarketClient({ initialRows }: Props) {
       const res = await updateMarketTorahBook(editRow.id, {
         sofer_id: editForm.sofer_id || null,
         dealer_id: editForm.dealer_id || null,
-        style: editForm.style.trim() || null,
-        size_cm: editForm.size_cm,
+        script_type: editForm.script_type.trim() || null,
+        torah_size: editForm.torah_size.trim() || null,
         parchment_type: editForm.parchment_type.trim() || null,
         influencer_style: editForm.influencer_style.trim() || null,
         asking_price: editForm.asking_price,
@@ -375,42 +381,55 @@ export default function MarketClient({ initialRows }: Props) {
               />
             </div>
 
-            {/* Size */}
+            {/* Torah size (inventory codes) */}
             <div>
-              <p className="text-xs text-muted-foreground mb-1">גודל (ס״מ)</p>
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={form.size_cm}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, size_cm: applyNumericTransform(e.target.value) }))
-                }
-              />
+              <p className="text-xs text-muted-foreground mb-1">גודל ס״ת</p>
+              <select
+                value={form.torah_size}
+                onChange={(e) => setForm((f) => ({ ...f, torah_size: e.target.value }))}
+                className={selectClass}
+              >
+                <option value="">— לא צוין —</option>
+                {STAM_SEFER_TORAH_SIZES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Parchment */}
             <div>
               <p className="text-xs text-muted-foreground mb-1">סוג קלף</p>
-              <Input
+              <select
                 value={form.parchment_type}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, parchment_type: e.target.value }))
-                }
-                placeholder="שליל, עבודת יד..."
-              />
+                onChange={(e) => setForm((f) => ({ ...f, parchment_type: e.target.value }))}
+                className={selectClass}
+              >
+                <option value="">— לא צוין —</option>
+                {MARKET_PARCHMENT_TYPES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Style */}
+            {/* Script (כתב) */}
             <div>
-              <p className="text-xs text-muted-foreground mb-1">סגנון</p>
-              <Input
-                value={form.style}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, style: e.target.value }))
-                }
-                placeholder='אריז"ל, חב"ד...'
-              />
+              <p className="text-xs text-muted-foreground mb-1">כתב</p>
+              <select
+                value={form.script_type}
+                onChange={(e) => setForm((f) => ({ ...f, script_type: e.target.value }))}
+                className={selectClass}
+              >
+                <option value="">— לא צוין —</option>
+                {STAM_SCRIPT_TYPES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Asking price */}
@@ -575,7 +594,7 @@ export default function MarketClient({ initialRows }: Props) {
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[180px]">
-          <p className="text-xs text-muted-foreground mb-1">חיפוש (סוחר / סופר / סגנון)</p>
+          <p className="text-xs text-muted-foreground mb-1">חיפוש (סוחר / סופר / כתב)</p>
           <Input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
@@ -596,39 +615,26 @@ export default function MarketClient({ initialRows }: Props) {
             ))}
           </select>
         </div>
-        <div className="flex items-end gap-2">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">גודל מינ׳ (ס״מ)</p>
-            <Input
-              type="number"
-              min={0}
-              step={0.5}
-              value={filterSizeMin}
-              onChange={(e) => setFilterSizeMin(e.target.value)}
-              className="h-9 w-24"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">גודל מקס׳</p>
-            <Input
-              type="number"
-              min={0}
-              step={0.5}
-              value={filterSizeMax}
-              onChange={(e) => setFilterSizeMax(e.target.value)}
-              className="h-9 w-24"
-              placeholder="∞"
-            />
-          </div>
+        <div className="min-w-[120px]">
+          <p className="text-xs text-muted-foreground mb-1">גודל ס״ת</p>
+          <select
+            value={filterTorahSize}
+            onChange={(e) => setFilterTorahSize(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">הכל</option>
+            {STAM_SEFER_TORAH_SIZES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
-        {(filterText || filterParchment || filterSizeMin || filterSizeMax) && (
+        {(filterText || filterParchment || filterTorahSize) && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-9 self-end text-slate-500"
-            onClick={() => { setFilterText(""); setFilterParchment(""); setFilterSizeMin(""); setFilterSizeMax(""); }}
+            onClick={() => { setFilterText(""); setFilterParchment(""); setFilterTorahSize(""); }}
           >
             <X className="size-3.5 ml-1" />
             נקה
@@ -651,9 +657,9 @@ export default function MarketClient({ initialRows }: Props) {
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">קשר אחרון</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[80px]">גודל</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[72px]">גודל</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">סוג קלף</TableHead>
-                  <TableHead className="text-right py-3 px-4 w-[120px]">סגנון</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[100px]">כתב</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px]">כתב</TableHead>
                   <TableHead className="text-right py-3 px-4 w-[100px]">מחיר דורש</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px]">יעד תיווך</TableHead>
@@ -692,13 +698,13 @@ export default function MarketClient({ initialRows }: Props) {
                           : "—"}
                       </TableCell>
                       <TableCell className="py-3 px-4 hidden md:table-cell text-sm whitespace-nowrap">
-                        {row.size_cm != null ? `${row.size_cm} ס״מ` : "—"}
+                        {row.torah_size ?? "—"}
                       </TableCell>
                       <TableCell className="py-3 px-4 hidden lg:table-cell text-sm text-muted-foreground truncate max-w-[100px]">
                         {row.parchment_type ?? "—"}
                       </TableCell>
                       <TableCell className="py-3 px-4 text-sm truncate max-w-[108px]">
-                        {row.style ?? "—"}
+                        {row.script_type ?? "—"}
                       </TableCell>
                       <TableCell className="py-3 px-4 hidden sm:table-cell">
                         {row.handwriting_image_url ? (
@@ -788,28 +794,43 @@ export default function MarketClient({ initialRows }: Props) {
                 />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">גודל (ס״מ)</p>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={editForm.size_cm}
-                  onChange={(e) => setEditForm((f) => ({ ...f, size_cm: applyNumericTransform(e.target.value) }))}
-                />
+                <p className="text-xs text-muted-foreground mb-1">גודל ס״ת</p>
+                <select
+                  value={editForm.torah_size}
+                  onChange={(e) => setEditForm((f) => ({ ...f, torah_size: e.target.value }))}
+                  className={selectClass}
+                >
+                  <option value="">— לא צוין —</option>
+                  {STAM_SEFER_TORAH_SIZES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">סוג קלף</p>
-                <Input
+                <select
                   value={editForm.parchment_type}
                   onChange={(e) => setEditForm((f) => ({ ...f, parchment_type: e.target.value }))}
-                />
+                  className={selectClass}
+                >
+                  <option value="">— לא צוין —</option>
+                  {MARKET_PARCHMENT_TYPES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">סגנון</p>
-                <Input
-                  value={editForm.style}
-                  onChange={(e) => setEditForm((f) => ({ ...f, style: e.target.value }))}
-                />
+                <p className="text-xs text-muted-foreground mb-1">כתב</p>
+                <select
+                  value={editForm.script_type}
+                  onChange={(e) => setEditForm((f) => ({ ...f, script_type: e.target.value }))}
+                  className={selectClass}
+                >
+                  <option value="">— לא צוין —</option>
+                  {STAM_SCRIPT_TYPES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">מחיר דורש (אל״ש)</p>

@@ -8,8 +8,24 @@ import type {
   TorahSheetGridRow,
   TorahSheetStatus,
 } from "@/src/lib/types/torah";
+import { normalizeQaAgreed } from "@/src/lib/types/torah";
+import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
 import { computeTorahScribePace, type TorahScribePaceResult } from "@/src/services/crm.logic";
 import { runTorahCalendarSync } from "@/src/lib/google/calendar";
+
+const torahContractParchment = TORAH_CONTRACT_PARCHMENT_TYPES as unknown as readonly [
+  string,
+  ...string[],
+];
+
+const optTorahParchment = z
+  .union([
+    z.enum(torahContractParchment),
+    z.literal(""),
+    z.null(),
+    z.undefined(),
+  ])
+  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
 
 const SHEET_STATUS_TUPLE = [
   "not_started",
@@ -86,6 +102,16 @@ export async function fetchProjectWithSheets(
       gavra_qa_count: Number(row.gavra_qa_count ?? 1),
       computer_qa_count: Number(row.computer_qa_count ?? 1),
       requires_tagging: Boolean(row.requires_tagging),
+      price_per_column: Number((row as { price_per_column?: number }).price_per_column ?? 0),
+      qa_agreed_types: normalizeQaAgreed(
+        (row as { qa_agreed_types?: unknown }).qa_agreed_types
+      ),
+      includes_accessories: Boolean(
+        (row as { includes_accessories?: boolean }).includes_accessories
+      ),
+      parchment_type:
+        ((row as { parchment_type?: string | null }).parchment_type as string | null) ??
+        null,
       created_at: row.created_at as string,
       scribe_name: nameMap.get(row.scribe_id as string) ?? null,
       client_name: row.client_id ? (nameMap.get(row.client_id as string) ?? null) : null,
@@ -337,6 +363,9 @@ const updateTorahProjectSchema = z.object({
   gavra_qa_count: z.coerce.number().int().nonnegative(),
   computer_qa_count: z.coerce.number().int().nonnegative(),
   requires_tagging: z.boolean(),
+  price_per_column: z.coerce.number().nonnegative(),
+  includes_accessories: z.boolean(),
+  parchment_type: optTorahParchment,
 });
 
 export type UpdateTorahProjectInput = z.infer<typeof updateTorahProjectSchema>;
@@ -370,6 +399,13 @@ export async function updateTorahProject(
         gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count)),
         computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count)),
         requires_tagging: v.requires_tagging,
+        price_per_column: v.price_per_column,
+        includes_accessories: v.includes_accessories,
+        parchment_type: v.parchment_type,
+        qa_agreed_types: {
+          gavra: Math.max(0, Math.floor(v.gavra_qa_count)),
+          computer: Math.max(0, Math.floor(v.computer_qa_count)),
+        },
       })
       .eq("id", projectId)
       .eq("user_id", user.id);

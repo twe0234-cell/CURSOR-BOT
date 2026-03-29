@@ -4,7 +4,20 @@
 // 045 — total_agreed_price, columns_count
 // 046 — amount_paid_by_client, amount_paid_to_scribe
 // 047 — workflow: columns_per_day, qa_weeks_buffer, gavra_qa_count, computer_qa_count, requires_tagging
+// 052 — contract: price_per_column, qa_agreed_types (jsonb), includes_accessories, parchment_type
 // ============================================================
+
+/** Parse qa_agreed_types JSON from DB */
+export function normalizeQaAgreed(raw: unknown): { gavra: number; computer: number } {
+  if (raw == null || typeof raw !== "object") return { gavra: 1, computer: 1 };
+  const o = raw as Record<string, unknown>;
+  const g = Number(o.gavra);
+  const c = Number(o.computer);
+  return {
+    gavra: Number.isFinite(g) && g >= 0 ? Math.floor(g) : 1,
+    computer: Number.isFinite(c) && c >= 0 ? Math.floor(c) : 1,
+  };
+}
 
 /** Standard STaM Sefer Torah layout: sheets 1, 61, 62 → 3 columns; all others → 4 (245 columns total). */
 export function columnsCountForTorahSheetNumber(sheetNumber: number): number {
@@ -61,6 +74,14 @@ export interface TorahProject {
   computer_qa_count: number;
   /** External tagging (תיוג) required */
   requires_tagging: boolean;
+  /** מחיר לעמודה בחוזה (₪) */
+  price_per_column: number;
+  /** מספרי הגהה מוסכמים בחוזה */
+  qa_agreed_types: { gavra: number; computer: number };
+  /** אביזרים בחוזה */
+  includes_accessories: boolean;
+  /** סוג קלף בחוזה */
+  parchment_type: string | null;
   created_at: string;           // ISO timestamptz
 }
 

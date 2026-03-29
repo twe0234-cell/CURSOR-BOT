@@ -6,26 +6,9 @@ import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
 
-/** כולל סוחר + משא ומתן + SKU + דוגמת כתב */
+/** כולל סוחר + משא ומתן + SKU + דוגמת כתב (מיגרציה 051) */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
-
-const MARKET_SELECT_FULL =
-  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, expected_completion_date, notes, created_at";
-
-const MARKET_SELECT_LEGACY =
-  "id, sofer_id, external_sofer_name, style, size_cm, parchment_type, influencer_style, asking_price, currency, expected_completion_date, notes, created_at";
-
-function isMissingColumnError(msg: string | undefined): boolean {
-  if (!msg) return false;
-  const m = msg.toLowerCase();
-  return (
-    (m.includes("column") && m.includes("does not exist")) ||
-    m.includes("42703") ||
-    m.includes("schema cache") ||
-    m.includes("could not find")
-  );
-}
+  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
 
 export type MarketTorahBookRow = {
   id: string;
@@ -33,8 +16,8 @@ export type MarketTorahBookRow = {
   sofer_id: string | null;
   dealer_id: string | null;
   external_sofer_name: string | null;
-  style: string | null;
-  size_cm: number | null;
+  script_type: string | null;
+  torah_size: string | null;
   parchment_type: string | null;
   influencer_style: string | null;
   /** מחירי תצוגה (אלפי ש״ח / K) אחרי המרה ממאגר — הערכים ב-DB נשמרים ×1000 */
@@ -75,8 +58,8 @@ function mapBookRow(
     sofer_id: (b.sofer_id as string | null) ?? null,
     dealer_id: hasExtendedDealer ? ((b.dealer_id as string | null) ?? null) : null,
     external_sofer_name: (b.external_sofer_name as string | null) ?? null,
-    style: (b.style as string | null) ?? null,
-    size_cm: b.size_cm != null ? Number(b.size_cm) : null,
+    script_type: (b.script_type as string | null) ?? null,
+    torah_size: (b.torah_size as string | null) ?? null,
     parchment_type: (b.parchment_type as string | null) ?? null,
     influencer_style: (b.influencer_style as string | null) ?? null,
     asking_price: ask,
@@ -111,39 +94,16 @@ export async function fetchMarketTorahBooks(): Promise<
     let hasBrokerageCols = true;
     let hasExtendedDealer = true;
 
-    const trySelect = async (cols: string) => {
-      return supabase.from("market_torah_books").select(cols).eq("user_id", user.id).order("created_at", { ascending: false });
-    };
-
-    const resExt = await trySelect(MARKET_SELECT_EXT);
+    const resExt = await supabase
+      .from("market_torah_books")
+      .select(MARKET_SELECT_EXT)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
     books = resExt.data as Record<string, unknown>[] | null;
     selErr = resExt.error;
 
     if (selErr) {
-      console.error("[fetchMarketTorahBooks] EXT select error (full):", JSON.stringify(selErr, null, 2));
-    }
-
-    if (selErr && isMissingColumnError(selErr.message)) {
-      const resFull = await trySelect(MARKET_SELECT_FULL);
-      books = resFull.data as Record<string, unknown>[] | null;
-      selErr = resFull.error;
-      hasExtendedDealer = false;
-      if (selErr) {
-        console.error("[fetchMarketTorahBooks] FULL select error (full):", JSON.stringify(selErr, null, 2));
-      }
-    }
-
-    if (selErr && isMissingColumnError(selErr.message)) {
-      const resLeg = await trySelect(MARKET_SELECT_LEGACY);
-      books = resLeg.data as Record<string, unknown>[] | null;
-      selErr = resLeg.error;
-      hasBrokerageCols = false;
-      hasExtendedDealer = false;
-      if (selErr) {
-        console.error("[fetchMarketTorahBooks] LEGACY select error (full):", JSON.stringify(selErr, null, 2));
-      } else {
-        console.warn("[fetchMarketTorahBooks] Using legacy market columns.");
-      }
+      console.error("[fetchMarketTorahBooks] select error:", JSON.stringify(selErr, null, 2));
     }
 
     if (selErr) {
@@ -248,8 +208,8 @@ export async function createMarketTorahBook(
       sofer_id: v.sofer_id ?? null,
       dealer_id: v.dealer_id ?? null,
       external_sofer_name: null,
-      style: v.style ?? null,
-      size_cm: v.size_cm ?? null,
+      script_type: v.script_type ?? null,
+      torah_size: v.torah_size ?? null,
       parchment_type: v.parchment_type ?? null,
       influencer_style: v.influencer_style ?? null,
       asking_price: askDb,
@@ -321,8 +281,8 @@ export async function updateMarketTorahBook(
       .update({
         sofer_id: v.sofer_id ?? null,
         dealer_id: v.dealer_id ?? null,
-        style: v.style ?? null,
-        size_cm: v.size_cm ?? null,
+        script_type: v.script_type ?? null,
+        torah_size: v.torah_size ?? null,
         parchment_type: v.parchment_type ?? null,
         influencer_style: v.influencer_style ?? null,
         asking_price: askDb,

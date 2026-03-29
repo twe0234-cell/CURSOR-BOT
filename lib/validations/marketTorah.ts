@@ -1,10 +1,14 @@
 import { z } from "zod";
+import {
+  STAM_SEFER_TORAH_SIZES,
+  MARKET_PARCHMENT_TYPES,
+  STAM_SCRIPT_TYPES,
+} from "@/src/lib/stam/catalog";
 
 const optionalUuid = z
   .union([z.string().uuid(), z.literal(""), z.null(), z.undefined()])
   .transform((v) => (v === "" || v === undefined ? null : v));
 
-/** מחירים בטופס באלפי שקלים (K); השרת יכפיל ב-1000 לפני DB */
 const optPositiveNum = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? null : v),
   z.coerce.number().nonnegative().nullable()
@@ -14,15 +18,29 @@ const optDate = z
   .union([z.string(), z.literal(""), z.null(), z.undefined()])
   .transform((v) => (v === "" || v === undefined || v === null ? null : v));
 
+const sizes = STAM_SEFER_TORAH_SIZES as unknown as readonly [string, ...string[]];
+const parchments = MARKET_PARCHMENT_TYPES as unknown as readonly [string, ...string[]];
+const scripts = STAM_SCRIPT_TYPES as unknown as readonly [string, ...string[]];
+
+const torahSizeEnum = z
+  .union([z.enum(sizes), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
+
+const parchmentEnum = z
+  .union([z.enum(parchments), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
+
+const scriptEnum = z
+  .union([z.enum(scripts), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === "" || v === undefined || v === null ? null : v));
+
 export const marketTorahBookSchema = z.object({
   sofer_id: optionalUuid,
-  /** סוחר (Merchant) — אם נבחר, הוא הבעלים לתצוגה */
   dealer_id: optionalUuid,
-  /** נשמר ב-DB לתאימות לאחור; הטופס לא שולח */
   external_sofer_name: z.string().max(200).optional().nullable(),
-  style: z.string().max(200).optional().nullable(),
-  size_cm: optPositiveNum,
-  parchment_type: z.string().max(200).optional().nullable(),
+  script_type: scriptEnum,
+  torah_size: torahSizeEnum,
+  parchment_type: parchmentEnum,
   influencer_style: z.string().max(200).optional().nullable(),
   asking_price: optPositiveNum,
   target_brokerage_price: optPositiveNum,

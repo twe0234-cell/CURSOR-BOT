@@ -36,6 +36,7 @@ import { createCrmContact } from "@/app/crm/actions";
 import { applyNumericTransform } from "@/lib/numericInput";
 import { createQaBatch, returnQaBatch, fetchQaBatches, type QaBatchRow } from "./qa-actions";
 import { cn } from "@/lib/utils";
+import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -118,6 +119,13 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
   const [editGavraQa, setEditGavraQa] = useState(String(project.gavra_qa_count));
   const [editComputerQa, setEditComputerQa] = useState(String(project.computer_qa_count));
   const [editRequiresTagging, setEditRequiresTagging] = useState(project.requires_tagging);
+  const [editPricePerColumn, setEditPricePerColumn] = useState(
+    String(project.price_per_column ?? 0)
+  );
+  const [editParchmentType, setEditParchmentType] = useState(project.parchment_type ?? "");
+  const [editIncludesAccessories, setEditIncludesAccessories] = useState(
+    project.includes_accessories
+  );
   const [editSaving, setEditSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -142,6 +150,9 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
     setEditGavraQa(String(project.gavra_qa_count));
     setEditComputerQa(String(project.computer_qa_count));
     setEditRequiresTagging(project.requires_tagging);
+    setEditPricePerColumn(String(project.price_per_column ?? 0));
+    setEditParchmentType(project.parchment_type ?? "");
+    setEditIncludesAccessories(project.includes_accessories);
     setPayClientStr(String(project.amount_paid_by_client));
     setPayScribeStr(String(project.amount_paid_to_scribe));
   }, [project]);
@@ -301,6 +312,9 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
         computer_qa_count:
           editComputerQa === "" ? 0 : Math.max(0, Math.floor(Number(editComputerQa))),
         requires_tagging: editRequiresTagging,
+        price_per_column: editPricePerColumn === "" ? 0 : Number(editPricePerColumn),
+        includes_accessories: editIncludesAccessories,
+        parchment_type: editParchmentType.trim() || null,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -406,6 +420,11 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
             <p className="text-sm text-slate-600 mt-3 flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground">סטטוס פרויקט:</span>{" "}
               {TORAH_PROJECT_STATUS_LABELS[project.status]}
+              {project.requires_tagging && (
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-200">
+                  שלב תיוג בחוזה
+                </span>
+              )}
               <span
                 className={cn(
                   "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
@@ -741,7 +760,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
 
       {/* ── Edit project dialog ──────────────────────────── */}
       <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>עריכת פרויקט</DialogTitle>
           </DialogHeader>
@@ -754,15 +773,84 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
               <p className="text-xs text-muted-foreground mb-1">תאריך יעד</p>
               <Input type="date" value={editTarget} onChange={(e) => setEditTarget(e.target.value)} />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">מחיר מוסכם כולל (₪)</p>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={editTotalAgreed}
-                onChange={(e) => setEditTotalAgreed(applyNumericTransform(e.target.value))}
-              />
+
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <p className="text-xs font-semibold text-foreground">פרטי חוזה</p>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">מחיר מוסכם כולל (₪)</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={editTotalAgreed}
+                  onChange={(e) => setEditTotalAgreed(applyNumericTransform(e.target.value))}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">מחיר לעמודה (₪)</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={editPricePerColumn}
+                  onChange={(e) => setEditPricePerColumn(applyNumericTransform(e.target.value))}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">סוג קלף</p>
+                <select
+                  value={editParchmentType}
+                  onChange={(e) => setEditParchmentType(e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">— לא צוין —</option>
+                  {TORAH_CONTRACT_PARCHMENT_TYPES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editIncludesAccessories}
+                  onChange={(e) => setEditIncludesAccessories(e.target.checked)}
+                  className="size-4 rounded border-input"
+                />
+                כולל אביזרים בחוזה
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">הגהות גו״ר מוסכמות</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editGavraQa}
+                    onChange={(e) => setEditGavraQa(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">הגהות מחשב מוסכמות</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editComputerQa}
+                    onChange={(e) => setEditComputerQa(applyNumericTransform(e.target.value))}
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editRequiresTagging}
+                  onChange={(e) => setEditRequiresTagging(e.target.checked)}
+                  className="size-4 rounded border-input"
+                />
+                נדרש שלב תיוג חיצוני בחוזה
+              </label>
             </div>
 
             <div className="border-t border-slate-100 pt-3 space-y-3">
@@ -788,36 +876,7 @@ export default function TorahDetailClient({ projectId, project, initialSheets }:
                     onChange={(e) => setEditQaWeeks(applyNumericTransform(e.target.value))}
                   />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות גו״ר (אדם)</p>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={editGavraQa}
-                    onChange={(e) => setEditGavraQa(applyNumericTransform(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב</p>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={editComputerQa}
-                    onChange={(e) => setEditComputerQa(applyNumericTransform(e.target.value))}
-                  />
-                </div>
               </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editRequiresTagging}
-                  onChange={(e) => setEditRequiresTagging(e.target.checked)}
-                  className="size-4 rounded border-input"
-                />
-                נדרש תיוג חיצוני
-              </label>
             </div>
 
             <div className="flex gap-2 pt-1">

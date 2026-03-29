@@ -26,6 +26,7 @@ import {
 } from "@/src/lib/types/torah";
 import { cn } from "@/lib/utils";
 import { applyNumericTransform } from "@/lib/numericInput";
+import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
 
 // ── Status badge ──────────────────────────────────────────────
 
@@ -77,6 +78,9 @@ type FormState = {
   client_id: string;
   target_date: string;
   total_agreed_price: string;
+  price_per_column: string;
+  parchment_type: string;
+  includes_accessories: boolean;
   columns_per_day: string;
   qa_weeks_buffer: string;
   gavra_qa_count: string;
@@ -91,6 +95,9 @@ const emptyForm = (): FormState => ({
   client_id: "",
   target_date: "",
   total_agreed_price: "",
+  price_per_column: "",
+  parchment_type: "",
+  includes_accessories: false,
   columns_per_day: "0",
   qa_weeks_buffer: "3",
   gavra_qa_count: "1",
@@ -177,6 +184,9 @@ function NewProjectDialog({
         gavra_qa_count: form.gavra_qa_count === "" ? 1 : Number(form.gavra_qa_count),
         computer_qa_count: form.computer_qa_count === "" ? 1 : Number(form.computer_qa_count),
         requires_tagging: form.requires_tagging,
+        price_per_column: form.price_per_column === "" ? 0 : Number(form.price_per_column),
+        includes_accessories: form.includes_accessories,
+        parchment_type: form.parchment_type.trim() || null,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -266,22 +276,107 @@ function NewProjectDialog({
           </div>
 
           {/* Total agreed price */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">מחיר כולל מוסכם (₪)</p>
-            <Input
-              type="number"
-              min={0}
-              step={0.01}
-              inputMode="decimal"
-              value={form.total_agreed_price}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  total_agreed_price: applyNumericTransform(e.target.value),
-                }))
-              }
-              placeholder="0"
-            />
+          <div className="border-t border-slate-100 pt-3 space-y-3">
+            <p className="text-xs font-semibold text-foreground">פרטי חוזה</p>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">מחיר כולל מוסכם (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                inputMode="decimal"
+                value={form.total_agreed_price}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    total_agreed_price: applyNumericTransform(e.target.value),
+                  }))
+                }
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">מחיר לעמודה (₪)</p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                inputMode="decimal"
+                value={form.price_per_column}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    price_per_column: applyNumericTransform(e.target.value),
+                  }))
+                }
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">סוג קלף</p>
+              <select
+                value={form.parchment_type}
+                onChange={(e) => setForm((f) => ({ ...f, parchment_type: e.target.value }))}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— לא צוין —</option>
+                {TORAH_CONTRACT_PARCHMENT_TYPES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.includes_accessories}
+                onChange={(e) => setForm((f) => ({ ...f, includes_accessories: e.target.checked }))}
+                className="size-4 rounded border-input"
+              />
+              כולל אביזרים (עצי חיים, מעיל וכו׳)
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">הגהות גו״ר מוסכמות בחוזה</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.gavra_qa_count}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      gavra_qa_count: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">הגהות מחשב מוסכמות בחוזה</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.computer_qa_count}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      computer_qa_count: applyNumericTransform(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_tagging}
+                onChange={(e) => setForm((f) => ({ ...f, requires_tagging: e.target.checked }))}
+                className="size-4 rounded border-input"
+              />
+              נדרש שלב תיוג חיצוני בחוזה
+            </label>
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-3">
@@ -319,46 +414,7 @@ function NewProjectDialog({
                   }
                 />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">מספר הגהות גו״ר (אדם)</p>
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.gavra_qa_count}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      gavra_qa_count: applyNumericTransform(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">מספר הגהות מחשב</p>
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.computer_qa_count}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      computer_qa_count: applyNumericTransform(e.target.value),
-                    }))
-                  }
-                />
-              </div>
             </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.requires_tagging}
-                onChange={(e) => setForm((f) => ({ ...f, requires_tagging: e.target.checked }))}
-                className="size-4 rounded border-input"
-              />
-              נדרש תיוג חיצוני
-            </label>
           </div>
 
           <div className="flex gap-2 pt-2">

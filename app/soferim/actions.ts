@@ -15,6 +15,7 @@ export type SoferDirectoryRow = {
   name: string;
   phone: string | null;
   city: string | null;
+  community: string | null;
   writing_style: string | null;
   writing_level: string | null;
   handwriting_quality: number | null;
@@ -50,7 +51,7 @@ export async function fetchSoferimDirectory(): Promise<
     const { data: profiles, error: pErr } = await supabase
       .from("crm_sofer_profiles")
       .select(
-        "contact_id, writing_style, writing_level, handwriting_quality, sample_image_url, last_contact_date, daily_page_capacity, pricing_notes"
+        "contact_id, community, writing_style, writing_level, handwriting_quality, sample_image_url, last_contact_date, daily_page_capacity, pricing_notes"
       )
       .in("contact_id", ids);
 
@@ -66,6 +67,9 @@ export async function fetchSoferimDirectory(): Promise<
         name: c.name ?? "",
         phone: c.phone ?? null,
         city: raw.city?.trim() ? String(raw.city).trim() : null,
+        community: p?.community != null && String(p.community).trim()
+          ? String(p.community).trim()
+          : null,
         writing_style: p?.writing_style ?? null,
         writing_level: p?.writing_level ?? null,
         handwriting_quality:
@@ -192,6 +196,7 @@ export async function upsertSoferProfile(
     const { error } = await supabase.from("crm_sofer_profiles").upsert(
       {
         contact_id: v.contact_id,
+        community: v.community?.trim() ? v.community.trim() : null,
         writing_style: v.writing_style ?? null,
         writing_level: v.writing_level ?? null,
         handwriting_quality:
@@ -218,7 +223,10 @@ export async function upsertSoferProfile(
 export async function createScribeContactAndProfile(
   payload: Record<string, unknown>,
   profileFields: Record<string, unknown>
-): Promise<{ success: true; contact_id: string } | { success: false; error: string }> {
+): Promise<
+  | { success: true; contact_id: string }
+  | { success: false; error: string; isDuplicate?: boolean }
+> {
   try {
     const parsedContact = newScribeContactSchema.safeParse(payload);
     if (!parsedContact.success) {
@@ -231,13 +239,40 @@ export async function createScribeContactAndProfile(
     } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
+    const forceDup = parsedContact.data.force_duplicate === true;
+    const nameNorm = parsedContact.data.name.trim();
+    const cityNorm =
+      parsedContact.data.city?.trim() ? parsedContact.data.city.trim() : null;
+
+    if (!forceDup) {
+      const { data: sameName } = await supabase
+        .from("crm_contacts")
+        .select("id, city")
+        .eq("user_id", user.id)
+        .eq("type", "Scribe")
+        .eq("name", nameNorm);
+
+      const dup = (sameName ?? []).find((row) => {
+        const rc = row.city != null && String(row.city).trim() ? String(row.city).trim() : null;
+        return rc === cityNorm;
+      });
+
+      if (dup) {
+        return {
+          success: false,
+          isDuplicate: true,
+          error: "קיים סופר בשם זה בעיר זו. האם להמשיך?",
+        };
+      }
+    }
+
     const { data: inserted, error: insErr } = await supabase
       .from("crm_contacts")
       .insert({
         user_id: user.id,
-        name: parsedContact.data.name,
+        name: nameNorm,
         phone: parsedContact.data.phone ?? null,
-        city: parsedContact.data.city?.trim() || null,
+        city: cityNorm,
         type: "Scribe",
         preferred_contact: "WhatsApp",
         sku: generateSku(crmSkuPrefix),
