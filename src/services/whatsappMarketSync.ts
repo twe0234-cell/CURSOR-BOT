@@ -17,9 +17,32 @@ import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
 import { resolveContentType } from "@/lib/upload";
 
+/** שורת דיבוג ל-UI — מה חולץ מההודעה ומה נכשל בפרסור */
+export type WhatsAppMarketSyncDebugEntry = {
+  id: string;
+  rawText: string;
+  missingFields?: string[];
+  error?: string;
+};
+
+const EMPTY_OR_DISCONNECTED_HISTORY =
+  "No messages found or API disconnected. Check Group ID.";
+
 export type WhatsAppMarketSyncResult =
-  | { success: true; imported: number; skipped: number; errors: string[] }
-  | { success: false; error: string };
+  | {
+      success: true;
+      imported: number;
+      skipped: number;
+      errors: string[];
+      debugData: WhatsAppMarketSyncDebugEntry[];
+      waMarketGroupId: string;
+    }
+  | {
+      success: false;
+      error: string;
+      waMarketGroupId?: string;
+      debugData?: WhatsAppMarketSyncDebugEntry[];
+    };
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MEDIA_BUCKET = "media";
@@ -90,7 +113,10 @@ export async function syncMarketFromWhatsAppGroup(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || user.id !== userId) {
-    return { success: false, error: "יש להתחבר" };
+    return {
+      success: false,
+      error: "יש להתחבר — לא ניתן לסנכרן ללא התחברות למערכת",
+    };
   }
 
   const { data: settings, error: settingsErr } = await supabase
@@ -100,7 +126,10 @@ export async function syncMarketFromWhatsAppGroup(
     .maybeSingle();
 
   if (settingsErr) {
-    return { success: false, error: settingsErr.message };
+    return {
+      success: false,
+      error: `שגיאת הגדרות: ${settingsErr.message}`,
+    };
   }
 
   const groupId = String(settings?.wa_market_group_id ?? "").trim();
@@ -110,18 +139,36 @@ export async function syncMarketFromWhatsAppGroup(
   if (!groupId) {
     return {
       success: false,
-      error: "לא הוגדר Chat ID לקבוצת המאגר (הגדרות → חיבורי API)",
+      error:
+        "לא הוגדר wa_market_group_id (מזהה קבוצת WhatsApp). הגדר ב: הגדרות → חיבורי API.",
+      waMarketGroupId: "",
     };
   }
   if (!instanceId || !token) {
-    return { success: false, error: "חסרים Instance ID או API Token של Green API" };
+    return {
+      success: false,
+      error:
+        "חסרים Green API: Instance ID או API Token. מלא ב: הגדרות → חיבורי API.",
+      waMarketGroupId: groupId,
+    };
   }
 
   console.log("[WA sync] Fetching history for group (wa_market_group_id):", groupId);
 
   const hist = await greenApiGetChatHistory(instanceId, token, groupId, 20);
   if (!hist.ok) {
-    return { success: false, error: hist.error };
+    return {
+      success: false,
+      error: hist.error,
+      waMarketGroupId: groupId,
+      debugData: [
+        {
+          id: "—",
+          rawText: "[API]",
+          error: EMPTY_OR_DISCONNECTED_HISTORY,
+        },
+      ],
+    };
   }
 
   const sampleN = Math.min(3, hist.messages.length);
@@ -144,7 +191,11 @@ export async function syncMarketFromWhatsAppGroup(
     .not("source_message_id", "is", null);
 
   if (exErr) {
-    return { success: false, error: exErr.message };
+    return {
+      success: false,
+      error: exErr.message,
+      waMarketGroupId: groupId,
+    };
   }
 
   const seen = new Set(
@@ -156,20 +207,40 @@ export async function syncMarketFromWhatsAppGroup(
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
+  const debugData: WhatsAppMarketSyncDebugEntry[] = [];
+
+  if (hist.messages.length === 0) {
+    debugData.push({
+      id: "—",
+      rawText: "[History]",
+      error: EMPTY_OR_DISCONNECTED_HISTORY,
+    });
+  }
 
   for (let mi = 0; mi < hist.messages.length; mi++) {
     const m = hist.messages[mi];
     const idMsg = m.idMessage?.trim();
+    const body = combinedMessageText(m);
+
     if (!idMsg) {
+      debugData.push({
+        id: "(ללא idMessage)",
+        rawText: body.trim() ? body : "[Empty]",
+        error: "No message id from API",
+      });
       skipped++;
       continue;
     }
     if (seen.has(idMsg)) {
+      debugData.push({
+        id: idMsg,
+        rawText: body.trim() ? body : "[Empty]",
+        error: "Already in catalogue",
+      });
       skipped++;
       continue;
     }
 
-    const body = combinedMessageText(m);
     if (!body.trim()) {
       if (mi < 3) {
         console.log("[WA sync] empty extracted text — inspect nested media", {
@@ -179,6 +250,11 @@ export async function syncMarketFromWhatsAppGroup(
           hasDownloadUrl: Boolean(m.downloadUrl),
         });
       }
+      debugData.push({
+        id: idMsg,
+        rawText: "[Empty]",
+        error: "No text/caption found",
+      });
       skipped++;
       continue;
     }
@@ -194,6 +270,12 @@ export async function syncMarketFromWhatsAppGroup(
         reasons: explainParseNotActionable(parsed),
         missingFieldHints: listMissingParseFields(parsed),
         parsed,
+      });
+      debugData.push({
+        id: idMsg,
+        rawText: body,
+        missingFields: listMissingParseFields(parsed),
+        error: "Parser failed",
       });
       skipped++;
       continue;
@@ -246,15 +328,30 @@ export async function syncMarketFromWhatsAppGroup(
       if (insErr) {
         if (insErr.code === "23505") {
           seen.add(idMsg);
+          debugData.push({
+            id: idMsg,
+            rawText: body,
+            error: "Already in catalogue",
+          });
           skipped++;
           continue;
         }
+        debugData.push({
+          id: idMsg,
+          rawText: body,
+          error: insErr.message,
+        });
         errors.push(`${idMsg.slice(0, 16)}: ${insErr.message}`);
         continue;
       }
 
       seen.add(idMsg);
       imported++;
+      debugData.push({
+        id: idMsg,
+        rawText: body,
+        error: "Success",
+      });
 
       await new Promise((r) => setTimeout(r, greenApiDispatchSpacingDelayMs()));
       const sent = await greenApiSendChatMessage(
@@ -267,9 +364,22 @@ export async function syncMarketFromWhatsAppGroup(
         errors.push(`אישור לקבוצה (${idMsg.slice(0, 12)}…): ${sent.error}`);
       }
     } catch (e) {
-      errors.push(`${idMsg.slice(0, 16)}: ${e instanceof Error ? e.message : "שגיאה"}`);
+      const msg = e instanceof Error ? e.message : "שגיאה";
+      debugData.push({
+        id: idMsg,
+        rawText: body,
+        error: msg,
+      });
+      errors.push(`${idMsg.slice(0, 16)}: ${msg}`);
     }
   }
 
-  return { success: true, imported, skipped, errors };
+  return {
+    success: true,
+    imported,
+    skipped,
+    errors,
+    debugData,
+    waMarketGroupId: groupId,
+  };
 }

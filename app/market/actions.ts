@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
-import { syncMarketFromWhatsAppGroup } from "@/src/services/whatsappMarketSync";
+import {
+  syncMarketFromWhatsAppGroup,
+  type WhatsAppMarketSyncDebugEntry,
+} from "@/src/services/whatsappMarketSync";
+
+export type { WhatsAppMarketSyncDebugEntry };
 
 /** כולל סוחר + משא ומתן + SKU + דוגמת כתב (מיגרציה 051) */
 const MARKET_SELECT_EXT =
@@ -311,16 +316,31 @@ export async function updateMarketTorahBook(
   }
 }
 
-export async function triggerMarketWhatsAppSync(): Promise<
-  | { success: true; imported: number; skipped: number; errors: string[] }
-  | { success: false; error: string }
-> {
+export type MarketWhatsAppSyncResult =
+  | {
+      success: true;
+      imported: number;
+      skipped: number;
+      errors: string[];
+      debugData: WhatsAppMarketSyncDebugEntry[];
+      waMarketGroupId: string;
+    }
+  | {
+      success: false;
+      error: string;
+      waMarketGroupId?: string;
+      debugData?: WhatsAppMarketSyncDebugEntry[];
+    };
+
+export async function triggerMarketWhatsAppSync(): Promise<MarketWhatsAppSyncResult> {
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "יש להתחבר" };
+    if (!user) {
+      return { success: false, error: "יש להתחבר" };
+    }
 
     const result = await syncMarketFromWhatsAppGroup(user.id);
     if (result.success) {

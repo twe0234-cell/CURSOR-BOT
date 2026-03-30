@@ -22,13 +22,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { MarketTorahBookRow } from "./actions";
+import type {
+  MarketTorahBookRow,
+  MarketWhatsAppSyncResult,
+  WhatsAppMarketSyncDebugEntry,
+} from "./actions";
 import {
   createMarketTorahBook,
   updateMarketTorahBook,
   deleteMarketTorahBook,
   triggerMarketWhatsAppSync,
 } from "./actions";
+
+/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
+const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // formatMarketPriceK is intentionally NOT imported here.
@@ -101,6 +108,9 @@ const emptyForm = () => ({
 export default function MarketClient({ initialRows }: Props) {
   const router = useRouter();
   const [waSyncPending, startWaSync] = useTransition();
+  const [waSyncDebugOpen, setWaSyncDebugOpen] = useState(false);
+  const [waSyncDebugResult, setWaSyncDebugResult] =
+    useState<MarketWhatsAppSyncResult | null>(null);
   const [rows, setRows] = useState(initialRows);
   useEffect(() => {
     setRows(initialRows);
@@ -336,16 +346,43 @@ export default function MarketClient({ initialRows }: Props) {
   const runWaMarketSync = () => {
     startWaSync(async () => {
       const r = await triggerMarketWhatsAppSync();
+      const debugLen = r.success ? r.debugData.length : (r.debugData?.length ?? 0);
+      const openDebug =
+        debugLen > 0 &&
+        (r.success ? r.imported === 0 : true);
+
       if (!r.success) {
         toast.error(r.error);
+        if (openDebug) {
+          setWaSyncDebugResult(r);
+          setWaSyncDebugOpen(true);
+        }
         return;
       }
+
       const errHint =
         r.errors.length > 0 ? ` (${r.errors.length} אזהרות ביומן)` : "";
       toast.success(`סנכרון הושלם: נקלטו ${r.imported} רשומות${errHint}`);
+
+      if (openDebug) {
+        setWaSyncDebugResult(r);
+        setWaSyncDebugOpen(true);
+      }
+
       router.refresh();
     });
   };
+
+  const waDebugRows: WhatsAppMarketSyncDebugEntry[] =
+    waSyncDebugResult?.success === true
+      ? waSyncDebugResult.debugData
+      : waSyncDebugResult?.debugData ?? [];
+  const waDebugGroupId =
+    waSyncDebugResult?.success === true
+      ? waSyncDebugResult.waMarketGroupId
+      : waSyncDebugResult?.waMarketGroupId ?? "";
+  const groupIdMatchesExpected =
+    waDebugGroupId.trim() === EXPECTED_WA_MARKET_GROUP_ID;
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
@@ -370,6 +407,94 @@ export default function MarketClient({ initialRows }: Props) {
           {waSyncPending ? "מסנכרן…" : "🔄 סנכרן מקבוצת וואטסאפ"}
         </Button>
       </div>
+
+      <Dialog open={waSyncDebugOpen} onOpenChange={setWaSyncDebugOpen}>
+        <DialogContent
+          className="max-h-[min(90vh,42rem)] max-w-3xl overflow-y-auto"
+          dir="rtl"
+        >
+          <DialogHeader>
+            <DialogTitle>דיבוג סנכרון WhatsApp למאגר</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">
+                מזהה קבוצה בשימוש (wa_market_group_id)
+              </p>
+              <code className="block break-all rounded-md bg-slate-100 px-2 py-1.5 text-xs font-mono">
+                {waDebugGroupId || "— (לא הוגדר)"}
+              </code>
+              <p
+                className={
+                  groupIdMatchesExpected
+                    ? "mt-2 text-xs text-emerald-700"
+                    : "mt-2 text-xs text-amber-800"
+                }
+              >
+                {groupIdMatchesExpected
+                  ? "תואם לקבוצת המאגר הצפויה."
+                  : `צפוי בדרך כלל: ${EXPECTED_WA_MARKET_GROUP_ID} — אם אינך משתמש בקבוצה הזו, עדכן בהגדרות.`}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                טקסט שחולץ מההודעות ושדות שלא עברו את הפרסור (גודל / כתב / מחיר)
+              </p>
+              <div className="rounded-lg border border-slate-200 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[28%]">מזהה הודעה</TableHead>
+                      <TableHead className="w-[32%]">טקסט שחולץ</TableHead>
+                      <TableHead className="w-[22%]">שדות חסרים</TableHead>
+                      <TableHead className="w-[18%]">תוצאה</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {waDebugRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-muted-foreground">
+                          אין נתוני דיבוג
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      waDebugRows.map((row, i) => (
+                        <TableRow key={`${row.id}-${i}`}>
+                          <TableCell className="align-top font-mono text-[11px] break-all">
+                            {row.id}
+                          </TableCell>
+                          <TableCell className="align-top whitespace-pre-wrap break-words text-xs max-w-[14rem]">
+                            {row.rawText}
+                          </TableCell>
+                          <TableCell className="align-top text-xs text-amber-900">
+                            {row.missingFields?.length
+                              ? row.missingFields.join(" · ")
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="align-top text-xs">
+                            {row.error === "Success" ? (
+                              <span className="text-emerald-700 font-medium">
+                                הצלחה
+                              </span>
+                            ) : (
+                              <span className="text-red-700">{row.error}</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            {waSyncDebugResult && !waSyncDebugResult.success && (
+              <p className="text-xs text-red-700 border border-red-200 bg-red-50 rounded-md p-2">
+                {waSyncDebugResult.error}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">
         <CardContent className="pt-6">
