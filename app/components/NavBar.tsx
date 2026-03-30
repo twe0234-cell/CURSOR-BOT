@@ -71,12 +71,12 @@ export default function NavBar() {
 
         <nav
           className={cn(
-            "flex min-w-0 flex-1 flex-nowrap overflow-x-auto w-full items-center justify-end gap-0 sm:gap-0.5 py-0.5 overscroll-x-contain",
-            "scroll-pl-2 scroll-pr-2",
+            "flex min-w-0 flex-1 flex-nowrap overflow-x-auto items-center gap-0 sm:gap-0.5 py-0.5 overscroll-x-contain",
+            "scroll-ps-1 scroll-pe-1",
             "[scrollbar-width:thin]",
-            "[scrollbar-color:var(--border)_transparent]",
-            "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-0",
-            "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-thumb]:hover:bg-border"
+            "[scrollbar-color:var(--gold-light)_transparent]",
+            "[&::-webkit-scrollbar]:h-[3px] [&::-webkit-scrollbar]:w-0",
+            "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gold-light/60"
           )}
           aria-label="ניווט ראשי"
         >

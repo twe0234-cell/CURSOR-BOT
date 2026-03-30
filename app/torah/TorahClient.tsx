@@ -571,7 +571,7 @@ export default function TorahClient({ initialProjects, parchmentLabels }: Props)
   const sheetsPossible = total * TORAH_SHEET_COUNT;
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen bg-slate-50/60">
+    <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
       {/* Page header */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

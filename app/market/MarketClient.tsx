@@ -22,11 +22,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type {
-  MarketTorahBookRow,
-  MarketWhatsAppSyncResult,
-  WhatsAppMarketSyncDebugEntry,
-} from "./actions";
+import type { MarketTorahBookRow, MarketWhatsAppSyncResult } from "./actions";
+import type { WhatsAppMarketSyncDebugEntry } from "@/src/services/whatsappMarketSync";
 import {
   createMarketTorahBook,
   updateMarketTorahBook,
@@ -385,7 +382,7 @@ export default function MarketClient({ initialRows }: Props) {
     waDebugGroupId.trim() === EXPECTED_WA_MARKET_GROUP_ID;
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
+    <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
@@ -421,7 +418,7 @@ export default function MarketClient({ initialRows }: Props) {
               <p className="text-xs font-medium text-muted-foreground mb-1">
                 מזהה קבוצה בשימוש (wa_market_group_id)
               </p>
-              <code className="block break-all rounded-md bg-slate-100 px-2 py-1.5 text-xs font-mono">
+              <code className="block break-all rounded-md bg-muted px-2 py-1.5 text-xs font-mono">
                 {waDebugGroupId || "— (לא הוגדר)"}
               </code>
               <p
@@ -440,7 +437,7 @@ export default function MarketClient({ initialRows }: Props) {
               <p className="text-xs font-medium text-muted-foreground mb-2">
                 טקסט שחולץ מההודעות ושדות שלא עברו את הפרסור (גודל / כתב / מחיר)
               </p>
-              <div className="rounded-lg border border-slate-200 overflow-x-auto">
+              <div className="rounded-lg border border-border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -496,7 +493,7 @@ export default function MarketClient({ initialRows }: Props) {
         </DialogContent>
       </Dialog>
 
-      <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">
+      <Card className="mb-8 rounded-2xl border border-border bg-card shadow-sm">
         <CardContent className="pt-6">
           <h2 className="text-lg font-semibold text-sky-800 mb-4">
             הוספה למאגר
@@ -684,7 +681,7 @@ export default function MarketClient({ initialRows }: Props) {
                     <img
                       src={hwPreview}
                       alt="דוגמת כתב"
-                      className="h-14 w-14 rounded-md object-cover border border-slate-200"
+                      className="h-14 w-14 rounded-md object-cover border border-border"
                     />
                     <button
                       type="button"
@@ -799,12 +796,12 @@ export default function MarketClient({ initialRows }: Props) {
         )}
       </div>
 
-      <Card className="rounded-2xl border border-sky-100 bg-white shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50 border-b border-slate-200">
+                <TableRow className="bg-muted/50 border-b border-border">
                   <TableHead className="text-right py-3 px-4 w-[150px]">בעלים</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר</TableHead>
@@ -833,7 +830,7 @@ export default function MarketClient({ initialRows }: Props) {
                   </TableRow>
                 ) : (
                   filteredRows.map((row) => (
-                    <TableRow key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                    <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3 px-4 font-medium">
                         <div className="truncate max-w-[138px]">{displayOwner(row)}</div>
                         <SkuBadge sku={row.sku} />
@@ -870,7 +867,7 @@ export default function MarketClient({ initialRows }: Props) {
                             <img
                               src={row.handwriting_image_url}
                               alt="דוגמת כתב"
-                              className="h-8 w-8 rounded object-cover border border-slate-200 hover:scale-110 transition-transform"
+                              className="h-8 w-8 rounded object-cover border border-border hover:scale-110 transition-transform"
                             />
                           </a>
                         ) : (
@@ -1043,7 +1040,7 @@ export default function MarketClient({ initialRows }: Props) {
                       <img
                         src={editHwPreview}
                         alt="דוגמת כתב"
-                        className="h-14 w-14 rounded-md object-cover border border-slate-200"
+                        className="h-14 w-14 rounded-md object-cover border border-border"
                       />
                       <button
                         type="button"

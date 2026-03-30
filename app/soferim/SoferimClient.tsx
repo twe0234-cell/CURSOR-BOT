@@ -223,7 +223,7 @@ export default function SoferimClient({ initialRows }: Props) {
   }
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
+    <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">

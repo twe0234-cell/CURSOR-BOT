@@ -5,12 +5,7 @@ import { revalidatePath } from "next/cache";
 import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
-import {
-  syncMarketFromWhatsAppGroup,
-  type WhatsAppMarketSyncDebugEntry,
-} from "@/src/services/whatsappMarketSync";
-
-export type { WhatsAppMarketSyncDebugEntry };
+import { syncMarketFromWhatsAppGroup } from "@/src/services/whatsappMarketSync";
 
 /** כולל סוחר + משא ומתן + SKU + דוגמת כתב (מיגרציה 051) */
 const MARKET_SELECT_EXT =
