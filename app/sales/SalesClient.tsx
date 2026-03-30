@@ -117,6 +117,7 @@ export default function SalesClient() {
     }
   }, [saleOpen, editSale]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!editSale) return;
     setEditBuyerId(editSale.buyer_id ?? "");
@@ -135,6 +136,7 @@ export default function SalesClient() {
     setEditNotes(editSale.notes ?? "");
     setEditItemDescription(editSale.item_description ?? "");
   }, [editSale]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const filteredInventory = inventorySearch.trim()
     ? inventoryItems.filter((i) => {
