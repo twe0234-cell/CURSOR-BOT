@@ -33,9 +33,6 @@ import {
   deleteMarketTorahBook,
   triggerMarketWhatsAppSync,
 } from "./actions";
-
-/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
-const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // formatMarketPriceK is intentionally NOT imported here.
@@ -49,6 +46,9 @@ import {
   MARKET_PARCHMENT_TYPES,
   STAM_SCRIPT_TYPES,
 } from "@/src/lib/stam/catalog";
+
+/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
+const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
 
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
