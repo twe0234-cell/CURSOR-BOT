@@ -438,7 +438,7 @@ export default function SalesClient() {
               <CardDescription>רישום הוצאות יומי</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/50border border-border">
+              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/50 border border-border">
                 <select
                   value={newExpCategory}
                   onChange={(e) => setNewExpCategory(e.target.value)}
@@ -601,7 +601,7 @@ export default function SalesClient() {
                   const remaining = total != null ? total - paid : null;
                   if (total == null) return null;
                   return (
-                    <div className="rounded-lg bg-muted/50p-3 space-y-1 text-sm">
+                    <div className="rounded-lg bg-muted/50 p-3 space-y-1 text-sm">
                       <p className="font-medium">סה״כ עסקה: {total.toLocaleString("he-IL")} ₪</p>
                       <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
                         יתרת חוב של הלקוח: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
@@ -793,7 +793,7 @@ export default function SalesClient() {
                 const q = parseInt(editQuantity, 10) || 1;
                 if (Number.isNaN(p) || p < 0) return null;
                 return (
-                  <p className="text-xs text-muted-foreground rounded-lg bg-muted/50px-3 py-2">
+                  <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
                     סה״כ עסקה: <span className="font-semibold text-foreground">{(p * q).toLocaleString("he-IL")} ₪</span>
                     {editSale.sale_type === "תיווך" && " (יסונכרן לשדות עמלה)"}
                   </p>
