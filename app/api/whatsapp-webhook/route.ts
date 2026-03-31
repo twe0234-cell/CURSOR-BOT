@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 const REACTION_OK = "✅";
 const REACTION_FAIL = "❌";
+const LOG = "[whatsapp-webhook]";
 
 function ok200(): NextResponse {
   return NextResponse.json({ ok: true }, { status: 200 });
@@ -30,10 +31,12 @@ async function sendReactionSafe(
   try {
     const r = await greenApiSetMessageReaction(instanceId, token, chatId, idMessage, reaction);
     if (!r.ok) {
-      console.warn("[whatsapp-webhook] SetMessageReaction failed:", r.error);
+      console.warn(`${LOG} SetMessageReaction FAILED (${reaction}):`, r.error);
+    } else {
+      console.info(`${LOG} SetMessageReaction OK (${reaction}) msgId=${idMessage}`);
     }
   } catch (e) {
-    console.warn("[whatsapp-webhook] SetMessageReaction error:", e);
+    console.warn(`${LOG} SetMessageReaction exception (${reaction}):`, e);
   }
 }
 
@@ -49,6 +52,7 @@ export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const expected = process.env.WEBHOOK_SECRET ?? "";
   if (!token || token !== expected) {
+    console.warn(`${LOG} Unauthorized — token mismatch`);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -57,19 +61,26 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
+      console.warn(`${LOG} JSON parse failed`);
       return ok200();
     }
 
     if (!body || typeof body !== "object") {
+      console.warn(`${LOG} body not an object`);
       return ok200();
     }
 
     const b = body as Record<string, unknown>;
+    const webhookType = String(b.typeWebhook ?? "");
+
+    // לוג על כל סוג שמגיע — לאבחון
+    console.info(`${LOG} received typeWebhook="${webhookType}"`);
 
     if (
       b.typeWebhook !== "incomingMessageReceived" &&
       b.typeWebhook !== "outgoingMessageReceived"
     ) {
+      // סוגים אחרים (statusMessage, deviceInfo וכו') — לא מעבד
       return ok200();
     }
 
@@ -80,8 +91,11 @@ export async function POST(req: NextRequest) {
         ? String(idInstanceRaw).trim()
         : "";
 
+    console.info(`${LOG} instanceId="${instanceId}" type="${webhookType}"`);
+
     const admin = createAdminClient();
     if (!admin || !instanceId) {
+      console.warn(`${LOG} missing admin client or instanceId`);
       return ok200();
     }
 
@@ -97,6 +111,7 @@ export async function POST(req: NextRequest) {
     const configuredGroup = String(settings?.wa_market_group_id ?? "").trim();
 
     if (!greenApiToken || !userId) {
+      console.warn(`${LOG} no settings found for instanceId="${instanceId}"`);
       return ok200();
     }
 
@@ -104,23 +119,32 @@ export async function POST(req: NextRequest) {
     const chatId = String(senderData?.chatId ?? "").trim();
     const idMessage = String(b.idMessage ?? "").trim();
 
+    console.info(`${LOG} chatId="${chatId}" configuredGroup="${configuredGroup}" idMessage="${idMessage}"`);
+
     if (!chatId || !configuredGroup || chatId !== configuredGroup) {
+      console.info(`${LOG} chatId mismatch — skipping. chatId="${chatId}" expected="${configuredGroup}"`);
       return ok200();
     }
 
     if (!idMessage) {
+      console.warn(`${LOG} missing idMessage`);
       return ok200();
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
+    console.info(`${LOG} extracted text="${text?.slice(0, 80) ?? "(empty)"}"`);
 
     if (!text) {
+      console.info(`${LOG} no text — sending FAIL reaction`);
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
+    console.info(`${LOG} parsed=${JSON.stringify(parsed)}`);
+
     if (!parsedMessageIsActionable(parsed)) {
+      console.info(`${LOG} not actionable — sending FAIL reaction`);
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
@@ -128,6 +152,8 @@ export async function POST(req: NextRequest) {
     const askFull = parsed.asking_price_full_shekels!;
     const askDb = marketKToDb(marketDbToK(askFull));
     const sku = generateSku(marketSkuPrefix);
+
+    console.info(`${LOG} inserting to market_torah_books sku=${sku} askFull=${askFull}`);
 
     const { error: insErr } = await admin.from("market_torah_books").insert({
       user_id: userId,
@@ -152,18 +178,20 @@ export async function POST(req: NextRequest) {
 
     if (insErr) {
       if (insErr.code === "23505") {
+        console.info(`${LOG} duplicate message (23505) — sending OK reaction`);
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
-        console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
+        console.error(`${LOG} insert error:`, insErr);
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
+    console.info(`${LOG} insert success — sending OK reaction`);
     await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
-    console.error("[whatsapp-webhook] unhandled:", e);
+    console.error(`${LOG} unhandled exception:`, e);
     return ok200();
   }
 }
