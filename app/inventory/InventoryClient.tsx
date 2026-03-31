@@ -298,9 +298,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   };
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden bg-sky-50/30 min-h-screen" dir="rtl">
+    <div className="w-full max-w-screen-xl mx-auto px-4 py-6 min-w-0 overflow-hidden min-h-screen" dir="rtl">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-teal-800">מלאי</h1>
+        <h1 className="text-2xl font-bold text-foreground">מלאי</h1>
         <div className="flex items-center gap-2">
           <CsvActions
             data={items.map((i) => ({
@@ -335,7 +335,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm"
             >
               <option value="">הכל</option>
               {categories.map((c) => (
@@ -343,7 +343,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               ))}
             </select>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+          <div className="rounded-lg border border-border bg-card overflow-x-auto">
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
@@ -385,7 +385,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                         <img
                           src={item.images[0]}
                           alt=""
-                          className="w-10 h-10 rounded-md object-cover border border-slate-200"
+                          className="w-10 h-10 rounded-md object-cover border border-border"
                           loading="lazy"
                         />
                       ) : (
@@ -438,7 +438,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm"
             >
               <option value="">הכל</option>
               {categories.map((c) => (
@@ -446,7 +446,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               ))}
             </select>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+          <div className="rounded-lg border border-border bg-card overflow-x-auto">
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
@@ -481,14 +481,14 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               </TableHeader>
               <TableBody>
                 {archiveItems.map((item) => (
-                  <TableRow key={item.id} className="group bg-slate-50/50 opacity-90">
+                  <TableRow key={item.id} className="group bg-muted/30 opacity-90">
                     <TableCell className="p-1.5">
                       {item.images?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={item.images[0]}
                           alt=""
-                          className="w-10 h-10 rounded-md object-cover border border-slate-200 grayscale"
+                          className="w-10 h-10 rounded-md object-cover border border-border grayscale"
                           loading="lazy"
                         />
                       ) : (
@@ -502,7 +502,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                     <TableCell className="text-slate-600">{item.script_type ?? "—"}</TableCell>
                     <TableCell>
                       {item.status && !["available", "sold", "נמכר"].includes(item.status)
-                        ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">{inventoryStatusLabelHe(item.status)}</span>
+                        ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">{inventoryStatusLabelHe(item.status)}</span>
                         : <span className="text-xs text-slate-400">{inventoryStatusLabelHe(item.status)}</span>}
                     </TableCell>
                     <TableCell className="text-slate-600">
@@ -527,7 +527,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       </Tabs>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-slate-50/30" dir="rtl">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-muted/20" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editingId ? "עריכת פריט" : "פריט חדש"}</DialogTitle>
             {editingId && isInventorySoldStatus(items.find((i) => i.id === editingId)?.status) && (
@@ -537,14 +537,14 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
           <FormProvider {...form} key={editingId ?? "create"}>
             <form onSubmit={handleSave} className="space-y-6">
               {editingId ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col items-center gap-2">
+                <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-2">
                   <p className="text-xs font-medium text-slate-500">מק״ט והדפסת תווית (Nimbot B1)</p>
                   <BarcodePrint
                     value={items.find((i) => i.id === editingId)?.sku ?? editingId.slice(0, 8)}
                   />
                 </div>
               ) : null}
-              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+              <Card className="shadow-sm rounded-xl border-border bg-card">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <Package className="w-5 h-5 text-amber-500" />
@@ -569,7 +569,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       ) : (
                       <select
                         {...form.register("product_category")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-xl border border-border bg-cardshadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         <option value="">בחר</option>
                         {categories.map((c) => (
@@ -585,7 +585,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <label className="font-bold text-slate-800 text-right">כתב</label>
                       <select
                         {...form.register("script_type")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-xl border border-border bg-cardshadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         <option value="">בחר</option>
                         {SCRIPT_TYPES.map((t) => (
@@ -597,7 +597,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <label className="font-bold text-slate-800 text-right">סטטוס</label>
                       <select
                         {...form.register("status")}
-                        className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-xl border border-border bg-cardshadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       >
                         {STATUSES.map((t) => (
                           <option key={t} value={t}>{inventoryStatusLabelHe(t)}</option>
@@ -608,7 +608,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+              <Card className="shadow-sm rounded-xl border-border bg-card">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <Wallet className="w-5 h-5 text-amber-500" />
@@ -706,7 +706,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm rounded-xl border-slate-200 bg-white">
+              <Card className="shadow-sm rounded-xl border-border bg-card">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-amber-500" />
@@ -722,8 +722,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                 </CardContent>
               </Card>
 
-              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-right hover:bg-slate-50 transition-colors">
+              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-xl border border-border bg-card overflow-hidden">
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-right hover:bg-muted/50 transition-colors">
                   <span className="font-semibold text-slate-700">הגדרות מתקדמות</span>
                   {advancedOpen ? <ChevronUp className="size-4 text-slate-500" /> : <ChevronDown className="size-4 text-slate-500" />}
                 </CollapsibleTrigger>
@@ -743,7 +743,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                           type="checkbox"
                           id="computer_proofread"
                           {...form.register("computer_proofread")}
-                          className="rounded border-slate-300"
+                          className="rounded border-border"
                         />
                         <label htmlFor="computer_proofread" className="text-sm font-medium">בדיקת מחשב</label>
                       </div>
@@ -752,7 +752,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                           type="checkbox"
                           id="human_proofread"
                           {...form.register("human_proofread")}
-                          className="rounded border-slate-300"
+                          className="rounded border-border"
                         />
                         <label htmlFor="human_proofread" className="text-sm font-medium">בדיקה אנושית</label>
                       </div>
@@ -761,7 +761,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                           type="checkbox"
                           id="is_sewn"
                           {...form.register("is_sewn")}
-                          className="rounded border-slate-300"
+                          className="rounded border-border"
                         />
                         <label htmlFor="is_sewn" className="text-sm font-medium">תפור</label>
                       </div>

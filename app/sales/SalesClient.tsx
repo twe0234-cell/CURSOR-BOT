@@ -117,6 +117,7 @@ export default function SalesClient() {
     }
   }, [saleOpen, editSale]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!editSale) return;
     setEditBuyerId(editSale.buyer_id ?? "");
@@ -135,6 +136,7 @@ export default function SalesClient() {
     setEditNotes(editSale.notes ?? "");
     setEditItemDescription(editSale.item_description ?? "");
   }, [editSale]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const filteredInventory = inventorySearch.trim()
     ? inventoryItems.filter((i) => {
@@ -301,19 +303,19 @@ export default function SalesClient() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="sales" className="w-full">
-        <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
-          <TabsTrigger value="sales" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsList className="mb-6 rounded-xl bg-muted p-1">
+          <TabsTrigger value="sales" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
             <ShoppingCartIcon className="size-4 ml-1" />
             ניהול מכירות
           </TabsTrigger>
-          <TabsTrigger value="expenses" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <TabsTrigger value="expenses" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
             <ReceiptIcon className="size-4 ml-1" />
             הוצאות ותזרים
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="mt-0">
-          <Card className="shadow-sm rounded-xl border-slate-200">
+          <Card className="shadow-sm rounded-xl border-border">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-semibold">מכירות</CardTitle>
@@ -353,7 +355,7 @@ export default function SalesClient() {
               <div className="rounded-xl border overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/80">
+                    <TableRow className="bg-muted/40">
                       <TableHead className="font-semibold">סוג</TableHead>
                       <TableHead className="font-semibold">תאריך</TableHead>
                       <TableHead className="font-semibold">פריט</TableHead>
@@ -374,7 +376,7 @@ export default function SalesClient() {
                       return (
                         <TableRow key={s.id}>
                           <TableCell>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
                               {s.sale_type ?? "ממלאי"}
                             </span>
                           </TableCell>
@@ -432,13 +434,13 @@ export default function SalesClient() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-0">
-          <Card className="shadow-sm rounded-xl border-slate-200">
+          <Card className="shadow-sm rounded-xl border-border">
             <CardHeader>
               <CardTitle className="text-base font-semibold">הוצאות</CardTitle>
               <CardDescription>רישום הוצאות יומי</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/50 border border-border">
                 <select
                   value={newExpCategory}
                   onChange={(e) => setNewExpCategory(e.target.value)}
@@ -468,7 +470,7 @@ export default function SalesClient() {
               <div className="rounded-xl border overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/80">
+                    <TableRow className="bg-muted/40">
                       <TableHead className="font-semibold">תאריך</TableHead>
                       <TableHead className="font-semibold">קטגוריה</TableHead>
                       <TableHead className="font-semibold">סכום</TableHead>
@@ -601,7 +603,7 @@ export default function SalesClient() {
                   const remaining = total != null ? total - paid : null;
                   if (total == null) return null;
                   return (
-                    <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-sm">
+                    <div className="rounded-lg bg-muted/50 p-3 space-y-1 text-sm">
                       <p className="font-medium">סה״כ עסקה: {total.toLocaleString("he-IL")} ₪</p>
                       <p className={remaining != null && remaining > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}>
                         יתרת חוב של הלקוח: {remaining != null ? remaining.toLocaleString("he-IL") : "—"} ₪
@@ -793,7 +795,7 @@ export default function SalesClient() {
                 const q = parseInt(editQuantity, 10) || 1;
                 if (Number.isNaN(p) || p < 0) return null;
                 return (
-                  <p className="text-xs text-muted-foreground rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
                     סה״כ עסקה: <span className="font-semibold text-foreground">{(p * q).toLocaleString("he-IL")} ₪</span>
                     {editSale.sale_type === "תיווך" && " (יסונכרן לשדות עמלה)"}
                   </p>

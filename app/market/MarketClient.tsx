@@ -42,6 +42,9 @@ import {
   STAM_SCRIPT_TYPES,
 } from "@/src/lib/stam/catalog";
 
+/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
+const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
+
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -332,7 +335,7 @@ export default function MarketClient({ initialRows }: Props) {
   );
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 bg-slate-50/80 min-h-screen">
+    <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
           <ScrollText className="size-7 text-amber-500" />
@@ -344,7 +347,7 @@ export default function MarketClient({ initialRows }: Props) {
         </p>
       </div>
 
-      <Card className="mb-8 rounded-2xl border border-sky-100 bg-white shadow-sm">
+      <Card className="mb-8 rounded-2xl border border-border bg-card shadow-sm">
         <CardContent className="pt-6">
           <h2 className="text-lg font-semibold text-sky-800 mb-4">
             הוספה למאגר
@@ -532,7 +535,7 @@ export default function MarketClient({ initialRows }: Props) {
                     <img
                       src={hwPreview}
                       alt="דוגמת כתב"
-                      className="h-14 w-14 rounded-md object-cover border border-slate-200"
+                      className="h-14 w-14 rounded-md object-cover border border-border"
                     />
                     <button
                       type="button"
@@ -647,12 +650,12 @@ export default function MarketClient({ initialRows }: Props) {
         )}
       </div>
 
-      <Card className="rounded-2xl border border-sky-100 bg-white shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50 border-b border-slate-200">
+                <TableRow className="bg-muted/50 border-b border-border">
                   <TableHead className="text-right py-3 px-4 w-[150px]">בעלים</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר</TableHead>
@@ -681,7 +684,7 @@ export default function MarketClient({ initialRows }: Props) {
                   </TableRow>
                 ) : (
                   filteredRows.map((row) => (
-                    <TableRow key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                    <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3 px-4 font-medium">
                         <div className="truncate max-w-[138px]">{displayOwner(row)}</div>
                         <SkuBadge sku={row.sku} />
@@ -718,7 +721,7 @@ export default function MarketClient({ initialRows }: Props) {
                             <img
                               src={row.handwriting_image_url}
                               alt="דוגמת כתב"
-                              className="h-8 w-8 rounded object-cover border border-slate-200 hover:scale-110 transition-transform"
+                              className="h-8 w-8 rounded object-cover border border-border hover:scale-110 transition-transform"
                             />
                           </a>
                         ) : (
@@ -891,7 +894,7 @@ export default function MarketClient({ initialRows }: Props) {
                       <img
                         src={editHwPreview}
                         alt="דוגמת כתב"
-                        className="h-14 w-14 rounded-md object-cover border border-slate-200"
+                        className="h-14 w-14 rounded-md object-cover border border-border"
                       />
                       <button
                         type="button"
