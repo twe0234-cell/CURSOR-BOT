@@ -164,3 +164,64 @@ export async function greenApiSendChatMessage(
     return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
   }
 }
+
+/**
+ * תגובת אימוג׳י להודעה (למשל ✅ / ❌ אחרי עיבוד webhook).
+ * @see https://green-api.com/en/docs/api/sending/SetMessageReaction/
+ */
+export async function greenApiSetMessageReaction(
+  instanceId: string,
+  apiToken: string,
+  chatId: string,
+  idMessage: string,
+  reaction: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const url = `${GREEN_API_BASE}/waInstance${instanceId}/SetMessageReaction/${apiToken}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, idMessage, reaction }),
+    });
+    const body = await res.text();
+    const interpreted = interpretGreenApiSendResult(res.ok, body);
+    if (!interpreted.ok) return { ok: false, error: interpreted.error };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
+  }
+}
+
+const pushTrim = (parts: string[], v: unknown) => {
+  if (typeof v === "string" && v.trim()) parts.push(v.trim());
+};
+
+/**
+ * חילוץ טקסט מ־messageData ב־webhook incomingMessageReceived (טקסט / מורחב / כיתוב מדיה).
+ */
+export function extractTextFromGreenIncomingWebhookMessageData(
+  messageData: unknown
+): string {
+  if (!messageData || typeof messageData !== "object") return "";
+  const md = messageData as Record<string, unknown>;
+  const parts: string[] = [];
+
+  const textMessageData = md.textMessageData as Record<string, unknown> | undefined;
+  pushTrim(parts, textMessageData?.textMessage);
+
+  const extendedTextMessageData = md.extendedTextMessageData as
+    | Record<string, unknown>
+    | undefined;
+  pushTrim(parts, extendedTextMessageData?.text);
+
+  for (const key of [
+    "imageMessageData",
+    "videoMessageData",
+    "documentMessageData",
+  ] as const) {
+    const block = md[key] as Record<string, unknown> | undefined;
+    pushTrim(parts, block?.caption);
+  }
+
+  return parts.join("\n").trim();
+}
