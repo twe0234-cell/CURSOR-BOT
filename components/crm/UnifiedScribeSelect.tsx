@@ -32,6 +32,7 @@ export function UnifiedScribeSelect({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -45,6 +46,7 @@ export function UnifiedScribeSelect({
       cancelled = true;
     };
   }, [addModalOpen]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const selected = scribes.find((s) => s.id === value);
   const filtered = search.trim()

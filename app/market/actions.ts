@@ -91,8 +91,8 @@ export async function fetchMarketTorahBooks(): Promise<
 
     let books: Record<string, unknown>[] | null = null;
     let selErr = null as { message?: string; code?: string; details?: string; hint?: string } | null;
-    let hasBrokerageCols = true;
-    let hasExtendedDealer = true;
+    const hasBrokerageCols = true;
+    const hasExtendedDealer = true;
 
     const resExt = await supabase
       .from("market_torah_books")

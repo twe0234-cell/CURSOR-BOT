@@ -46,6 +46,9 @@ import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 
 const SALE_TYPES = ["ממלאי", "תיווך", "פרויקט חדש"] as const;
 type SaleType = (typeof SALE_TYPES)[number];
@@ -53,6 +56,7 @@ type SaleType = (typeof SALE_TYPES)[number];
 const EXPENSE_CATEGORIES = ["משלוח", "פרסום", "הגהה", "תפירה", "אחר"];
 
 export default function SalesClient() {
+  const [viewMode, setViewMode] = useViewMode("sales");
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [saleOpen, setSaleOpen] = useState(false);
@@ -321,7 +325,8 @@ export default function SalesClient() {
                 <CardTitle className="text-base font-semibold">מכירות</CardTitle>
                 <CardDescription>היסטוריית מכירות – ממלאי, תיווך, פרויקטים</CardDescription>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <ViewToggle mode={viewMode} onChange={setViewMode} />
                 <CsvActions
                   data={sales.map((s) => ({
                     sale_type: s.sale_type ?? "ממלאי",
@@ -352,80 +357,129 @@ export default function SalesClient() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="rounded-xl border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40">
-                      <TableHead className="font-semibold">סוג</TableHead>
-                      <TableHead className="font-semibold">תאריך</TableHead>
-                      <TableHead className="font-semibold">פריט</TableHead>
-                      <TableHead className="font-semibold">קונה</TableHead>
-                      <TableHead className="font-semibold">סה״כ עסקה</TableHead>
-                      <TableHead className="font-semibold">סה״כ שולם</TableHead>
-                      <TableHead className="font-semibold">יתרת חוב</TableHead>
-                      <TableHead className="font-semibold">רווח על הנייר</TableHead>
-                      <TableHead className="font-semibold">רווח מוכר (החזר עלות)</TableHead>
-                      <TableHead className="font-semibold w-28">פעולות</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sales.map((s) => {
-                      const totalDeal = s.total_price ?? s.sale_price * (s.quantity ?? 1);
-                      const paid = s.total_paid ?? s.amount_paid_row ?? 0;
-                      const balance = s.remaining_balance ?? totalDeal - paid;
-                      return (
-                        <TableRow key={s.id}>
-                          <TableCell>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
-                              {s.sale_type ?? "ממלאי"}
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sales.map((s, i) => {
+                    const totalDeal = s.total_price ?? s.sale_price * (s.quantity ?? 1);
+                    const paid = s.total_paid ?? s.amount_paid_row ?? 0;
+                    const balance = s.remaining_balance ?? totalDeal - paid;
+                    const pct = totalDeal > 0 ? Math.min(100, Math.round((paid / totalDeal) * 100)) : 0;
+                    return (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "card-interactive rounded-xl border border-border bg-card p-4 space-y-3",
+                          `animate-scale-in stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-medium">
+                            {s.sale_type ?? "ממלאי"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(s.sale_date).toLocaleDateString("he-IL")}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-sm leading-snug">{getSaleDisplay(s)}</p>
+                        {s.buyer_name && (
+                          <p className="text-xs text-muted-foreground">קונה: {s.buyer_name}</p>
+                        )}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">שולם</span>
+                            <span className="font-medium">{paid.toLocaleString("he-IL")} / {totalDeal.toLocaleString("he-IL")} ₪</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className={cn("font-medium", balance > 0 ? "text-amber-700" : "text-emerald-600")}>
+                            {balance > 0 ? `יתרה: ${balance.toLocaleString("he-IL")} ₪` : "שולם במלואו"}
+                          </span>
+                          {s.profit != null && (
+                            <span className={s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
+                              רווח: {s.profit.toLocaleString("he-IL")} ₪
                             </span>
-                          </TableCell>
-                          <TableCell>{new Date(s.sale_date).toLocaleDateString("he-IL")}</TableCell>
-                          <TableCell>{getSaleDisplay(s)}</TableCell>
-                          <TableCell>{s.buyer_name ?? "—"}</TableCell>
-                          <TableCell>{totalDeal.toLocaleString("he-IL")} ₪</TableCell>
-                          <TableCell>{paid.toLocaleString("he-IL")} ₪</TableCell>
-                          <TableCell className={balance > 0 ? "text-amber-700 font-medium" : ""}>
-                            {balance.toLocaleString("he-IL")} ₪
-                          </TableCell>
-                          <TableCell className={s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
-                            {s.profit != null ? `${s.profit.toLocaleString("he-IL")} ₪` : "—"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {s.realized_recovery_profit != null
-                              ? `${s.realized_recovery_profit.toLocaleString("he-IL")} ₪`
-                              : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg h-8 text-xs"
-                                onClick={() => setEditSale(s)}
-                              >
-                                <PencilIcon className="size-3.5 ml-1" />
-                                ערוך
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg h-8 text-xs"
-                                onClick={() => setPaymentSaleId(s.id)}
-                              >
-                                <BanknoteIcon className="size-3.5 ml-1" />
-                                תשלום
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
+                            <PencilIcon className="size-3.5 ml-1" />ערוך
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
+                            <BanknoteIcon className="size-3.5 ml-1" />תשלום
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40">
+                        <TableHead className="font-semibold">סוג</TableHead>
+                        <TableHead className="font-semibold">תאריך</TableHead>
+                        <TableHead className="font-semibold">פריט</TableHead>
+                        <TableHead className="font-semibold">קונה</TableHead>
+                        <TableHead className="font-semibold">סה״כ עסקה</TableHead>
+                        <TableHead className="font-semibold">סה״כ שולם</TableHead>
+                        <TableHead className="font-semibold">יתרת חוב</TableHead>
+                        <TableHead className="font-semibold">רווח על הנייר</TableHead>
+                        <TableHead className="font-semibold">רווח מוכר (החזר עלות)</TableHead>
+                        <TableHead className="font-semibold w-28">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sales.map((s, i) => {
+                        const totalDeal = s.total_price ?? s.sale_price * (s.quantity ?? 1);
+                        const paid = s.total_paid ?? s.amount_paid_row ?? 0;
+                        const balance = s.remaining_balance ?? totalDeal - paid;
+                        return (
+                          <TableRow key={s.id} className={`table-row-animate stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
+                            <TableCell>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
+                                {s.sale_type ?? "ממלאי"}
+                              </span>
+                            </TableCell>
+                            <TableCell>{new Date(s.sale_date).toLocaleDateString("he-IL")}</TableCell>
+                            <TableCell>{getSaleDisplay(s)}</TableCell>
+                            <TableCell>{s.buyer_name ?? "—"}</TableCell>
+                            <TableCell>{totalDeal.toLocaleString("he-IL")} ₪</TableCell>
+                            <TableCell>{paid.toLocaleString("he-IL")} ₪</TableCell>
+                            <TableCell className={balance > 0 ? "text-amber-700 font-medium" : ""}>
+                              {balance.toLocaleString("he-IL")} ₪
+                            </TableCell>
+                            <TableCell className={s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
+                              {s.profit != null ? `${s.profit.toLocaleString("he-IL")} ₪` : "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {s.realized_recovery_profit != null
+                                ? `${s.realized_recovery_profit.toLocaleString("he-IL")} ₪`
+                                : "—"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
+                                  <PencilIcon className="size-3.5 ml-1" />ערוך
+                                </Button>
+                                <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
+                                  <BanknoteIcon className="size-3.5 ml-1" />תשלום
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
               {sales.length === 0 && (
                 <p className="py-8 text-center text-muted-foreground">אין מכירות</p>
               )}

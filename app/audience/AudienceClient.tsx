@@ -41,6 +41,8 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 
 const ImportGroupRow = memo(function ImportGroupRow({
   chatId,
@@ -55,7 +57,7 @@ const ImportGroupRow = memo(function ImportGroupRow({
 }) {
   return (
     <label
-      className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-teal-50/50 transition-colors"
+      className="flex cursor-pointer items-center gap-2 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/40 transition-colors"
       onClick={(e) => e.stopPropagation()}
     >
       <Checkbox checked={checked} onCheckedChange={() => onToggle(chatId)} />
@@ -83,6 +85,7 @@ export default function AudienceClient({
   allTags,
   allowedTags,
 }: Props) {
+  const [viewMode, setViewMode] = useViewMode("audience");
   const [audience, setAudience] = useState(initialAudience ?? []);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -337,8 +340,8 @@ export default function AudienceClient({
   };
 
   const BulkActionsBar = () => (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3 rounded-xl border border-teal-200 bg-gradient-to-l from-teal-50 to-white p-3 sm:p-4 shadow-sm">
-      <span className="flex items-center gap-2 text-sm font-semibold text-teal-800">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:p-4 shadow-sm">
+      <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <CheckCircle2Icon className="size-4" />
         נבחרו {selected.size} נמענים
       </span>
@@ -348,7 +351,7 @@ export default function AudienceClient({
           variant="outline"
           onClick={() => setApplyOpen(true)}
           disabled={bulkLoading}
-          className="border-teal-200 hover:bg-teal-50"
+          className="border-border hover:bg-muted"
         >
           <TagIcon className="size-4 ml-1" />
           החל תגיות
@@ -358,7 +361,7 @@ export default function AudienceClient({
           variant="outline"
           onClick={handlePaste}
           disabled={bulkLoading || copiedTags.length === 0}
-          className="border-teal-200 hover:bg-teal-50"
+          className="border-border hover:bg-muted"
         >
           <CopyIcon className="size-4 ml-1" />
           הדבק תגיות
@@ -389,12 +392,12 @@ export default function AudienceClient({
         <div className="space-y-4">
           {(allowedTags ?? []).length > 0 && (
             <div>
-              <p className="mb-2 text-sm font-medium text-slate-700">תגיות מערכת</p>
+              <p className="mb-2 text-sm font-medium text-foreground">תגיות מערכת</p>
               <div className="flex flex-wrap gap-2">
                 {(allowedTags ?? []).map((tag) => (
                   <label
                     key={tag}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/40 transition-colors"
                   >
                     <Checkbox
                       checked={selectedTagsToApply.has(tag)}
@@ -451,7 +454,7 @@ export default function AudienceClient({
         <div className="flex flex-col flex-1 min-h-0 space-y-4">
           {importLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="size-12 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+              <div className="size-12 animate-spin rounded-full border-4 border-muted border-t-primary" />
               <p className="text-muted-foreground">טוען קבוצות מ-Green API...</p>
             </div>
           ) : importError ? (
@@ -466,10 +469,10 @@ export default function AudienceClient({
             </div>
           ) : importGroups.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="flex size-16 items-center justify-center rounded-full bg-teal-100">
-                <UsersIcon className="size-8 text-teal-600" />
+              <div className="flex size-16 items-center justify-center rounded-full bg-muted">
+                <UsersIcon className="size-8 text-primary" />
               </div>
-              <p className="text-center font-medium text-slate-700">אין קבוצות חדשות לייבא</p>
+              <p className="text-center font-medium">אין קבוצות חדשות לייבא</p>
               <p className="text-center text-sm text-muted-foreground max-w-xs">
                 כל הקבוצות מ-WhatsApp כבר קיימות במערכת.
               </p>
@@ -495,7 +498,7 @@ export default function AudienceClient({
               </div>
               <div
                 ref={importListScrollRef}
-                className="flex-1 overflow-y-auto pr-2 overflow-anchor-none rounded-xl border border-slate-200 min-h-[200px] max-h-[50vh]"
+                className="flex-1 overflow-y-auto pr-2 overflow-anchor-none rounded-xl border border-border min-h-[200px] max-h-[50vh]"
                 style={{ overflowAnchor: "none" } as React.CSSProperties}
               >
                 {importGroups.map((g) => (
@@ -529,7 +532,7 @@ export default function AudienceClient({
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 pb-28 md:pb-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">נמענים</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">נמענים</h1>
         <p className="text-muted-foreground">נהל את רשימת הנמענים והייבוא מ-WhatsApp</p>
       </div>
 
@@ -540,7 +543,7 @@ export default function AudienceClient({
             placeholder="חיפוש לפי שם, טלפון או תגית..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pr-10 rounded-xl border-slate-200"
+            className="pr-10 rounded-xl border-border"
           />
         </div>
         <div className="relative shrink-0">
@@ -548,7 +551,7 @@ export default function AudienceClient({
             variant="outline"
             onClick={() => setActionsOpen((o) => !o)}
             disabled={importLoading || syncing}
-            className="rounded-xl border-teal-200 hover:bg-teal-50"
+            className="rounded-xl border-border hover:bg-muted"
           >
             <MoreHorizontalIcon className="size-4 ml-2" />
             פעולות
@@ -556,11 +559,11 @@ export default function AudienceClient({
           {actionsOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(false)} />
-              <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-xl border border-border bg-card py-1 shadow-lg">
                 <button
                   onClick={handleOpenImport}
                   disabled={importLoading}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-teal-50 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-muted disabled:opacity-50"
                 >
                   <DownloadIcon className={cn("size-4", importLoading && "animate-spin")} />
                   ייבוא קבוצות
@@ -568,7 +571,7 @@ export default function AudienceClient({
                 <button
                   onClick={handleSync}
                   disabled={syncing}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-teal-50 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-right hover:bg-muted disabled:opacity-50"
                 >
                   <RefreshCwIcon className={cn("size-4", syncing && "animate-spin")} />
                   סנכרן מ-WhatsApp
@@ -576,6 +579,7 @@ export default function AudienceClient({
               </div>
             </>
           )}
+          <ViewToggle mode={viewMode} onChange={setViewMode} className="mr-2" />
         </div>
       </div>
 
@@ -584,7 +588,7 @@ export default function AudienceClient({
           variant="outline"
           size="sm"
           onClick={toggleSelectAll}
-          className="rounded-xl border-teal-200 hover:bg-teal-50"
+          className="rounded-xl border-border hover:bg-muted"
         >
           {selected.size === filtered.length && filtered.length > 0 ? "בטל בחירה" : "בחר הכל"}
         </Button>
@@ -604,8 +608,8 @@ export default function AudienceClient({
             className={cn(
               "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200",
               tagFilter.includes(tag)
-                ? "bg-teal-600 text-white shadow-md"
-                : "bg-teal-100 text-teal-700 hover:bg-teal-200"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
             {tag}
@@ -619,128 +623,97 @@ export default function AudienceClient({
         </div>
       )}
 
-      <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
-        <Table className="min-w-0">
-          <TableHeader>
-            <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={selected.size === filtered.length && filtered.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                />
-              </TableHead>
-              <TableHead className="font-semibold">שם</TableHead>
-              <TableHead className="font-semibold">מזהה צ&apos;אט</TableHead>
-              <TableHead className="font-semibold">תגיות</TableHead>
-              <TableHead className="w-28 font-semibold">פעולות</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((r) => (
-              <TableRow key={r.id} className="hover:bg-teal-50/50 transition-colors">
-                <TableCell>
+      {viewMode === "list" ? (
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-x-auto">
+          <Table className="min-w-0">
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-10">
                   <Checkbox
-                    checked={selected.has(r.id)}
-                    onCheckedChange={() => toggleSelect(r.id)}
+                    checked={selected.size === filtered.length && filtered.length > 0}
+                    onCheckedChange={toggleSelectAll}
                   />
-                </TableCell>
-                <TableCell className="font-medium">{r.name || "—"}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{r.wa_chat_id}</TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {(r.tags ?? []).map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <div className="flex flex-row gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleCopyTags(r.tags ?? [])}
-                      title="העתק תגיות"
-                      className="size-8"
-                    >
-                      <CopyIcon className="size-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setDeleteOneId(r.id)}
-                      title="מחק"
-                      className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2Icon className="size-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+                </TableHead>
+                <TableHead className="font-semibold">שם</TableHead>
+                <TableHead className="font-semibold">מזהה צ&apos;אט</TableHead>
+                <TableHead className="font-semibold">תגיות</TableHead>
+                <TableHead className="w-28 font-semibold">פעולות</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="mb-4 md:hidden space-y-3">
-        {filtered.map((r) => (
-          <Card key={r.id} className="border-teal-100 overflow-hidden transition-all duration-200 hover:shadow-md hover:border-teal-200">
-            <CardHeader className="flex flex-row items-center gap-3 p-4">
-              <Checkbox
-                checked={selected.has(r.id)}
-                onCheckedChange={() => toggleSelect(r.id)}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold truncate">{r.name || "—"}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate">{r.wa_chat_id}</p>
-              </div>
-              <div className="flex gap-1 shrink-0">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => handleCopyTags(r.tags ?? [])}
-                  title="העתק תגיות"
-                  className="size-8"
-                >
-                  <CopyIcon className="size-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setDeleteOneId(r.id)}
-                  title="מחק"
-                  className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="flex flex-wrap gap-1">
-                {(r.tags ?? []).map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((r, i) => (
+                <TableRow key={r.id} className={`hover:bg-muted/20 transition-colors table-row-animate stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.has(r.id)}
+                      onCheckedChange={() => toggleSelect(r.id)}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">{r.name || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{r.wa_chat_id}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(r.tags ?? []).map((t) => (
+                        <span key={t} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex flex-row gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => handleCopyTags(r.tags ?? [])} title="העתק תגיות" className="size-8">
+                        <CopyIcon className="size-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteOneId(r.id)} title="מחק" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50">
+                        <Trash2Icon className="size-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((r, i) => (
+            <Card key={r.id} className={cn("border-border overflow-hidden card-interactive", `animate-fade-in-up stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>
+              <CardHeader className="flex flex-row items-center gap-3 p-4">
+                <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">{r.name || "—"}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate">{r.wa_chat_id}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button size="icon" variant="ghost" onClick={() => handleCopyTags(r.tags ?? [])} title="העתק תגיות" className="size-8">
+                    <CopyIcon className="size-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setDeleteOneId(r.id)} title="מחק" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50">
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="flex flex-wrap gap-1">
+                  {(r.tags ?? []).map((t) => (
+                    <span key={t} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
-          <div className="flex size-20 items-center justify-center rounded-full bg-teal-100 mb-4">
-            <UsersIcon className="size-10 text-teal-600" />
+        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-border bg-muted/20">
+          <div className="flex size-20 items-center justify-center rounded-full bg-muted mb-4">
+            <UsersIcon className="size-10 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">אין נמענים</h3>
+          <h3 className="text-lg font-semibold mb-2">אין נמענים</h3>
           <p className="text-center text-muted-foreground max-w-sm mb-6">
             לחץ על &quot;ייבוא קבוצות&quot; לייבא קבוצות WhatsApp
           </p>
@@ -751,7 +724,7 @@ export default function AudienceClient({
       )}
 
       {selected.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-teal-200 bg-white/95 backdrop-blur p-4 md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur p-4 md:hidden">
           <BulkActionsBar />
         </div>
       )}

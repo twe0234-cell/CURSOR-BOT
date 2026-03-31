@@ -84,6 +84,7 @@ export function DependentCategories() {
   const pitumIsPreset = ["15", "20", "25"].includes(String(pitumSizeVal).trim());
   const [pitumOtherOpen, setPitumOtherOpen] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!showPitum) {
       setPitumOtherOpen(false);
@@ -94,6 +95,7 @@ export function DependentCategories() {
       setPitumOtherOpen(true);
     }
   }, [showPitum, pitumSizeVal]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const pitumSelectValue = pitumIsPreset
     ? String(pitumSizeVal).trim()

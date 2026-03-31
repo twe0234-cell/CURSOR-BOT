@@ -45,6 +45,7 @@ export function PaymentModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
       setAmount("");
@@ -54,6 +55,7 @@ export function PaymentModal({
       setNotes("");
     }
   }, [open, defaultDirection]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSubmit = async () => {
     if (!entityId) return;

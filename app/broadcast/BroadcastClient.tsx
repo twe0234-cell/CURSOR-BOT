@@ -329,7 +329,7 @@ export default function BroadcastClient({
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       <div className="mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">שידור הודעות</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">שידור הודעות</h1>
         <p className="text-muted-foreground">שלח הודעות WhatsApp לנמענים לפי תגיות</p>
       </div>
 
@@ -343,9 +343,9 @@ export default function BroadcastClient({
         </TabsList>
 
         <TabsContent value="compose" className="mt-0">
-      <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
+      <Card className="mb-6 border-border rounded-2xl shadow-sm overflow-hidden">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-teal-800">בחירת קהל יעד</h2>
+          <h2 className="text-lg font-semibold text-foreground">בחירת קהל יעד</h2>
           <p className="text-sm text-muted-foreground">
             בחר תגיות כדי לסנן נמענים
           </p>
@@ -355,7 +355,7 @@ export default function BroadcastClient({
             {(allTags ?? []).map((tag) => (
               <label
                 key={tag}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/40"
               >
                 <Checkbox
                   checked={selectedTags.has(tag)}
@@ -367,12 +367,12 @@ export default function BroadcastClient({
           </div>
           {groups.length > 0 && (
             <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-slate-700">קבוצות ספציפיות</p>
+              <p className="mb-2 text-sm font-medium text-foreground">קבוצות ספציפיות</p>
               <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                 {groups.map((g) => (
                   <label
                     key={g.wa_chat_id}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/40"
                   >
                     <Checkbox
                       checked={selectedGroups.has(g.wa_chat_id)}
@@ -401,9 +401,9 @@ export default function BroadcastClient({
         </CardContent>
       </Card>
 
-      <Card className="mb-6 border-teal-100 rounded-2xl shadow-sm overflow-hidden">
+      <Card className="mb-6 border-border rounded-2xl shadow-sm overflow-hidden">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-teal-800">הודעה</h2>
+          <h2 className="text-lg font-semibold text-foreground">הודעה</h2>
           <div className="flex flex-wrap gap-2">
             {VARIABLES.map((v) => (
               <Button
@@ -439,7 +439,7 @@ export default function BroadcastClient({
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-medium text-foreground">
               מק״ט סופר (Ref)
             </label>
             <div className="flex gap-2 mb-2">
@@ -461,7 +461,7 @@ export default function BroadcastClient({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-medium text-foreground">
               הערות פנימיות
             </label>
             <Input
@@ -472,7 +472,7 @@ export default function BroadcastClient({
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-medium text-foreground">
               טקסט
             </label>
             <textarea
@@ -481,11 +481,11 @@ export default function BroadcastClient({
               onChange={(e) => setMessageText(e.target.value)}
               placeholder="שלום {Name}, ..."
               rows={5}
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-xl border border-input px-4 py-3 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-medium text-foreground">
               תמונה (אופציונלי)
             </label>
             <input
@@ -493,7 +493,7 @@ export default function BroadcastClient({
               accept="image/*"
               onChange={handleFileChange}
               disabled={uploading}
-              className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-teal-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-teal-700 hover:file:bg-teal-100"
+              className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
             />
             {uploading && (
               <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>
@@ -504,12 +504,12 @@ export default function BroadcastClient({
                 <img
                   src={imageUrl}
                   alt="תצוגה מקדימה"
-                  className="max-h-48 w-auto max-w-full rounded-lg border border-slate-200 object-contain bg-white"
+                  className="max-h-48 w-auto max-w-full rounded-lg border border-border object-contain bg-card"
                   onError={() => {
                     toast.error("לא ניתן לטעון תצוגה מקדימה — בדוק את קישור האחסון");
                   }}
                 />
-                <p className="text-sm text-teal-600 truncate" title={imageUrl}>
+                <p className="text-sm text-primary truncate" title={imageUrl}>
                   {imageFile?.name || "תמונה הועלתה"}
                 </p>
                 <p className="text-xs text-muted-foreground break-all">{imageUrl}</p>
@@ -522,7 +522,7 @@ export default function BroadcastClient({
       <Button
         onClick={handleSend}
         disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
-        className="w-full rounded-xl bg-teal-600 py-6 text-base font-semibold hover:bg-teal-700 hover:shadow-lg"
+        className="w-full rounded-xl bg-primary py-6 text-base font-semibold hover:bg-primary/90 hover:shadow-lg"
       >
         <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
         {loading && sendProgress
@@ -534,10 +534,10 @@ export default function BroadcastClient({
         </TabsContent>
 
         <TabsContent value="logs" className="mt-0">
-          <Card className="border-teal-100 rounded-2xl shadow-sm overflow-hidden">
+          <Card className="border-border rounded-2xl shadow-sm overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-teal-800">היסטוריית שידורים</h2>
+                <h2 className="text-lg font-semibold text-foreground">היסטוריית שידורים</h2>
                 <p className="text-sm text-muted-foreground">סיכום לפי שידור — הצלחות / כשלונות</p>
               </div>
               <Button variant="outline" size="sm" onClick={refreshLogs} className="rounded-xl">
@@ -555,10 +555,10 @@ export default function BroadcastClient({
                   {queueItems.map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto] gap-2 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm"
+                      className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto] gap-2 items-center rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm"
                     >
                       <span className="text-muted-foreground tabular-nums">{formatDateTime(item.created_at)}</span>
-                      <span className="text-slate-600 truncate" title={item.payload?.tags?.join(", ") ?? ""}>
+                      <span className="text-muted-foreground truncate" title={item.payload?.tags?.join(", ") ?? ""}>
                         {item.payload?.tags?.length ? `תגיות: ${item.payload.tags.join(", ")}` : "שידור מתוזמן"}
                       </span>
                       <span className="text-green-700 font-medium tabular-nums">
@@ -580,12 +580,12 @@ export default function BroadcastClient({
                     return (
                       <div
                         key={`log-${log.id}`}
-                        className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto_auto] gap-2 items-center rounded-lg border border-teal-100 bg-white px-4 py-3 text-sm shadow-sm"
+                        className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto_auto] gap-2 items-center rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-sm"
                       >
                         <span className="text-muted-foreground tabular-nums shrink-0">
                           {formatDateTime(log.created_at)}
                         </span>
-                        <p className="text-slate-800 min-w-0 line-clamp-2" title={snippet}>
+                        <p className="text-foreground min-w-0 line-clamp-2" title={snippet}>
                           {snippet}
                         </p>
                         <span className="text-green-700 font-semibold tabular-nums whitespace-nowrap">
