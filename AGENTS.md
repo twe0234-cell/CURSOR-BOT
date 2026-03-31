@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## WORKFLOW RULE (חובה לקרוא)
+
+**NEVER create background, shadow, or feature branches.**
+ALL edits, refactors, and feature developments MUST be applied **DIRECTLY to the active `main` branch** unless the user explicitly commands "create a new branch".
+Ensure changes are visible in the user's immediate working directory.
+After any session-created branch: merge back to main, then delete the branch.
+
+---
+
 ## Cursor Cloud specific instructions
 
 ### Overview

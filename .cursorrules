@@ -21,6 +21,11 @@ You are an expert SaaS Architect and Next.js/Supabase Developer building a highl
 - CRM: `crm_contacts` table. 360-degree profiles tracking mutual balances, history, and notes. Roles: 'customer', 'sofer', 'trader'.
 - TORAH PROJECTS: `erp_torah_projects` (Parent) and exactly 62 `erp_torah_sheets` (Child). Tracked via a 62-square visual grid.
 
+## 0. WORKFLOW RULE (HIGHEST PRIORITY)
+NEVER create background, shadow, or feature branches unless the user explicitly says "create a new branch".
+ALL edits, refactors, and features MUST be applied DIRECTLY to the active `main` branch.
+Changes must be immediately visible in the user's working directory.
+
 ## 4. AGENT BEHAVIOR & RULES OF ENGAGEMENT
 - ZERO REGRESSION: Never delete or overwrite working logic unless explicitly commanded.
 - DIAGNOSE FIRST: If a bug occurs (e.g., upload fails), isolate and diagnose the root cause (e.g., missing RLS policies) instead of reverting to older code versions.
