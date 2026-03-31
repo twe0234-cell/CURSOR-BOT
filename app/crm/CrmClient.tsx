@@ -22,6 +22,9 @@ import {
   MailIcon,
   PhoneIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 
 // ── Tag configuration ─────────────────────────────────────────────────────────
 //
@@ -109,6 +112,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   /** Comma-separated custom tags typed by the user. */
   const [newCustomTags, setNewCustomTags] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
+  const [viewMode, setViewMode] = useViewMode("crm");
 
   // ── Derived: all unique tags that exist across all contacts ────────────────
   const allFilterTags = [
@@ -224,7 +228,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       {/* Page header */}
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-teal-800 mb-2">
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
           CRM – אנשי קשר
         </h1>
         <p className="text-muted-foreground">
@@ -243,7 +247,8 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
             className="pr-10 rounded-xl"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
           <CsvActions
             data={contacts.map((c) => ({
               name: c.name,
@@ -268,7 +273,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
           )}
           <Button
             onClick={() => setCreateOpen(true)}
-            className="rounded-xl bg-teal-600 hover:bg-teal-700"
+            className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <PlusIcon className="size-4 ml-2" />
             איש קשר חדש
@@ -284,8 +289,8 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
             onClick={() => setSelectedTags([])}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               selectedTags.length === 0
-                ? "bg-teal-600 text-white border-teal-600"
-                : "bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary"
             }`}
           >
             הכל
@@ -333,8 +338,8 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                 onClick={() => setFilterMode("or")}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                   filterMode === "or"
-                    ? "bg-teal-600 text-white"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 OR
@@ -343,8 +348,8 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                 onClick={() => setFilterMode("and")}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                   filterMode === "and"
-                    ? "bg-teal-600 text-white"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 AND
@@ -354,48 +359,100 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
         </div>
       )}
 
-      {/* ── Contacts grid ────────────────────────────────────────────────── */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((c) => {
+      {/* ── Contacts grid / list ─────────────────────────────────────────── */}
+      <div className={viewMode === "grid"
+        ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        : "flex flex-col gap-2"
+      }>
+        {filtered.map((c, i) => {
           const tags = contactAllTags(c);
           return (
-            <Link key={c.id} href={`/crm/${c.id}`}>
-              <Card className="border-teal-100 hover:border-teal-200 hover:shadow-md transition-all cursor-pointer h-full">
-                <CardHeader className="pb-2">
-                  <p className="font-semibold truncate">{c.name}</p>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-1.5">
-                  {c.email && (
-                    <p className="flex items-center gap-1 text-xs truncate text-muted-foreground">
-                      <MailIcon className="size-3 shrink-0" />
-                      {c.email}
-                    </p>
-                  )}
-                  {c.phone && (
-                    <p className="flex items-center gap-1 text-xs truncate text-muted-foreground">
-                      <PhoneIcon className="size-3 shrink-0" />
-                      {c.phone}
-                    </p>
-                  )}
-                  {tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {tags.slice(0, 4).map((t) => (
-                        <span
-                          key={t}
-                          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tagBadge(t)}`}
-                        >
-                          {tagLabel(t)}
-                        </span>
-                      ))}
-                      {tags.length > 4 && (
-                        <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-500">
-                          +{tags.length - 4}
-                        </span>
-                      )}
+            <Link
+              key={c.id}
+              href={`/crm/${c.id}`}
+              className={cn("block animate-fade-in-up", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}
+            >
+              {viewMode === "grid" ? (
+                <Card className="border-border hover:border-primary/30 hover:shadow-md transition-all cursor-pointer h-full card-interactive">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                        {c.name[0]}
+                      </div>
+                      <p className="font-semibold truncate">{c.name}</p>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-1.5">
+                    {c.email && (
+                      <p className="flex items-center gap-1 text-xs truncate text-muted-foreground">
+                        <MailIcon className="size-3 shrink-0" />
+                        {c.email}
+                      </p>
+                    )}
+                    {c.phone && (
+                      <p className="flex items-center gap-1 text-xs truncate text-muted-foreground">
+                        <PhoneIcon className="size-3 shrink-0" />
+                        {c.phone}
+                      </p>
+                    )}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {tags.slice(0, 4).map((t) => (
+                          <span
+                            key={t}
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tagBadge(t)}`}
+                          >
+                            {tagLabel(t)}
+                          </span>
+                        ))}
+                        {tags.length > 4 && (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                            +{tags.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-border hover:border-primary/30 hover:bg-muted/30 transition-all cursor-pointer">
+                  <CardContent className="py-2.5 px-4 flex items-center gap-3 min-w-0">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                      {c.name[0]}
+                    </div>
+                    <p className="font-semibold text-sm min-w-[8rem] truncate shrink-0">{c.name}</p>
+                    {c.phone && (
+                      <p className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground min-w-[8rem] truncate shrink-0">
+                        <PhoneIcon className="size-3 shrink-0" />
+                        {c.phone}
+                      </p>
+                    )}
+                    {c.email && (
+                      <p className="hidden md:flex items-center gap-1 text-xs text-muted-foreground truncate flex-1">
+                        <MailIcon className="size-3 shrink-0" />
+                        {c.email}
+                      </p>
+                    )}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mr-auto">
+                        {tags.slice(0, 2).map((t) => (
+                          <span
+                            key={t}
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tagBadge(t)}`}
+                          >
+                            {tagLabel(t)}
+                          </span>
+                        ))}
+                        {tags.length > 2 && (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                            +{tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </Link>
           );
         })}
@@ -403,9 +460,9 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
 
       {/* ── Empty state ──────────────────────────────────────────────────── */}
       {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
-          <UsersIcon className="size-16 text-teal-600 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-border bg-muted/20">
+          <UsersIcon className="size-16 text-primary/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">
             {selectedTags.length > 0 || search
               ? "לא נמצאו אנשי קשר"
               : "אין אנשי קשר"}

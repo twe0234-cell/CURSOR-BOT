@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +114,7 @@ export default function MarketClient({ initialRows }: Props) {
   const [filterText, setFilterText] = useState("");
   const [filterParchment, setFilterParchment] = useState("");
   const [filterTorahSize, setFilterTorahSize] = useState("");
+  const [viewMode, setViewMode] = useViewMode("market");
 
   const parchmentOptions = [...new Set(
     rows.map((r) => r.parchment_type).filter(Boolean) as string[]
@@ -648,8 +652,57 @@ export default function MarketClient({ initialRows }: Props) {
             {filteredRows.length} / {rows.length} רשומות
           </span>
         )}
+        <ViewToggle mode={viewMode} onChange={setViewMode} className="self-end" />
       </div>
 
+      {viewMode === "grid" ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredRows.map((row, i) => (
+            <div key={row.id} className={cn("animate-scale-in", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>
+              <Card className="border-border bg-card card-interactive overflow-hidden">
+                <div
+                  className="relative h-40 bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
+                  onClick={() => row.handwriting_image_url && window.open(row.handwriting_image_url, "_blank")}
+                >
+                  {row.handwriting_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={row.handwriting_image_url} alt="כתב יד" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <ScrollText className="size-12 text-muted-foreground/30" />
+                  )}
+                  {row.torah_size && (
+                    <span className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-xs font-bold bg-background/90 border border-border">
+                      {row.torah_size} ס&quot;מ
+                    </span>
+                  )}
+                </div>
+                <CardContent className="p-3 space-y-1.5">
+                  <p className="font-semibold text-sm truncate">{displayOwner(row)}</p>
+                  {row.sofer_name && <p className="text-xs text-muted-foreground">סופר: {row.sofer_name}</p>}
+                  <div className="flex gap-1 text-xs flex-wrap">
+                    {row.parchment_type && <span className="bg-muted rounded px-1.5 py-0.5 text-muted-foreground">{row.parchment_type}</span>}
+                    {row.script_type && <span className="bg-muted rounded px-1.5 py-0.5 text-muted-foreground">{row.script_type}</span>}
+                  </div>
+                  {row.asking_price != null && (
+                    <p className="text-sm font-bold text-primary">{formatK(row.asking_price)}</p>
+                  )}
+                  {row.potential_profit != null && (
+                    <p className="text-xs text-emerald-600">רווח: {formatK(row.potential_profit)}</p>
+                  )}
+                  <div className="flex gap-1 pt-1">
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => setEditRow(row)}>
+                      <PencilIcon className="size-3 ml-1" />ערוך
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(row.id)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      ) : (
       <Card className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -769,6 +822,7 @@ export default function MarketClient({ initialRows }: Props) {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Edit Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

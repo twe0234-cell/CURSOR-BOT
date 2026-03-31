@@ -48,6 +48,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 import { INVENTORY_CATEGORY_OPTIONS } from "@/lib/validations/inventory";
 import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
@@ -70,6 +73,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [viewMode, setViewMode] = useViewMode("inventory");
   const [sortKey, setSortKey] = useState<
     "scribe_name" | "product_category" | "script_type" | "status" | "target_price"
   >("product_category");
@@ -317,7 +321,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             onImport={(rows) => toast.info(`יובאו ${rows.length} שורות. ייבוא מלאי יתווסף בעדכון.`)}
             filename="inventory"
           />
-          <Button onClick={openCreate} className="bg-sky-600 hover:bg-sky-700">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+          <Button onClick={openCreate} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           <PlusIcon className="size-4 ml-2" />
           הוסף פריט
         </Button>
@@ -330,12 +335,12 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
           <TabsTrigger value="archive" className="rounded-lg">ארכיון (נמכר) ({archiveItems.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="active" className="mt-0">
-          <div className="mb-3 flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-600">סינון קטגוריה:</label>
+          <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <label className="text-sm font-medium text-muted-foreground">סינון קטגוריה:</label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background"
             >
               <option value="">הכל</option>
               {categories.map((c) => (
@@ -343,89 +348,135 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               ))}
             </select>
           </div>
-          <div className="rounded-lg border border-border bg-card overflow-x-auto">
-            <Table className="min-w-0">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead className="min-w-[100px]">
-                    <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
-                      סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
-                      קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
-                      כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
-                      סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
-                      מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-32">פעולות</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activeItems.map((item) => (
-                  <TableRow key={item.id} className="group">
-                    <TableCell className="p-1.5">
+
+          {viewMode === "grid" ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {activeItems.map((item, i) => (
+                <div key={item.id} className={cn("animate-scale-in", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>
+                  <Card className="border-border bg-card card-interactive overflow-hidden">
+                    <div className="relative h-36 bg-muted flex items-center justify-center overflow-hidden">
                       {item.images?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.images[0]}
-                          alt=""
-                          className="w-10 h-10 rounded-md object-cover border border-border"
-                          loading="lazy"
-                        />
+                        <img src={item.images[0]} alt="" className="h-full w-full object-cover" loading="lazy" />
                       ) : (
-                        <div className="w-10 h-10" />
+                        <Package className="size-12 text-muted-foreground/30" />
                       )}
-                    </TableCell>
-                    <TableCell className="truncate max-w-[140px] text-sm text-slate-700">
-                      {item.scribe_name?.trim() || "—"}
-                    </TableCell>
-                    <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
-                    <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
-                    <TableCell>
-                      {item.status !== "available"
-                        ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">{inventoryStatusLabelHe(item.status)}</span>
-                        : null}
-                    </TableCell>
-                    <TableCell>
-                      {item.target_price != null ? `${item.target_price} ₪` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}>
-                          <Button size="sm" variant="outline" className="rounded-lg">
-                            <SendIcon className="size-4 ml-1" />
-                            שידור
+                      {item.status !== "available" && (
+                        <span className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[11px] font-medium bg-background/90 border border-border">
+                          {inventoryStatusLabelHe(item.status)}
+                        </span>
+                      )}
+                    </div>
+                    <CardContent className="p-3 space-y-1.5">
+                      <p className="font-semibold text-sm truncate">{item.product_category ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{item.scribe_name?.trim() || "—"}</p>
+                      {item.script_type && <p className="text-xs text-muted-foreground">{item.script_type}</p>}
+                      {item.target_price != null && (
+                        <p className="text-sm font-bold text-primary">{item.target_price.toLocaleString("he-IL")} ₪</p>
+                      )}
+                      <div className="flex gap-1 pt-1">
+                        <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`} className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full h-7 text-xs">
+                            <SendIcon className="size-3 ml-1" />שידור
                           </Button>
                         </Link>
-                        <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                          <PencilIcon className="size-4" />
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)}>
+                          <PencilIcon className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)} disabled={loading}>
-                          <TrashIcon className="size-4 text-red-600" />
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleDelete(item.id)} disabled={loading}>
+                          <TrashIcon className="size-3.5 text-destructive" />
                         </Button>
                       </div>
-                    </TableCell>
+                    </CardContent>
+                  </Card>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card overflow-x-auto">
+              <Table className="min-w-0">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="min-w-[100px]">
+                      <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                        סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                        קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                        כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                        סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
+                        מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-32">פעולות</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {activeItems.map((item, i) => (
+                    <TableRow key={item.id} className={cn("group table-row-animate", i < 8 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>
+                      <TableCell className="p-1.5">
+                        {item.images?.[0] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.images[0]}
+                            alt=""
+                            className="w-10 h-10 rounded-md object-cover border border-border"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-10 h-10" />
+                        )}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[140px] text-sm">
+                        {item.scribe_name?.trim() || "—"}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[120px]">{item.product_category ?? "—"}</TableCell>
+                      <TableCell className="truncate max-w-[80px]">{item.script_type ?? "—"}</TableCell>
+                      <TableCell>
+                        {item.status !== "available"
+                          ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">{inventoryStatusLabelHe(item.status)}</span>
+                          : null}
+                      </TableCell>
+                      <TableCell>
+                        {item.target_price != null ? `${item.target_price} ₪` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}>
+                            <Button size="sm" variant="outline" className="rounded-lg">
+                              <SendIcon className="size-4 ml-1" />
+                              שידור
+                            </Button>
+                          </Link>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                            <PencilIcon className="size-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)} disabled={loading}>
+                            <TrashIcon className="size-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
           {activeItems.length === 0 && (
             <p className="py-12 text-center text-muted-foreground">
               אין פריטים. לחץ על &quot;הוסף פריט&quot;

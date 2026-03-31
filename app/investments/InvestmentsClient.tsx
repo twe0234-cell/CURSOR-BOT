@@ -39,6 +39,9 @@ import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, WalletIcon, Share2Icon, FileUpIcon, SettingsIcon, PackageIcon, PencilIcon, CalendarClockIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 import { handleNumericChange } from "@/lib/numericInput";
 import { getWorkingDays, estimateEndDate } from "@/src/lib/calendar/workDaysCalculator";
 
@@ -56,6 +59,7 @@ export default function InvestmentsClient() {
   const [newWorkDaysNeeded, setNewWorkDaysNeeded] = useState("");
   const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [detailDeductions, setDetailDeductions] = useState("");
+  const [viewMode, setViewMode] = useViewMode("investments");
   const [detailDocLoading, setDetailDocLoading] = useState(false);
   const [movingToInventoryId, setMovingToInventoryId] = useState<string | null>(null);
 
@@ -240,7 +244,8 @@ export default function InvestmentsClient() {
             <CardTitle className="text-base font-semibold">תיק השקעות</CardTitle>
             <CardDescription>פרויקטי כתיבה פעילים</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
             <CsvActions
               data={investments.map((inv) => ({
                 scribe: inv.scribe_name ?? "",
@@ -272,6 +277,81 @@ export default function InvestmentsClient() {
           </div>
         </CardHeader>
         <CardContent>
+          {viewMode === "grid" ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {investments.map((inv, i) => {
+                const ms = Array.isArray(inv.milestones) ? inv.milestones : [];
+                const doneCount = ms.filter((m: {done?: boolean}) => m?.done === true).length;
+                const pct = ms.length > 0
+                  ? Math.round((doneCount / ms.length) * 100)
+                  : inv.total_agreed_price > 0
+                    ? Math.min(100, Math.round((inv.amount_paid / inv.total_agreed_price) * 100))
+                    : 0;
+                return (
+                  <div key={inv.id} className={cn("animate-scale-in", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>
+                    <Card className="border-border bg-card card-interactive">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                              {(inv.scribe_name ?? "?")[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{inv.scribe_name ?? "—"}</p>
+                              <p className="text-xs text-muted-foreground truncate">{inv.item_details ?? "—"}</p>
+                            </div>
+                          </div>
+                          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+                            inv.status === "active" ? "bg-amber-100 text-amber-800" :
+                            inv.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                            inv.status === "delivered_to_inventory" ? "bg-sky-100 text-sky-800" :
+                            "bg-muted text-muted-foreground"
+                          )}>
+                            {inv.status === "active" ? "פעיל" : inv.status === "completed" ? "הושלם" : inv.status === "delivered_to_inventory" ? "נמסר" : "בוטל"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">ס״ה השקעה</p>
+                            <p className="font-semibold">{inv.total_agreed_price.toLocaleString("he-IL")} ₪</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">יתרה</p>
+                            <p className={cn("font-semibold", inv.remaining_balance > 0 ? "text-destructive" : "text-emerald-600")}>
+                              {inv.remaining_balance.toLocaleString("he-IL")} ₪
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                            <span>התקדמות</span><span>{pct}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        {inv.target_date && (
+                          <p className="text-xs text-muted-foreground">
+                            יעד: {new Date(inv.target_date).toLocaleDateString("he-IL")}
+                          </p>
+                        )}
+                        <div className="flex gap-1 pt-1 flex-wrap">
+                          {inv.status === "active" && inv.remaining_balance > 0 && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setPaymentOpen(inv.id)}>
+                              <WalletIcon className="size-3 ml-1" />תשלום
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openEdit(inv)}>
+                            <PencilIcon className="size-3 ml-1" />ערוך
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
           <div className="rounded-xl border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -301,7 +381,7 @@ export default function InvestmentsClient() {
                       ? Math.min(100, (inv.amount_paid / inv.total_agreed_price) * 100)
                       : 0;
                   return (
-                    <TableRow key={inv.id}>
+                    <TableRow key={inv.id} className="table-row-animate">
                       <TableCell>{inv.scribe_name ?? "—"}</TableCell>
                       <TableCell className="max-w-[120px] truncate">{inv.item_details ?? "—"}</TableCell>
                       <TableCell>{inv.quantity}</TableCell>
@@ -349,7 +429,7 @@ export default function InvestmentsClient() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                             <div
                               className="h-full bg-primary rounded-full transition-all"
                               style={{ width: `${pct}%` }}
@@ -408,6 +488,7 @@ export default function InvestmentsClient() {
               </TableBody>
             </Table>
           </div>
+          )}
           {investments.length === 0 && (
             <p className="py-8 text-center text-muted-foreground">אין השקעות</p>
           )}

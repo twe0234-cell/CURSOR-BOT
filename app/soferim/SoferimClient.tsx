@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import { PenLine, Plus, CalendarCheck, ZoomIn, ExternalLink } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useViewMode } from "@/lib/hooks/useViewMode";
+import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +58,7 @@ export default function SoferimClient({ initialRows }: Props) {
 
   const totalScribes = rows.length;
   const withProfile = rows.filter((r) => r.has_profile).length;
+  const [viewMode, setViewMode] = useViewMode("soferim");
   const [modalOpen, setModalOpen] = useState(false);
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"existing" | "new">("existing");
@@ -226,7 +230,7 @@ export default function SoferimClient({ initialRows }: Props) {
     <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-sky-700 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <PenLine className="size-7 text-amber-500" />
             מאגר סופרים
           </h1>
@@ -253,9 +257,10 @@ export default function SoferimClient({ initialRows }: Props) {
               </option>
             ))}
           </select>
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Button
             onClick={openModal}
-            className="bg-sky-600 hover:bg-sky-700 text-white shrink-0"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
           >
             <Plus className="size-4 ml-1" />
             צור תיק סופר
@@ -264,41 +269,47 @@ export default function SoferimClient({ initialRows }: Props) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3 mb-8">
-        <Card className="rounded-xl border-sky-100 bg-white shadow-sm">
+        <Card className="rounded-xl border-border bg-card shadow-sm card-interactive">
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground font-medium">סה״כ סופרים ב־CRM</p>
-            <p className="text-3xl font-bold text-sky-700 tabular-nums">{totalScribes}</p>
+            <p className="text-3xl font-bold text-primary tabular-nums animate-fade-in">{totalScribes}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-emerald-100 bg-white shadow-sm">
+        <Card className="rounded-xl border-border bg-card shadow-sm card-interactive">
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground font-medium">עם תיק מקצועי</p>
-            <p className="text-3xl font-bold text-emerald-700 tabular-nums">{withProfile}</p>
+            <p className="text-3xl font-bold text-emerald-600 tabular-nums animate-fade-in stagger-2">{withProfile}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-amber-100 bg-white shadow-sm">
+        <Card className="rounded-xl border-border bg-card shadow-sm card-interactive">
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground font-medium">בתצוגה (אחרי סינון)</p>
-            <p className="text-3xl font-bold text-amber-800 tabular-nums">{visibleRows.length}</p>
+            <p className="text-3xl font-bold text-foreground tabular-nums animate-fade-in stagger-3">{visibleRows.length}</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={viewMode === "grid"
+        ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        : "flex flex-col gap-2"
+      }>
         {visibleRows.length === 0 ? (
           <p className="text-muted-foreground col-span-full text-center py-12">
             אין סופרים ב-CRM. הוסף איש קשר מסוג סופר ב-CRM או צור תיק חדש כאן.
           </p>
-        ) : (
-          visibleRows.map((row) => (
+        ) : viewMode === "grid" ? (
+          visibleRows.map((row, i) => (
             <Card
               key={row.contact_id}
-              className="rounded-2xl border border-sky-100 bg-white shadow-sm overflow-hidden"
+              className={cn(
+                "rounded-2xl border border-border bg-card shadow-sm overflow-hidden card-interactive animate-scale-in",
+                i < 8 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`
+              )}
             >
               <CardContent className="pt-5 space-y-3">
                 <div className="flex gap-3">
                   <div
-                    className="relative size-20 shrink-0 rounded-lg bg-slate-100 overflow-hidden cursor-pointer"
+                    className="relative size-20 shrink-0 rounded-lg bg-muted overflow-hidden cursor-pointer"
                     onClick={() => row.sample_image_url && setZoomUrl(row.sample_image_url)}
                   >
                     {row.sample_image_url ? (
@@ -322,7 +333,7 @@ export default function SoferimClient({ initialRows }: Props) {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="font-semibold text-sky-800 truncate">{row.name}</h2>
+                    <h2 className="font-semibold text-foreground truncate">{row.name}</h2>
                     <p className="text-sm text-muted-foreground truncate">
                       {row.phone ?? "—"}
                       {row.city ? ` · ${row.city}` : ""}
@@ -344,7 +355,7 @@ export default function SoferimClient({ initialRows }: Props) {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
                   <span className="text-xs text-muted-foreground">
                     קשר אחרון:{" "}
                     {row.last_contact_date
@@ -355,7 +366,7 @@ export default function SoferimClient({ initialRows }: Props) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="text-xs h-8 border-amber-200 text-amber-800 hover:bg-amber-50"
+                    className="text-xs h-8"
                     onClick={() => touchContact(row.contact_id)}
                   >
                     <CalendarCheck className="size-3 ml-1" />
@@ -366,7 +377,7 @@ export default function SoferimClient({ initialRows }: Props) {
                 <div className="flex gap-2">
                   <Button
                     variant="secondary"
-                    className="flex-1 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                    className="flex-1"
                     size="sm"
                     onClick={() => openEdit(row)}
                   >
@@ -376,6 +387,46 @@ export default function SoferimClient({ initialRows }: Props) {
                     <Button variant="outline" size="sm" className="h-9 px-2.5" title="כרטיס CRM">
                       <ExternalLink className="size-4" />
                     </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          visibleRows.map((row, i) => (
+            <Card
+              key={row.contact_id}
+              className={cn(
+                "border-border bg-card hover:bg-muted/30 transition-all animate-fade-in-up",
+                i < 8 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`
+              )}
+            >
+              <CardContent className="py-2.5 px-4 flex items-center gap-3 min-w-0">
+                <div
+                  className="relative size-10 shrink-0 rounded-lg bg-muted overflow-hidden cursor-pointer"
+                  onClick={() => row.sample_image_url && setZoomUrl(row.sample_image_url)}
+                >
+                  {row.sample_image_url ? (
+                    <Image src={row.sample_image_url} alt="" fill className="object-cover" sizes="40px" unoptimized />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">✍️</div>
+                  )}
+                </div>
+                <div className="min-w-[8rem] shrink-0">
+                  <p className="font-semibold text-sm truncate">{row.name}</p>
+                  <p className="text-xs text-muted-foreground">{row.city ?? "—"}</p>
+                </div>
+                <div className="hidden sm:block shrink-0">
+                  <StarRating value={row.handwriting_quality} readOnly size="sm" />
+                </div>
+                <p className="hidden md:block text-xs text-muted-foreground truncate flex-1">{row.writing_style ?? "—"}</p>
+                <p className="hidden lg:block text-xs text-muted-foreground shrink-0">
+                  {row.last_contact_date ? new Date(row.last_contact_date).toLocaleDateString("he-IL") : "—"}
+                </p>
+                <div className="flex gap-1 mr-auto shrink-0">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openEdit(row)}>ערוך</Button>
+                  <Link href={`/crm/${row.contact_id}`}>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><ExternalLink className="size-3.5" /></Button>
                   </Link>
                 </div>
               </CardContent>
