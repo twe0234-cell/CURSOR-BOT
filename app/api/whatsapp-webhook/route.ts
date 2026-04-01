@@ -123,6 +123,13 @@ export async function POST(req: NextRequest) {
 
     if (!chatId || !configuredGroup || chatId !== configuredGroup) {
       console.info(`${LOG} chatId mismatch — skipping. chatId="${chatId}" expected="${configuredGroup}"`);
+      // כתוב ל-DB כדי לחשוף את ה-chatId המלא (אבחון זמני)
+      await admin.from("sys_logs").insert({
+        level: "warn",
+        module: "whatsapp-webhook",
+        message: "chatId mismatch",
+        metadata: { chatId, configuredGroup, typeWebhook: webhookType, idMessage: String(b.idMessage ?? "") },
+      }).then(() => {});
       return ok200();
     }
 
