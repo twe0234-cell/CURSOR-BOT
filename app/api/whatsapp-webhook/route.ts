@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
       b.typeWebhook !== "outgoingMessageReceived"
     ) {
       // סוגים אחרים (statusMessage, deviceInfo וכו') — לא מעבד
+      const admin0 = createAdminClient();
+      await admin0?.from("sys_logs").insert({ level: "debug", module: "whatsapp-webhook", message: "early-return: non-message type", metadata: { typeWebhook: webhookType } }).then(() => {});
       return ok200();
     }
 
@@ -121,9 +123,11 @@ export async function POST(req: NextRequest) {
 
     console.info(`${LOG} chatId="${chatId}" configuredGroup="${configuredGroup}" idMessage="${idMessage}"`);
 
+    // לוג: הגענו לבדיקת chatId (הודעת טקסט אמיתית)
+    await admin.from("sys_logs").insert({ level: "info", module: "whatsapp-webhook", message: "message received", metadata: { chatId, configuredGroup, typeWebhook: webhookType, idMessage: String(b.idMessage ?? "") } }).then(() => {});
+
     if (!chatId || !configuredGroup || chatId !== configuredGroup) {
       console.info(`${LOG} chatId mismatch — skipping. chatId="${chatId}" expected="${configuredGroup}"`);
-      // כתוב ל-DB כדי לחשוף את ה-chatId המלא (אבחון זמני)
       await admin.from("sys_logs").insert({
         level: "warn",
         module: "whatsapp-webhook",
@@ -146,15 +150,18 @@ export async function POST(req: NextRequest) {
 
     if (!text) {
       console.info(`${LOG} no text — sending FAIL reaction`);
+      await admin.from("sys_logs").insert({ level: "warn", module: "whatsapp-webhook", message: "no text extracted", metadata: { idMessage } }).then(() => {});
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     console.info(`${LOG} parsed=${JSON.stringify(parsed)}`);
+    await admin.from("sys_logs").insert({ level: "info", module: "whatsapp-webhook", message: "parsed", metadata: { text: text.slice(0, 200), parsed } }).then(() => {});
 
     if (!parsedMessageIsActionable(parsed)) {
       console.info(`${LOG} not actionable — sending FAIL reaction`);
+      await admin.from("sys_logs").insert({ level: "warn", module: "whatsapp-webhook", message: "not actionable", metadata: { parsed } }).then(() => {});
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
