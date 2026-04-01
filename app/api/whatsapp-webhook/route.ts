@@ -138,6 +138,9 @@ export async function POST(req: NextRequest) {
       return ok200();
     }
 
+    // תגובה מיידית "קיבלתי, מטפל" — לפני עיבוד
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, "⏳");
+
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
     console.info(`${LOG} extracted text="${text?.slice(0, 80) ?? "(empty)"}"`);
 
