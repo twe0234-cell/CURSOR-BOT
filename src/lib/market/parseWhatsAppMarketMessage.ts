@@ -101,24 +101,64 @@ function parsePrice(raw: string): number | null {
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 /**
- * פענוח הודעה — פורמט קבוע, ירידת שורה כמפריד.
- * שורות ריקות (כולל אם שדה חסר) מדולגות בחישוב המיקום.
+ * פענוח הודעה — content-based (מזהה כל שורה לפי תוכן, לא מיקום).
+ * מאפשר שדות אופציונליים ואפילו סדר שונה.
+ *
+ * אלגוריתם:
+ * 1. כתב   — אם השורה מתאימה לאחד מהכתבים הידועים
+ * 2. גודל  — אם השורה היא אחד מהגדלים הידועים או "אחר"
+ * 3. תאריך — אם השורה נראית כתאריך (MM/YY, MM.YY, "עוד...")
+ * 4. מחיר  — מספר שאינו גודל ידוע (≥ 10)
+ * 5. בעלים — כל דבר אחר (מילה/שתיים)
  */
 export function parseMarketTorahMessage(text: string): ParsedMarketTorahMessage {
-  // נרמול: הסר תווי כיווניות ו-CRLF בלבד; שמור שורות
   const normalized = text
     .replace(/\u200f|\u200e|\u202a|\u202b|\u202c/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 
-  // פצל לשורות — כולל ריקות (לשמירת מיקום)
-  const lines = normalized.split("\n").map((l) => l.trim());
+  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  const script_type = parseScript(lines[0] ?? "");
-  const torah_size = parseSize(lines[1] ?? "");
-  const owner_name = (lines[2] ?? "").trim() || null;
-  const ready_date = parseReadyDate(lines[3] ?? "");
-  const asking_price_full_shekels = parsePrice(lines[4] ?? "");
+  let script_type: string | null = null;
+  let torah_size: string | null = null;
+  let ready_date: string | null = null;
+  let asking_price_full_shekels: number | null = null;
+  let owner_name: string | null = null;
+
+  for (const line of lines) {
+    // כתב — בדיקה ראשונה (בוא לפני גודל)
+    const script = parseScript(line);
+    if (script !== null && script_type === null) {
+      script_type = script;
+      continue;
+    }
+
+    // גודל — מספר שהוא גודל ידוע או "אחר"
+    const size = parseSize(line);
+    if (size !== null && torah_size === null) {
+      torah_size = size;
+      continue;
+    }
+
+    // תאריך — MM/YY, MM.YY, "עוד..."
+    const date = parseReadyDate(line);
+    if (date !== null && ready_date === null) {
+      ready_date = date;
+      continue;
+    }
+
+    // מחיר — מספר שאינו גודל ידוע
+    const price = parsePrice(line);
+    if (price !== null && asking_price_full_shekels === null) {
+      asking_price_full_shekels = price;
+      continue;
+    }
+
+    // בעלים — כל שאר (מילה אחת או שתיים)
+    if (owner_name === null && line.length > 0 && line.length <= 40) {
+      owner_name = line;
+    }
+  }
 
   return { torah_size, script_type, owner_name, ready_date, asking_price_full_shekels };
 }
