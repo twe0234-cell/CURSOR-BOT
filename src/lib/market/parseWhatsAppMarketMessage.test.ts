@@ -1,76 +1,118 @@
 import { describe, expect, it } from "vitest";
 import {
-  normalizeMarketMessageText,
   parseMarketTorahMessage,
   parsedMessageIsActionable,
+  listMissingParseFields,
 } from "./parseWhatsAppMarketMessage";
 
-describe("parseMarketTorahMessage", () => {
-  it("parses size, script, and price near מחיר", () => {
-    const p = parseMarketTorahMessage("ספרדי 48 מחיר 120 אלף");
+describe("parseMarketTorahMessage — פורמט חדש (ירידת שורה)", () => {
+  it("דוגמה מלאה: ארי 48 יעקובוב 06/26 165.", () => {
+    const p = parseMarketTorahMessage("ארי\n48\nיעקובוב\n06/26\n165.");
+    expect(p.script_type).toBe("ארי");
     expect(p.torah_size).toBe("48");
-    expect(p.script_type).toBe("ספרדי");
-    expect(p.asking_price_full_shekels).toBe(120_000);
+    expect(p.owner_name).toBe("יעקובוב");
+    expect(p.ready_date).toBe("2026-06-01");
+    expect(p.asking_price_full_shekels).toBe(165_000);
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it("maps ארי and ₪ price", () => {
-    const p = parseMarketTorahMessage("ארי 42 — 85000 ₪");
+  it('ב"י עם מרכאות רגילות', () => {
+    const p = parseMarketTorahMessage('ב"י\n36\nכהן\nעוד חודש\n95');
+    expect(p.script_type).toBe('ב"י');
+    expect(p.torah_size).toBe("36");
+    expect(p.owner_name).toBe("כהן");
+    expect(p.asking_price_full_shekels).toBe(95_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
+  });
+
+  it('אר"י עם מרכאות', () => {
+    const p = parseMarketTorahMessage('אר"י\n42\nלוי\n\n180');
     expect(p.script_type).toBe("ארי");
     expect(p.torah_size).toBe("42");
-    expect(p.asking_price_full_shekels).toBe(85_000);
+    expect(p.owner_name).toBe("לוי");
+    expect(p.ready_date).toBeNull();
+    expect(p.asking_price_full_shekels).toBe(180_000);
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it("maps בית יוסף to ב״י", () => {
-    const p = parseMarketTorahMessage("בית יוסף 36 מחיר 95 אלף");
-    expect(p.script_type).toBe("ב״י");
-    expect(p.torah_size).toBe("36");
-    expect(p.asking_price_full_shekels).toBe(95_000);
+  it("ספרדי גודל 24 — שדות אופציונליים חסרים", () => {
+    const p = parseMarketTorahMessage("ספרדי\n24\n\n\n200");
+    expect(p.script_type).toBe("ספרדי");
+    expect(p.torah_size).toBe("24");
+    expect(p.owner_name).toBeNull();
+    expect(p.ready_date).toBeNull();
+    expect(p.asking_price_full_shekels).toBe(200_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it("is not actionable without price", () => {
-    const p = parseMarketTorahMessage("ספרדי 48 בלי מחיר");
+  it("גודל 30 — גודל חדש", () => {
+    const p = parseMarketTorahMessage("ארי\n30\nברגר\n04.26\n120");
+    expect(p.torah_size).toBe("30");
+    expect(p.ready_date).toBe("2026-04-01");
+    expect(p.asking_price_full_shekels).toBe(120_000);
+  });
+
+  it("מחיר בשקלים מלאים (> 1000)", () => {
+    const p = parseMarketTorahMessage("ארי\n48\n\n\n185000");
+    expect(p.asking_price_full_shekels).toBe(185_000);
+  });
+
+  it("מחיר עם פסיק כמפריד אלפים", () => {
+    const p = parseMarketTorahMessage("ספרדי\n42\n\n\n185,000");
+    expect(p.asking_price_full_shekels).toBe(185_000);
+  });
+
+  it("תאריך בפורמט MM.YY", () => {
+    const p = parseMarketTorahMessage("ארי\n48\nאלון\n04.26\n150");
+    expect(p.ready_date).toBe("2026-04-01");
+  });
+
+  it("תאריך: עוד חודשיים", () => {
+    const p = parseMarketTorahMessage("ארי\n36\nדוד\nעוד חודשיים\n90");
+    expect(p.ready_date).toBeTruthy();
+    expect(p.ready_date).toMatch(/^\d{4}-\d{2}-01$/);
+  });
+
+  it("תאריך: עוד חצי שנה", () => {
+    const p = parseMarketTorahMessage("ב\"י\n48\n\nעוד חצי שנה\n130");
+    expect(p.ready_date).toBeTruthy();
+  });
+
+  it("ללא מחיר — not actionable", () => {
+    const p = parseMarketTorahMessage("ארי\n48\nכהן\n06/26\n");
+    expect(p.asking_price_full_shekels).toBeNull();
     expect(parsedMessageIsActionable(p)).toBe(false);
   });
 
-  it("is not actionable with price only (no listed torah size / script)", () => {
-    const p = parseMarketTorahMessage("מחיר 130 אלף");
+  it("ללא גודל וכתב — not actionable", () => {
+    const p = parseMarketTorahMessage("\n\nכהן\n06/26\n150");
     expect(p.torah_size).toBeNull();
     expect(p.script_type).toBeNull();
     expect(parsedMessageIsActionable(p)).toBe(false);
   });
 
-  it("handles CRLF and line breaks between fields", () => {
-    const raw = "ספרדי\r\n48\r\nמחיר\r\n120 אלף";
-    expect(normalizeMarketMessageText(raw)).toMatch(/ספרדי 48 מחיר 120 אלף/);
-    const p = parseMarketTorahMessage(raw);
-    expect(p.torah_size).toBe("48");
-    expect(p.script_type).toBe("ספרדי");
-    expect(p.asking_price_full_shekels).toBe(120_000);
-    expect(parsedMessageIsActionable(p)).toBe(true);
-  });
-
-  it("collapses NBSP and extra spaces", () => {
-    const p = parseMarketTorahMessage("ספרדי\u00a0\u00a048  מחיר  90 אלף");
-    expect(p.torah_size).toBe("48");
-    expect(p.asking_price_full_shekels).toBe(90_000);
-  });
-
-  it("parses ארי 36 / שיינר / 185 אלף across lines (image caption style)", () => {
-    const raw = "ארי 36\nשיינר\n185 אלף\nמוכן.";
-    const p = parseMarketTorahMessage(raw);
-    expect(p.torah_size).toBe("36");
+  it("CRLF — ממיר ל-LF", () => {
+    const p = parseMarketTorahMessage("ארי\r\n48\r\nברק\r\n06/26\r\n165.");
     expect(p.script_type).toBe("ארי");
-    expect(p.asking_price_full_shekels).toBe(185_000);
+    expect(p.torah_size).toBe("48");
+    expect(p.asking_price_full_shekels).toBe(165_000);
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it("maps שיינר alone with size and price to ב״י", () => {
-    const p = parseMarketTorahMessage("שיינר\n45\n200 אלף");
-    expect(p.torah_size).toBe("45");
-    expect(p.script_type).toBe("ב״י");
-    expect(p.asking_price_full_shekels).toBe(200_000);
+  it("listMissingParseFields — מדווח על חסרים", () => {
+    const p = parseMarketTorahMessage("ארי\n48\n\n\n");
+    const missing = listMissingParseFields(p);
+    expect(missing.some((m) => m.includes("מחיר"))).toBe(true);
+  });
+
+  it("גודל אחר", () => {
+    const p = parseMarketTorahMessage("ארי\nאחר\nלוי\n\n200");
+    expect(p.torah_size).toBe("אחר");
     expect(parsedMessageIsActionable(p)).toBe(true);
+  });
+
+  it("בי ללא מרכאות → ב\"י", () => {
+    const p = parseMarketTorahMessage("בי\n36\n\n\n100");
+    expect(p.script_type).toBe('ב"י');
   });
 });
