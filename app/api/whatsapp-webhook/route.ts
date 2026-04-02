@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   extractTextFromGreenIncomingWebhookMessageData,
-  greenApiSetMessageReaction,
+  greenApiSendChatMessage,
 } from "@/lib/whatsapp/greenApi";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
@@ -13,30 +13,29 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const REACTION_OK = "✅";
-const REACTION_FAIL = "❌";
+const MSG_OK   = "✅ נקלט בהצלחה";
+const MSG_FAIL = "❌ נכשל — לא זוהה פורמט תקין";
 const LOG = "[whatsapp-webhook]";
 
 function ok200(): NextResponse {
   return NextResponse.json({ ok: true }, { status: 200 });
 }
 
-async function sendReactionSafe(
+async function sendReplySafe(
   instanceId: string,
   token: string,
   chatId: string,
-  idMessage: string,
-  reaction: string
+  message: string
 ): Promise<void> {
   try {
-    const r = await greenApiSetMessageReaction(instanceId, token, chatId, idMessage, reaction);
+    const r = await greenApiSendChatMessage(instanceId, token, chatId, message);
     if (!r.ok) {
-      console.warn(`${LOG} SetMessageReaction FAILED (${reaction}):`, r.error);
+      console.warn(`${LOG} sendMessage FAILED:`, r.error);
     } else {
-      console.info(`${LOG} SetMessageReaction OK (${reaction}) msgId=${idMessage}`);
+      console.info(`${LOG} sendMessage OK: "${message}"`);
     }
   } catch (e) {
-    console.warn(`${LOG} SetMessageReaction exception (${reaction}):`, e);
+    console.warn(`${LOG} sendMessage exception:`, e);
   }
 }
 
@@ -146,8 +145,8 @@ export async function POST(req: NextRequest) {
       return ok200();
     }
 
-    // תגובה מיידית "קיבלתי, מטפל" — לפני עיבוד
-    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, "⏳");
+    // תגובה מיידית — לפני עיבוד
+    await sendReplySafe(instanceId, greenApiToken, chatId, "⏳ מעבד...");
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
     console.info(`${LOG} extracted text="${text?.slice(0, 80) ?? "(empty)"}"`);
@@ -160,7 +159,7 @@ export async function POST(req: NextRequest) {
         message: "no text extracted",
         metadata: { idMessage },
       }).then(() => {});
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReplySafe(instanceId, greenApiToken, chatId, MSG_FAIL);
       return ok200();
     }
 
@@ -181,7 +180,7 @@ export async function POST(req: NextRequest) {
         message: "not actionable",
         metadata: { parsed },
       }).then(() => {});
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReplySafe(instanceId, greenApiToken, chatId, MSG_FAIL);
       return ok200();
     }
 
@@ -215,7 +214,7 @@ export async function POST(req: NextRequest) {
     if (insErr) {
       if (insErr.code === "23505") {
         console.info(`${LOG} duplicate message (23505) — sending OK reaction`);
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendReplySafe(instanceId, greenApiToken, chatId, MSG_OK);
       } else {
         console.error(`${LOG} insert error:`, insErr);
         await admin.from("sys_logs").insert({
@@ -224,7 +223,7 @@ export async function POST(req: NextRequest) {
           message: "insert failed",
           metadata: { code: insErr.code, details: insErr.message },
         }).then(() => {});
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendReplySafe(instanceId, greenApiToken, chatId, MSG_FAIL);
       }
       return ok200();
     }
@@ -236,7 +235,7 @@ export async function POST(req: NextRequest) {
       message: "insert success",
       metadata: { sku, idMessage },
     }).then(() => {});
-    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    await sendReplySafe(instanceId, greenApiToken, chatId, MSG_OK);
     return ok200();
   } catch (e) {
     console.error(`${LOG} unhandled exception:`, e);
