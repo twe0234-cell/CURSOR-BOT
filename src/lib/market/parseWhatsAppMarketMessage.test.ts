@@ -84,11 +84,12 @@ describe("parseMarketTorahMessage — פורמט חדש (ירידת שורה)", 
     expect(parsedMessageIsActionable(p)).toBe(false);
   });
 
-  it("ללא גודל וכתב — not actionable", () => {
+  it("ללא גודל וכתב אך עם מחיר — actionable (מחיר לבד מספיק)", () => {
     const p = parseMarketTorahMessage("\n\nכהן\n06/26\n150");
     expect(p.torah_size).toBeNull();
     expect(p.script_type).toBeNull();
-    expect(parsedMessageIsActionable(p)).toBe(false);
+    expect(p.asking_price_full_shekels).toBe(150_000);
+    expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
   it("CRLF — ממיר ל-LF", () => {

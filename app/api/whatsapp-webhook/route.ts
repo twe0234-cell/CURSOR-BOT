@@ -9,6 +9,7 @@ import { createAdminClient } from "@/src/lib/supabase/admin";
 import {
   parseMarketTorahMessage,
   parsedMessageIsActionable,
+  listMissingParseFields,
 } from "@/src/lib/market/parseWhatsAppMarketMessage";
 
 export const dynamic = "force-dynamic";
@@ -173,14 +174,16 @@ export async function POST(req: NextRequest) {
     }).then(() => {});
 
     if (!parsedMessageIsActionable(parsed)) {
-      console.info(`${LOG} not actionable — sending FAIL reaction`);
+      const missing = listMissingParseFields(parsed);
+      const failMsg = `❌ נכשל — חסר: ${missing.join(" | ")}`;
+      console.info(`${LOG} not actionable: ${failMsg}`);
       await admin.from("sys_logs").insert({
         level: "WARN",
         module: "whatsapp-webhook",
         message: "not actionable",
-        metadata: { parsed },
+        metadata: { parsed, missing },
       }).then(() => {});
-      await sendReplySafe(instanceId, greenApiToken, chatId, MSG_FAIL);
+      await sendReplySafe(instanceId, greenApiToken, chatId, failMsg);
       return ok200();
     }
 

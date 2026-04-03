@@ -165,18 +165,14 @@ export function parseMarketTorahMessage(text: string): ParsedMarketTorahMessage 
 
 // ─── Validation ────────────────────────────────────────────────────────────
 
-/** האם יש מספיק נתונים לשמירת רשומה — מחיר + לפחות גודל או כתב */
+/** האם יש מספיק נתונים לשמירת רשומה — מחיר בלבד מספיק */
 export function parsedMessageIsActionable(p: ParsedMarketTorahMessage): boolean {
-  const hasPrice = p.asking_price_full_shekels != null && p.asking_price_full_shekels > 0;
-  const hasSizeOrScript = p.torah_size != null || p.script_type != null;
-  return hasPrice && hasSizeOrScript;
+  return p.asking_price_full_shekels != null && p.asking_price_full_shekels > 0;
 }
 
 /** שדות חסרים (לדיבוג) */
 export function listMissingParseFields(p: ParsedMarketTorahMessage): string[] {
   const missing: string[] = [];
-  if (p.torah_size == null) missing.push("גודל (24|30|36|42|48|56|אחר)");
-  if (p.script_type == null) missing.push("כתב (ארי|אר\"י|ב\"י|בי|ספרדי)");
   if (p.asking_price_full_shekels == null || p.asking_price_full_shekels <= 0)
     missing.push("מחיר (165 = 165,000)");
   return missing;
