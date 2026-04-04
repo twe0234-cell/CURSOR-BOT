@@ -653,6 +653,12 @@ export default function MarketClient({ initialRows }: Props) {
           </span>
         )}
         <ViewToggle mode={viewMode} onChange={setViewMode} className="self-end" />
+        <a
+          href="/market/kanban"
+          className="self-end inline-flex items-center gap-1 h-9 px-3 text-xs font-medium rounded-md border border-slate-200 bg-white shadow-sm hover:bg-slate-50 text-slate-700 transition-colors"
+        >
+          🗂 קנבן
+        </a>
       </div>
 
       {viewMode === "grid" ? (
