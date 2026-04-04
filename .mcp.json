@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "openai": {
+      "command": "python3",
+      "args": ["/home/user/CURSOR-BOT/scripts/openai_mcp_server.py"],
+      "env": {
+        "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY_HERE"
+      }
+    },
+    "gemini": {
+      "command": "python3",
+      "args": ["/home/user/CURSOR-BOT/scripts/gemini_mcp_server.py"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_GEMINI_API_KEY_HERE"
+      }
+    }
+  }
+}

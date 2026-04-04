@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-openai_mcp_server.py — MCP server שמחבר Claude Code ל-OpenAI GPT-4o-mini
-כעובד זול למשימות boilerplate: קוד, טקסט, SQL.
+openai_mcp_server.py — MCP server שמחבר Claude Code ל-OpenAI GPT-4o-mini + Codex CLI
+תפקידים:
+  GPT-4o-mini: קוד boilerplate, SQL, תרגום, שאלות מהירות
+  Codex CLI:   ביצוע קוד אוטונומי בתיקיית הפרויקט
+  Git:         בדיקת שינויים לאחר הרצת Codex
 
 הגדרה ב-~/.claude/settings.json:
 {
@@ -19,13 +22,20 @@ openai_mcp_server.py — MCP server שמחבר Claude Code ל-OpenAI GPT-4o-mini
   gpt_code       — בקש קוד ספציפי (מחזיר רק קוד, ללא הסברים)
   gpt_sql        — בקש שאילתת SQL
   gpt_translate  — תרגם טקסט (לעברית/אנגלית)
+  codex_execute  — הרץ Codex CLI על משימת קוד (ביצוע אוטונומי בקבצים)
+  git_diff       — הצג git diff נוכחי (לאחר codex_execute)
+  git_status     — הצג קבצים שהשתנו
 """
 
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 import urllib.error
+
+CODEX_BIN = "/opt/node22/bin/codex"
+DEFAULT_WORKDIR = "/home/user/CURSOR-BOT"
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 MODEL = "gpt-4o-mini"
@@ -113,6 +123,54 @@ TOOLS = [
             "required": ["text"],
         },
     },
+    {
+        "name": "codex_execute",
+        "description": (
+            "הרץ את OpenAI Codex CLI על משימת קוד. "
+            "Codex יבצע שינויים בקבצים אוטונומית ללא אישור ידני. "
+            "לאחר הרצה — השתמש ב-git_diff כדי לבדוק מה השתנה."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "תיאור מפורט של המשימה — מה Codex צריך לבנות/לתקן",
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": f"תיקיית העבודה (ברירת מחדל: {DEFAULT_WORKDIR})",
+                },
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "git_diff",
+        "description": "הצג את git diff הנוכחי — לבדיקת מה Codex שינה. מחזיר את כל השינויים שטרם עלו ל-commit.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workdir": {
+                    "type": "string",
+                    "description": f"תיקיית הפרויקט (ברירת מחדל: {DEFAULT_WORKDIR})",
+                },
+            },
+        },
+    },
+    {
+        "name": "git_status",
+        "description": "הצג קבצים שהשתנו (git status --short) — תצוגה מהירה של מה Codex גע.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workdir": {
+                    "type": "string",
+                    "description": f"תיקיית הפרויקט (ברירת מחדל: {DEFAULT_WORKDIR})",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -143,6 +201,71 @@ def handle_tool(name: str, args: dict) -> str:
             f"Translate the following text to {lang_name}. Output ONLY the translation.",
             args.get("text", ""),
         )
+
+    elif name == "codex_execute":
+        task = args.get("task", "")
+        workdir = args.get("workdir", DEFAULT_WORKDIR)
+        if not task:
+            return "ERROR: task שדה חובה."
+        if not os.path.isfile(CODEX_BIN):
+            return f"ERROR: Codex CLI לא נמצא ב-{CODEX_BIN}. הרץ: npm install -g @openai/codex"
+        env = dict(os.environ)
+        if OPENAI_API_KEY:
+            env["OPENAI_API_KEY"] = OPENAI_API_KEY
+        try:
+            result = subprocess.run(
+                [CODEX_BIN, "--approval-mode", "full-auto", "--quiet", task],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env=env,
+            )
+            output = result.stdout.strip()
+            err = result.stderr.strip()
+            parts = []
+            if output:
+                parts.append(f"=== Codex output ===\n{output}")
+            if err:
+                parts.append(f"=== stderr ===\n{err[:500]}")
+            if result.returncode != 0:
+                parts.append(f"exit code: {result.returncode}")
+            return "\n\n".join(parts) if parts else "Codex סיים ללא פלט. השתמש ב-git_diff לבדיקת שינויים."
+        except subprocess.TimeoutExpired:
+            return "ERROR: Codex timeout (300 שניות). המשימה אולי גדולה מדי — פצל אותה."
+        except Exception as e:
+            return f"ERROR: {e}"
+
+    elif name == "git_diff":
+        workdir = args.get("workdir", DEFAULT_WORKDIR)
+        try:
+            result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            diff = result.stdout.strip()
+            return diff if diff else "אין שינויים לא-committed."
+        except Exception as e:
+            return f"ERROR: {e}"
+
+    elif name == "git_status":
+        workdir = args.get("workdir", DEFAULT_WORKDIR)
+        try:
+            result = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            status = result.stdout.strip()
+            return status if status else "Working tree clean — אין שינויים."
+        except Exception as e:
+            return f"ERROR: {e}"
+
     return f"כלי לא מוכר: {name}"
 
 
