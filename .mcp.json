@@ -13,6 +13,20 @@
       "env": {
         "GEMINI_API_KEY": "YOUR_GEMINI_API_KEY_HERE"
       }
+    },
+    "filesystem": {
+      "command": "mcp-server-filesystem",
+      "args": [
+        "/home/user/CURSOR-BOT",
+        "/home/user",
+        "/tmp"
+      ]
+    },
+    "puppeteer": {
+      "command": "mcp-server-puppeteer",
+      "env": {
+        "PUPPETEER_LAUNCH_ARGS": "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
+      }
     }
   }
 }

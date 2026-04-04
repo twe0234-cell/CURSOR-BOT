@@ -124,6 +124,37 @@ TOOLS = [
             "required": ["question"],
         },
     },
+    {
+        "name": "gemini_search",
+        "description": (
+            "חיפוש Google אמיתי דרך Gemini Grounding. "
+            "שאל שאלה ו-Gemini יחפש ב-Google ויחזיר תשובה מבוססת מקורות עדכניים. "
+            "מתאים ל: מחירי שוק, חדשות, ספריות חדשות, בדיקת נתונים."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "מה לחפש"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "gemini_design_review",
+        "description": (
+            "ניתוח עיצוב UI/UX דרך Gemini. "
+            "תאר רכיב, עמוד, או בעיית עיצוב — Gemini יחזיר המלצות Tailwind, UX, accessibility, RTL. "
+            "מתאים ל: בחירת צבעים, layout, hierarchy, shadcn components."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "תיאור הרכיב/עמוד לעיצוב"},
+                "constraints": {"type": "string", "description": "מגבלות: RTL, עברית, Tailwind v4, shadcn — אופציונלי"},
+            },
+            "required": ["description"],
+        },
+    },
 ]
 
 
@@ -183,6 +214,51 @@ def handle_tool(name: str, args: dict) -> str:
             "You are a helpful senior developer assistant. Answer concisely and technically. "
             "Respond in the same language as the question.",
             args.get("question", ""),
+        )
+
+    elif name == "gemini_search":
+        query = args.get("query", "")
+        # Gemini with Google Search grounding
+        payload = json.dumps({
+            "system_instruction": {"parts": [{"text": "You are a research assistant. Search and provide accurate, up-to-date information with sources. Respond in the same language as the query."}]},
+            "contents": [{"role": "user", "parts": [{"text": query}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.1},
+        }).encode()
+        url = f"{API_URL}?key={GEMINI_API_KEY}"
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read())
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()
+            # Fallback without grounding if not supported on this key tier
+            if "400" in str(e.code) or "404" in str(e.code):
+                return call_gemini(
+                    "Answer based on your knowledge. Note any uncertainty about recency.",
+                    query,
+                )
+            return f"Gemini Search error {e.code}: {body[:200]}"
+        except Exception as e:
+            return f"שגיאה: {e}"
+
+    elif name == "gemini_design_review":
+        description = args.get("description", "")
+        constraints = args.get("constraints", "RTL Hebrew UI, Tailwind v4, shadcn/ui, Next.js App Router")
+        return call_gemini(
+            (
+                "You are a senior UI/UX designer and frontend engineer. "
+                "Given a UI component or page description, provide: "
+                "1. Layout recommendation (Flexbox/Grid, RTL considerations) "
+                "2. Color palette suggestion (Tailwind classes) "
+                "3. Typography hierarchy "
+                "4. Specific shadcn/ui components to use "
+                "5. Accessibility notes (WCAG, Hebrew screen readers) "
+                "Be specific with Tailwind class names. Respond in Hebrew."
+            ),
+            f"עיצוב: {description}\nמגבלות: {constraints}",
+            max_tokens=2048,
         )
 
     return f"כלי לא מוכר: {name}"
