@@ -92,6 +92,19 @@ describe("parseMarketTorahMessage — פורמט חדש (ירידת שורה)", 
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
+  it('"מוכן" → חודש נוכחי', () => {
+    const p = parseMarketTorahMessage("48\nכהן\nמוכן\n150");
+    expect(p.torah_size).toBe("48");
+    expect(p.ready_date).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(parsedMessageIsActionable(p)).toBe(true);
+  });
+
+  it('"זמין" → חודש נוכחי', () => {
+    const p = parseMarketTorahMessage("ארי\n36\nזמין\n120");
+    expect(p.ready_date).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(p.script_type).toBe("ארי");
+  });
+
   it("CRLF — ממיר ל-LF", () => {
     const p = parseMarketTorahMessage("ארי\r\n48\r\nברק\r\n06/26\r\n165.");
     expect(p.script_type).toBe("ארי");

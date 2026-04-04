@@ -192,6 +192,19 @@ export async function greenApiSetMessageReaction(
   }
 }
 
+/**
+ * חילוץ URL תמונה מ־messageData (imageMessageData).
+ * מחזיר את downloadUrl אם קיים, אחרת null.
+ */
+export function extractImageUrlFromMessageData(messageData: unknown): string | null {
+  if (!messageData || typeof messageData !== "object") return null;
+  const md = messageData as Record<string, unknown>;
+  const img = md.imageMessageData as Record<string, unknown> | undefined;
+  if (!img) return null;
+  const url = img.downloadUrl ?? img.jpegThumbnail;
+  return typeof url === "string" && url.trim() ? url.trim() : null;
+}
+
 const pushTrim = (parts: string[], v: unknown) => {
   if (typeof v === "string" && v.trim()) parts.push(v.trim());
 };

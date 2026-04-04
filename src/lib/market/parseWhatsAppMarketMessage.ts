@@ -76,6 +76,9 @@ function parseReadyDate(raw: string): string | null {
   if (/עוד\s+חצי\s+שנה/.test(t)) return addMonths(6);
   if (/עוד\s+שנה/.test(t)) return addMonths(12);
 
+  // "מוכן" / "מוכנה" / "זמין" — זמין עכשיו = חודש נוכחי
+  if (/^(מוכן|מוכנה|זמין|זמינה)$/.test(t)) return addMonths(0);
+
   return null;
 }
 
