@@ -45,9 +45,6 @@ import {
   STAM_SCRIPT_TYPES,
 } from "@/src/lib/stam/catalog";
 
-/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
-const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
-
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }

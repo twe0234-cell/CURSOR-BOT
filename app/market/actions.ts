@@ -6,9 +6,17 @@ import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
 
-/** כולל סוחר + משא ומתן + SKU + דוגמת כתב (מיגרציה 051) */
+/** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
+  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, created_at";
+
+export type MarketStage =
+  | "image_pending"
+  | "new"
+  | "contacted"
+  | "negotiating"
+  | "sold"
+  | "archived";
 
 export type MarketTorahBookRow = {
   id: string;
@@ -30,6 +38,7 @@ export type MarketTorahBookRow = {
   expected_completion_date: string | null;
   notes: string | null;
   handwriting_image_url: string | null;
+  market_stage: MarketStage;
   created_at: string;
   sofer_name: string | null;
   dealer_name: string | null;
@@ -75,6 +84,7 @@ function mapBookRow(
     expected_completion_date: (b.expected_completion_date as string | null) ?? null,
     notes: (b.notes as string | null) ?? null,
     handwriting_image_url: (b.handwriting_image_url as string | null) ?? null,
+    market_stage: ((b.market_stage as string | null) ?? "new") as MarketStage,
     created_at: (b.created_at as string) ?? "",
   };
 }

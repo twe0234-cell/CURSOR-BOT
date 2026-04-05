@@ -174,8 +174,8 @@ export async function POST(req: NextRequest) {
     const askDb = marketKToDb(marketDbToK(askFull));
     const sku = generateSku(marketSkuPrefix);
 
-    // ── בדוק אם יש pending image מאותו user בשעה האחרונה ──────────
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // ── בדוק אם יש pending image מאותו user ב-24 השעות האחרונות ────
+    const oneHourAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: pendingRow } = await admin
       .from("market_torah_books")
       .select("id, handwriting_image_url")
