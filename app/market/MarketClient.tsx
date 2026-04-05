@@ -25,10 +25,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { MarketTorahBookRow } from "./actions";
+import type { MarketTorahBookRow, MarketStage } from "./actions";
 import {
   createMarketTorahBook,
   updateMarketTorahBook,
+  updateMarketTorahStage,
   deleteMarketTorahBook,
 } from "./actions";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
@@ -82,6 +83,70 @@ function SkuBadge({ sku }: { sku: string | null }) {
   );
 }
 
+const STAGE_CONFIG: Record<
+  MarketStage,
+  { label: string; emoji: string; bg: string; text: string; border: string }
+> = {
+  image_pending: { label: "ממתין לתמונה", emoji: "📷", bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300" },
+  new:           { label: "חדש",          emoji: "🆕", bg: "bg-blue-50",   text: "text-blue-700",  border: "border-blue-200" },
+  contacted:     { label: "יצרתי קשר",    emoji: "📞", bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-300" },
+  negotiating:   { label: "משא ומתן",     emoji: "🤝", bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-300" },
+  sold:          { label: "נמכר",         emoji: "✅", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-300" },
+  archived:      { label: "ארכיון",       emoji: "🗃️", bg: "bg-gray-100",  text: "text-gray-500",  border: "border-gray-300" },
+};
+
+const STAGE_ORDER: MarketStage[] = ["image_pending", "new", "contacted", "negotiating", "sold", "archived"];
+
+function StageBadge({
+  stage,
+  onChangeStage,
+}: {
+  stage: MarketStage;
+  onChangeStage?: (s: MarketStage) => void;
+}) {
+  const cfg = STAGE_CONFIG[stage];
+  if (!onChangeStage) {
+    return (
+      <span className={cn("inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium", cfg.bg, cfg.text, cfg.border)}>
+        {cfg.emoji} {cfg.label}
+      </span>
+    );
+  }
+  return (
+    <div className="relative group inline-block">
+      <button
+        type="button"
+        className={cn(
+          "inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium cursor-pointer transition-opacity hover:opacity-80",
+          cfg.bg, cfg.text, cfg.border
+        )}
+        title="לחץ לשינוי שלב"
+      >
+        {cfg.emoji} {cfg.label} ▾
+      </button>
+      <div className="absolute top-full right-0 z-50 mt-0.5 hidden group-focus-within:flex group-hover:flex flex-col bg-white border border-border rounded-lg shadow-lg overflow-hidden min-w-[140px]">
+        {STAGE_ORDER.map((s) => {
+          const c = STAGE_CONFIG[s];
+          return (
+            <button
+              key={s}
+              type="button"
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-right",
+                s === stage && "font-bold",
+                c.text
+              )}
+              onClick={() => onChangeStage(s)}
+            >
+              {c.emoji} {c.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
@@ -111,6 +176,7 @@ export default function MarketClient({ initialRows }: Props) {
   const [filterText, setFilterText] = useState("");
   const [filterParchment, setFilterParchment] = useState("");
   const [filterTorahSize, setFilterTorahSize] = useState("");
+  const [filterStage, setFilterStage] = useState<MarketStage | "">("");
   const [viewMode, setViewMode] = useViewMode("market");
 
   const parchmentOptions = [...new Set(
@@ -126,8 +192,15 @@ export default function MarketClient({ initialRows }: Props) {
     }
     if (filterParchment && row.parchment_type !== filterParchment) return false;
     if (filterTorahSize && row.torah_size !== filterTorahSize) return false;
+    if (filterStage && row.market_stage !== filterStage) return false;
     return true;
   });
+
+  // Stage counts for pipeline bar
+  const stageCounts = STAGE_ORDER.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = rows.filter((r) => r.market_stage === s).length;
+    return acc;
+  }, {});
   // ─────────────────────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(false);
@@ -327,6 +400,18 @@ export default function MarketClient({ initialRows }: Props) {
     }
   }
 
+  async function handleStageChange(id: string, stage: MarketStage) {
+    // Optimistic update
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, market_stage: stage } : r))
+    );
+    const res = await updateMarketTorahStage(id, stage);
+    if (!res.success) {
+      toast.error(res.error);
+      router.refresh(); // revert
+    }
+  }
+
   const priceInputWrap =
     "flex items-center gap-2 rounded-md border border-input bg-background px-2";
   const priceSuffix = (
@@ -347,6 +432,43 @@ export default function MarketClient({ initialRows }: Props) {
           הבעלים; אחרת הבעלים הוא הסופר.
         </p>
       </div>
+
+      {/* ── Pipeline stats bar ────────────────────────────────────────── */}
+      {rows.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {STAGE_ORDER.map((s) => {
+            const cfg = STAGE_CONFIG[s];
+            const count = stageCounts[s] ?? 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setFilterStage(filterStage === s ? "" : s)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all",
+                  cfg.bg, cfg.text, cfg.border,
+                  filterStage === s ? "ring-2 ring-offset-1 ring-current opacity-100" : "opacity-80 hover:opacity-100"
+                )}
+              >
+                {cfg.emoji} {cfg.label}
+                <span className={cn("inline-flex items-center justify-center rounded-full w-5 h-5 text-[10px] font-bold", cfg.bg, cfg.text)}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+          {filterStage && (
+            <button
+              type="button"
+              onClick={() => setFilterStage("")}
+              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground border-border transition-colors"
+            >
+              <X className="size-3" /> הצג הכל
+            </button>
+          )}
+        </div>
+      )}
 
       <Card className="mb-8 rounded-2xl border border-border bg-card shadow-sm">
         <CardContent className="pt-6">
@@ -632,13 +754,26 @@ export default function MarketClient({ initialRows }: Props) {
             ))}
           </select>
         </div>
-        {(filterText || filterParchment || filterTorahSize) && (
+        <div className="min-w-[140px]">
+          <p className="text-xs text-muted-foreground mb-1">שלב</p>
+          <select
+            value={filterStage}
+            onChange={(e) => setFilterStage(e.target.value as MarketStage | "")}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">כל השלבים</option>
+            {STAGE_ORDER.map((s) => (
+              <option key={s} value={s}>{STAGE_CONFIG[s].emoji} {STAGE_CONFIG[s].label}</option>
+            ))}
+          </select>
+        </div>
+        {(filterText || filterParchment || filterTorahSize || filterStage) && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-9 self-end text-slate-500"
-            onClick={() => { setFilterText(""); setFilterParchment(""); setFilterTorahSize(""); }}
+            onClick={() => { setFilterText(""); setFilterParchment(""); setFilterTorahSize(""); setFilterStage(""); }}
           >
             <X className="size-3.5 ml-1" />
             נקה
@@ -674,7 +809,10 @@ export default function MarketClient({ initialRows }: Props) {
                   )}
                 </div>
                 <CardContent className="p-3 space-y-1.5">
-                  <p className="font-semibold text-sm truncate">{displayOwner(row)}</p>
+                  <div className="flex items-start justify-between gap-1">
+                    <p className="font-semibold text-sm truncate">{displayOwner(row)}</p>
+                    <StageBadge stage={row.market_stage} onChangeStage={(s) => handleStageChange(row.id, s)} />
+                  </div>
                   {row.sofer_name && <p className="text-xs text-muted-foreground">סופר: {row.sofer_name}</p>}
                   <div className="flex gap-1 text-xs flex-wrap">
                     {row.parchment_type && <span className="bg-muted rounded px-1.5 py-0.5 text-muted-foreground">{row.parchment_type}</span>}
@@ -717,6 +855,7 @@ export default function MarketClient({ initialRows }: Props) {
                   <TableHead className="text-right py-3 px-4 w-[100px]">מחיר דורש</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px]">יעד תיווך</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[100px]">רווח צפוי</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[140px]">שלב</TableHead>
                   <TableHead className="text-right py-3 px-4 w-[76px]">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
@@ -724,7 +863,7 @@ export default function MarketClient({ initialRows }: Props) {
                 {filteredRows.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={12}
+                      colSpan={13}
                       className="text-center text-muted-foreground py-14"
                     >
                       {rows.length === 0
@@ -786,6 +925,9 @@ export default function MarketClient({ initialRows }: Props) {
                       </TableCell>
                       <TableCell className="py-3 px-4 tabular-nums whitespace-nowrap hidden md:table-cell text-sm text-emerald-700 font-semibold">
                         {formatK(row.potential_profit)}
+                      </TableCell>
+                      <TableCell className="py-3 px-4 hidden lg:table-cell">
+                        <StageBadge stage={row.market_stage} onChangeStage={(s) => handleStageChange(row.id, s)} />
                       </TableCell>
                       <TableCell className="py-3 px-4">
                         <div className="flex gap-1">

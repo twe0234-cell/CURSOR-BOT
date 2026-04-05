@@ -320,6 +320,32 @@ export async function updateMarketTorahBook(
   }
 }
 
+export async function updateMarketTorahStage(
+  id: string,
+  stage: MarketStage
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_torah_books")
+      .update({ market_stage: stage, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 export async function deleteMarketTorahBook(id: string): Promise<
   { success: true } | { success: false; error: string }
 > {
