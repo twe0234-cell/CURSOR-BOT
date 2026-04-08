@@ -11,8 +11,17 @@ import {
   importGmailContacts,
   createCrmContact,
   bulkImportCrmContacts,
+  findDuplicateCrmContacts,
+  mergeCrmContacts,
   type CrmContact,
 } from "./actions";
+import type { DuplicateGroup } from "@/src/services/crm.service";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CsvActions } from "@/components/shared/CsvActions";
 import {
   UsersIcon,
@@ -21,6 +30,7 @@ import {
   SearchIcon,
   MailIcon,
   PhoneIcon,
+  GitMergeIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
@@ -113,6 +123,11 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   const [newCustomTags, setNewCustomTags] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [viewMode, setViewMode] = useViewMode("crm");
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [dupeGroups, setDupeGroups] = useState<DuplicateGroup[]>([]);
+  // primaryId per group index
+  const [mergePrimary, setMergePrimary] = useState<Record<number, string>>({});
 
   // ── Derived: all unique tags that exist across all contacts ────────────────
   const allFilterTags = [
@@ -223,6 +238,42 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
     }
   };
 
+  const handleOpenMerge = async () => {
+    setMergeLoading(true);
+    const res = await findDuplicateCrmContacts();
+    setMergeLoading(false);
+    if (!res.success) { toast.error(res.error); return; }
+    if (res.groups.length === 0) { toast.success("לא נמצאו כפולים"); return; }
+    const initPrimary: Record<number, string> = {};
+    res.groups.forEach((g, i) => { initPrimary[i] = g.contacts[0].id; });
+    setDupeGroups(res.groups);
+    setMergePrimary(initPrimary);
+    setMergeOpen(true);
+  };
+
+  const handleMergeGroup = async (groupIndex: number) => {
+    const group = dupeGroups[groupIndex];
+    const primaryId = mergePrimary[groupIndex];
+    if (!primaryId) return;
+    const dupIds = group.contacts.filter((c) => c.id !== primaryId).map((c) => c.id);
+    setMergeLoading(true);
+    const res = await mergeCrmContacts(primaryId, dupIds);
+    setMergeLoading(false);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success(`אוחדו ${res.merged} רשומות`);
+    setDupeGroups((prev) => prev.filter((_, i) => i !== groupIndex));
+    setMergePrimary((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = Number(k);
+        if (ki !== groupIndex) next[ki > groupIndex ? ki - 1 : ki] = v;
+      });
+      return next;
+    });
+    await refreshContacts();
+    if (dupeGroups.length <= 1) setMergeOpen(false);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
@@ -271,6 +322,15 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
               ייבוא מ-Gmail
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={handleOpenMerge}
+            disabled={mergeLoading}
+            className="rounded-xl"
+          >
+            <GitMergeIcon className="size-4 ml-2" />
+            {mergeLoading ? "סורק..." : "מצא כפולים"}
+          </Button>
           <Button
             onClick={() => setCreateOpen(true)}
             className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -621,6 +681,73 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
           </Card>
         </div>
       )}
+
+      {/* ── Merge Duplicates Dialog ──────────────────────────────────────── */}
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent className="sm:max-w-xl rounded-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>איחוד כפולים ({dupeGroups.length} קבוצות)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            {dupeGroups.map((group, gi) => {
+              const reasonLabel =
+                group.reason === "phone" ? "טלפון זהה"
+                : group.reason === "email" ? "אימייל זהה"
+                : "שם דומה";
+              return (
+                <div key={gi} className="border border-border rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {reasonLabel}
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={mergeLoading}
+                      onClick={() => handleMergeGroup(gi)}
+                      className="h-7 text-xs"
+                    >
+                      <GitMergeIcon className="size-3 ml-1" />
+                      אחד
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">בחר איש קשר ראשי (ישאר):</p>
+                  {group.contacts.map((c) => (
+                    <label
+                      key={c.id}
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors",
+                        mergePrimary[gi] === c.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name={`merge-primary-${gi}`}
+                        value={c.id}
+                        checked={mergePrimary[gi] === c.id}
+                        onChange={() =>
+                          setMergePrimary((prev) => ({ ...prev, [gi]: c.id }))
+                        }
+                        className="accent-primary"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[c.phone, c.email].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </div>
+                      {mergePrimary[gi] !== c.id && (
+                        <span className="text-xs text-muted-foreground shrink-0">ימחק</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

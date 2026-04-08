@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon } from "lucide-react";
+import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon, Kanban, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -25,11 +25,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { MarketTorahBookRow } from "./actions";
+import type { MarketTorahBookRow, MarketStage } from "./actions";
 import {
   createMarketTorahBook,
   updateMarketTorahBook,
+  updateMarketStage,
   deleteMarketTorahBook,
+  MARKET_STAGE_LABELS,
+  MARKET_STAGE_ORDER,
 } from "./actions";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
@@ -45,8 +48,6 @@ import {
   STAM_SCRIPT_TYPES,
 } from "@/src/lib/stam/catalog";
 
-/** קבוצת המאגר הצפויה — להשוואה מול ההגדרות */
-const EXPECTED_WA_MARKET_GROUP_ID = "120363422255767258@g.us";
 
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -115,6 +116,8 @@ export default function MarketClient({ initialRows }: Props) {
   const [filterParchment, setFilterParchment] = useState("");
   const [filterTorahSize, setFilterTorahSize] = useState("");
   const [viewMode, setViewMode] = useViewMode("market");
+  const [kanbanMode, setKanbanMode] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const parchmentOptions = [...new Set(
     rows.map((r) => r.parchment_type).filter(Boolean) as string[]
@@ -290,6 +293,18 @@ export default function MarketClient({ initialRows }: Props) {
     else {
       toast.success("הוסר מהמאגר");
       router.refresh();
+    }
+  }
+
+  async function handleStageMove(id: string, stage: MarketStage) {
+    setMovingId(id);
+    const res = await updateMarketStage(id, stage);
+    setMovingId(null);
+    if (!res.success) toast.error(res.error);
+    else {
+      setRows((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, market_stage: stage } : r))
+      );
     }
   }
 
@@ -652,10 +667,108 @@ export default function MarketClient({ initialRows }: Props) {
             {filteredRows.length} / {rows.length} רשומות
           </span>
         )}
-        <ViewToggle mode={viewMode} onChange={setViewMode} className="self-end" />
+        <div className="flex items-center gap-1 self-end">
+          <ViewToggle mode={viewMode} onChange={(m) => { setViewMode(m); setKanbanMode(false); }} className="" />
+          <button
+            type="button"
+            title="תצוגת Kanban"
+            aria-pressed={kanbanMode}
+            onClick={() => setKanbanMode((v) => !v)}
+            className={cn(
+              "flex items-center justify-center rounded-md p-1.5 transition-all duration-200 bg-muted",
+              kanbanMode
+                ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Kanban className="size-4" />
+          </button>
+        </div>
       </div>
 
-      {viewMode === "grid" ? (
+      {kanbanMode ? (
+        /* ── Kanban Board ────────────────────────────────────────────── */
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-3 min-w-max">
+            {MARKET_STAGE_ORDER.map((stage) => {
+              const stageRows = filteredRows.filter(
+                (r) => (r.market_stage ?? "new") === stage
+              );
+              const nextStage = MARKET_STAGE_ORDER[MARKET_STAGE_ORDER.indexOf(stage) + 1];
+              const stageBg: Record<string, string> = {
+                image_pending: "bg-slate-100 border-slate-200",
+                new: "bg-blue-50 border-blue-200",
+                contacted: "bg-yellow-50 border-yellow-200",
+                negotiating: "bg-orange-50 border-orange-200",
+                deal_closed: "bg-green-50 border-green-200",
+                archived: "bg-gray-100 border-gray-200",
+              };
+              const stageText: Record<string, string> = {
+                image_pending: "text-slate-700",
+                new: "text-blue-700",
+                contacted: "text-yellow-800",
+                negotiating: "text-orange-700",
+                deal_closed: "text-green-700",
+                archived: "text-gray-500",
+              };
+              return (
+                <div
+                  key={stage}
+                  className={cn(
+                    "w-64 rounded-xl border-2 p-3 flex flex-col gap-2 min-h-[120px]",
+                    stageBg[stage]
+                  )}
+                >
+                  <div className={cn("flex items-center justify-between mb-1", stageText[stage])}>
+                    <span className="font-bold text-sm">{MARKET_STAGE_LABELS[stage]}</span>
+                    <span className="text-xs font-mono opacity-70">{stageRows.length}</span>
+                  </div>
+                  {stageRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="bg-white rounded-lg border border-border p-2.5 shadow-sm space-y-1 text-sm"
+                    >
+                      <div className="font-semibold truncate">{displayOwner(row)}</div>
+                      <div className="flex gap-1 flex-wrap text-xs text-muted-foreground">
+                        {row.torah_size && <span className="bg-muted rounded px-1">{row.torah_size} ס"מ</span>}
+                        {row.script_type && <span className="bg-muted rounded px-1">{row.script_type}</span>}
+                      </div>
+                      {row.asking_price != null && (
+                        <div className="text-xs font-bold text-primary">{formatK(row.asking_price)}</div>
+                      )}
+                      <div className="flex gap-1 pt-0.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-xs flex-1"
+                          onClick={() => setEditRow(row)}
+                        >
+                          <PencilIcon className="size-3 ml-0.5" />ערוך
+                        </Button>
+                        {nextStage && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs px-1.5 text-sky-600 hover:bg-sky-50"
+                            disabled={movingId === row.id}
+                            onClick={() => handleStageMove(row.id, nextStage)}
+                            title={`העבר ל-${MARKET_STAGE_LABELS[nextStage]}`}
+                          >
+                            <ChevronRight className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {stageRows.length === 0 && (
+                    <div className="text-xs text-muted-foreground text-center py-4 opacity-50">ריק</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : viewMode === "grid" ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredRows.map((row, i) => (
             <div key={row.id} className={cn("animate-scale-in", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}>

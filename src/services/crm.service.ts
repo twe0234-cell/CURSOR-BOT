@@ -1563,3 +1563,179 @@ export async function loadContactDetailPage(
     },
   };
 }
+
+// ─── Deduplication / Merge ────────────────────────────────────────────────────
+
+export type DuplicateGroup = {
+  reason: "phone" | "email" | "name";
+  contacts: CrmContact[];
+};
+
+function normPhone(p: string | null | undefined): string {
+  return (p ?? "").replace(/\D/g, "").slice(-9);
+}
+
+function nameSimilar(a: string, b: string): boolean {
+  const la = a.toLowerCase().trim();
+  const lb = b.toLowerCase().trim();
+  if (la === lb) return true;
+  if (la.includes(lb) || lb.includes(la)) return true;
+  if (Math.abs(la.length - lb.length) > 3) return false;
+  let prev = Array.from({ length: lb.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= la.length; i++) {
+    const curr = [i];
+    for (let j = 1; j <= lb.length; j++) {
+      curr[j] =
+        la[i - 1] === lb[j - 1]
+          ? prev[j - 1]
+          : Math.min(prev[j - 1], prev[j], curr[j - 1]) + 1;
+    }
+    prev = curr;
+  }
+  return prev[lb.length] <= 2;
+}
+
+export async function findDuplicateCrmContacts(): Promise<
+  { success: true; groups: DuplicateGroup[] } | { success: false; error: string }
+> {
+  try {
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("crm_contacts")
+      .select(
+        "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at"
+      )
+      .eq("user_id", user.id)
+      .order("name");
+    if (error) return { success: false, error: handleSupabaseError(error) };
+
+    const contacts: CrmContact[] = (data ?? []).map(mapContact);
+    const groups: DuplicateGroup[] = [];
+    const usedIds = new Set<string>();
+
+    // Phone duplicates
+    const phoneMap = new Map<string, CrmContact[]>();
+    for (const c of contacts) {
+      const p = normPhone(c.phone);
+      if (!p || p.length < 7) continue;
+      const arr = phoneMap.get(p) ?? [];
+      arr.push(c);
+      phoneMap.set(p, arr);
+    }
+    for (const arr of phoneMap.values()) {
+      if (arr.length < 2) continue;
+      arr.forEach((c) => usedIds.add(c.id));
+      groups.push({ reason: "phone", contacts: arr });
+    }
+
+    // Email duplicates
+    const emailMap = new Map<string, CrmContact[]>();
+    for (const c of contacts) {
+      const e = (c.email ?? "").toLowerCase().trim();
+      if (!e) continue;
+      const arr = emailMap.get(e) ?? [];
+      arr.push(c);
+      emailMap.set(e, arr);
+    }
+    for (const arr of emailMap.values()) {
+      if (arr.length < 2) continue;
+      const newOnes = arr.filter((c) => !usedIds.has(c.id));
+      if (newOnes.length < 2) continue;
+      newOnes.forEach((c) => usedIds.add(c.id));
+      groups.push({ reason: "email", contacts: newOnes });
+    }
+
+    // Name similarity
+    const remaining = contacts.filter((c) => !usedIds.has(c.id));
+    const nameGrouped = new Set<string>();
+    for (let i = 0; i < remaining.length; i++) {
+      if (nameGrouped.has(remaining[i].id)) continue;
+      const group: CrmContact[] = [remaining[i]];
+      for (let j = i + 1; j < remaining.length; j++) {
+        if (!nameGrouped.has(remaining[j].id) && nameSimilar(remaining[i].name, remaining[j].name)) {
+          group.push(remaining[j]);
+        }
+      }
+      if (group.length > 1) {
+        group.forEach((c) => nameGrouped.add(c.id));
+        groups.push({ reason: "name", contacts: group });
+      }
+    }
+
+    return { success: true, groups };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function mergeCrmContacts(
+  primaryId: string,
+  duplicateIds: string[]
+): Promise<{ success: true; merged: number } | { success: false; error: string }> {
+  try {
+    if (!duplicateIds.length) return { success: true, merged: 0 };
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: contactRows, error: fetchErr } = await supabase
+      .from("crm_contacts")
+      .select("id, name, email, phone, wa_chat_id, tags, type")
+      .eq("user_id", user.id)
+      .in("id", [primaryId, ...duplicateIds]);
+    if (fetchErr) return { success: false, error: handleSupabaseError(fetchErr) };
+
+    const primary = (contactRows ?? []).find((c) => c.id === primaryId);
+    if (!primary) return { success: false, error: "איש הקשר הראשי לא נמצא" };
+
+    const dups = (contactRows ?? []).filter((c) => duplicateIds.includes(c.id));
+
+    const patchEmail = primary.email ?? dups.find((d) => d.email)?.email ?? null;
+    const patchPhone = primary.phone ?? dups.find((d) => d.phone)?.phone ?? null;
+    const patchWa = primary.wa_chat_id ?? dups.find((d) => d.wa_chat_id)?.wa_chat_id ?? null;
+    const mergedTags = [
+      ...new Set([
+        ...(primary.tags as string[] ?? []),
+        ...dups.flatMap((d) => d.tags as string[] ?? []),
+      ]),
+    ];
+
+    const { error: upErr } = await supabase
+      .from("crm_contacts")
+      .update({
+        email: patchEmail,
+        phone: patchPhone,
+        wa_chat_id: patchWa,
+        tags: mergedTags,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", primaryId)
+      .eq("user_id", user.id);
+    if (upErr) return { success: false, error: handleSupabaseError(upErr) };
+
+    const FK_TABLES: Array<{ table: string; column: string }> = [
+      { table: "erp_sales", column: "buyer_id" },
+      { table: "erp_sales", column: "seller_id" },
+      { table: "crm_transactions", column: "contact_id" },
+      { table: "crm_documents", column: "contact_id" },
+      { table: "crm_communication_logs", column: "contact_id" },
+      { table: "crm_contact_history", column: "contact_id" },
+      { table: "crm_sofer_profiles", column: "contact_id" },
+    ];
+
+    for (const dupId of duplicateIds) {
+      for (const { table, column } of FK_TABLES) {
+        await (supabase.from(table as "erp_sales") as ReturnType<typeof supabase.from>)
+          .update({ [column]: primaryId })
+          .eq(column, dupId);
+      }
+      await supabase.from("crm_contacts").delete().eq("id", dupId).eq("user_id", user.id);
+    }
+
+    logInfo("CRM", "mergeCrmContacts: merged", { primaryId, duplicateIds });
+    return { success: true, merged: duplicateIds.length };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}

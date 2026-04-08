@@ -164,3 +164,13 @@ export async function upsertSoferProfile(
   if (result.success) revalidatePath(`/crm/${contactId}`);
   return result;
 }
+
+export async function findDuplicateCrmContacts() {
+  return crm.findDuplicateCrmContacts();
+}
+
+export async function mergeCrmContacts(primaryId: string, duplicateIds: string[]) {
+  const result = await crm.mergeCrmContacts(primaryId, duplicateIds);
+  if (result.success) revalidatePath("/crm");
+  return result;
+}
