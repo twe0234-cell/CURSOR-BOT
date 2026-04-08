@@ -60,10 +60,9 @@ export async function POST(req: NextRequest) {
     const webhookType = String(b.typeWebhook ?? "");
     console.info(`${LOG} received typeWebhook="${webhookType}"`);
 
-    if (
-      b.typeWebhook !== "incomingMessageReceived" &&
-      b.typeWebhook !== "outgoingMessageReceived"
-    ) return ok200();
+    // עיבוד הודעות נכנסות בלבד — הודעות יוצאות (מהבוט עצמו) מדולגות
+    // כדי למנוע לולאה אינסופית: בוט שולח → webhook מופעל → בוט שולח → ...
+    if (b.typeWebhook !== "incomingMessageReceived") return ok200();
 
     const instanceData = b.instanceData as Record<string, unknown> | undefined;
     const idInstanceRaw = instanceData?.idInstance;

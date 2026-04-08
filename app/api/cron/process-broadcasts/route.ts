@@ -192,6 +192,26 @@ export async function GET(req: Request) {
     return NextResponse.json({ processed: 1, sent, failed });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Processing failed";
+    // מחזיר job תקוע ל-failed כדי שלא יישאר ב-processing לנצח
+    try {
+      const { data: stuckJob } = await supabase
+        .from("broadcast_queue")
+        .select("id")
+        .eq("status", "processing")
+        .order("updated_at", { ascending: true })
+        .limit(1)
+        .single();
+      if (stuckJob) {
+        await supabase
+          .from("broadcast_queue")
+          .update({
+            status: "failed",
+            result: { error: msg },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", stuckJob.id);
+      }
+    } catch { /* ignore recovery errors */ }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

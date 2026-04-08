@@ -4,6 +4,7 @@
  */
 
 import { createClient } from "@/src/lib/supabase/server";
+import { getAccessToken, sendEmail } from "@/src/lib/gmail";
 import { logError, logInfo, logWarn } from "@/lib/logger";
 import {
   buildTorahScribeDelayWhatsAppMessage,
@@ -217,7 +218,7 @@ export async function notifyScribePayment(
   }
 }
 
-/** כוונת קבלה במייל — שלב Gmail יגיע בהמשך. */
+/** שולח קבלת תשלום במייל ללקוח אחרי קבלת תשלום בפרויקט תורה. */
 export async function notifyClientPayment(
   clientId: string,
   amount: number,
@@ -233,35 +234,53 @@ export async function notifyClientPayment(
       return;
     }
 
-    const { data: contact } = await supabase
-      .from("crm_contacts")
-      .select("email")
-      .eq("id", clientId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const { data: project } = await supabase
-      .from("torah_projects")
-      .select("title")
-      .eq("id", projectId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const [{ data: contact }, { data: project }, { data: settings }] = await Promise.all([
+      supabase.from("crm_contacts").select("email, name").eq("id", clientId).eq("user_id", user.id).maybeSingle(),
+      supabase.from("torah_projects").select("title").eq("id", projectId).eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_settings").select("gmail_refresh_token, gmail_email, business_name").eq("user_id", user.id).maybeSingle(),
+    ]);
 
     const title = ((project?.title as string) ?? "").trim() || "—";
+    const clientEmail = ((contact?.email as string) ?? "").trim();
+    const clientName = ((contact?.name as string) ?? "").trim() || "לקוח יקר";
 
-    const email = ((contact?.email as string) ?? "").trim();
-    if (!email) {
+    if (!clientEmail) {
       logInfo("Notification", "notifyClientPayment: no email on contact", { clientId, projectId, title });
       return;
     }
 
-    console.log("Would send email receipt to:", email);
+    const refreshToken = (settings?.gmail_refresh_token as string | null) ?? null;
+    if (!refreshToken) {
+      logWarn("Notification", "notifyClientPayment: no Gmail connected", { clientId, projectId });
+      return;
+    }
 
-    logInfo("Notification", "notifyClientPayment: receipt intent logged", {
+    const fromEmail = ((settings?.gmail_email as string) ?? "").trim();
+    const businessName = ((settings?.business_name as string) ?? "").trim() || "הידור הסת\"ם";
+    const amountFormatted = amount.toLocaleString("he-IL", { style: "currency", currency: "ILS" });
+
+    const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;direction:rtl;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#1d4ed8;border-bottom:2px solid #e5e7eb;padding-bottom:8px">קבלת תשלום</h2>
+  <p>שלום ${clientName},</p>
+  <p>תשלום בסך <strong>${amountFormatted}</strong> התקבל בהצלחה עבור הפרויקט: <strong>${title}</strong>.</p>
+  <p>תודה על אמונך ב${businessName}.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
+  <p style="font-size:12px;color:#6b7280">${businessName}</p>
+</body>
+</html>`;
+
+    const accessToken = await getAccessToken(refreshToken);
+    await sendEmail(accessToken, clientEmail, `קבלת תשלום — ${title}`, html, fromEmail, businessName);
+
+    logInfo("Notification", "notifyClientPayment: email sent", {
       projectId,
       title,
       amount,
-      hasEmail: true,
+      clientEmail,
     });
   } catch (e) {
     logError("Notification", "notifyClientPayment failed", { error: String(e) });

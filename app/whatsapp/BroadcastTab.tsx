@@ -322,6 +322,7 @@ export default function BroadcastTab({
       setScribeCode("");
       setInternalNotes("");
       setSelectedGroups(new Set());
+      setSelectedTags(new Set());
       fetchNextScribeNumber().then((r) => {
         if (r.success) setNextScribeNum(r.next);
       });

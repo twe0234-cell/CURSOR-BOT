@@ -6,9 +6,35 @@ import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
 
-/** כולל סוחר + משא ומתן + SKU + דוגמת כתב (מיגרציה 051) */
+/** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline (מיגרציה 058) */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, created_at";
+  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, created_at";
+
+export type MarketStage =
+  | "image_pending"
+  | "new"
+  | "contacted"
+  | "negotiating"
+  | "deal_closed"
+  | "archived";
+
+export const MARKET_STAGE_LABELS: Record<MarketStage, string> = {
+  image_pending: "ממתין לתמונה",
+  new: "חדש",
+  contacted: "ביצירת קשר",
+  negotiating: "במשא ומתן",
+  deal_closed: "עסקה סגורה",
+  archived: "ארכיון",
+};
+
+export const MARKET_STAGE_ORDER: MarketStage[] = [
+  "image_pending",
+  "new",
+  "contacted",
+  "negotiating",
+  "deal_closed",
+  "archived",
+];
 
 export type MarketTorahBookRow = {
   id: string;
@@ -30,6 +56,7 @@ export type MarketTorahBookRow = {
   expected_completion_date: string | null;
   notes: string | null;
   handwriting_image_url: string | null;
+  market_stage: MarketStage | null;
   created_at: string;
   sofer_name: string | null;
   dealer_name: string | null;
@@ -76,6 +103,7 @@ function mapBookRow(
     notes: (b.notes as string | null) ?? null,
     handwriting_image_url: (b.handwriting_image_url as string | null) ?? null,
     created_at: (b.created_at as string) ?? "",
+    market_stage: (b.market_stage as MarketStage | null) ?? null,
   };
 }
 
@@ -323,6 +351,32 @@ export async function deleteMarketTorahBook(id: string): Promise<
     const { error } = await supabase
       .from("market_torah_books")
       .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function updateMarketStage(
+  id: string,
+  stage: MarketStage
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_torah_books")
+      .update({ market_stage: stage, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", user.id);
 
