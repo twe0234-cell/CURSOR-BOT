@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   extractTextFromGreenIncomingWebhookMessageData,
+  extractImageUrlFromMessageData,
   greenApiSetMessageReaction,
   normalizeWhatsAppChatId,
 } from "@/lib/whatsapp/greenApi";
@@ -138,19 +139,16 @@ export async function POST(req: NextRequest) {
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
+    const imageUrl = extractImageUrlFromMessageData(b.messageData);
 
     if (!text) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
@@ -176,26 +174,20 @@ export async function POST(req: NextRequest) {
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
-      handwriting_image_url: null,
+      handwriting_image_url: imageUrl ?? null,
     });
 
     if (insErr) {
       if (insErr.code === "23505") {
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
-        }
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-        }
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
-    if (!isOutgoing) {
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
-    }
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
