@@ -5,36 +5,11 @@ import { revalidatePath } from "next/cache";
 import { marketTorahBookSchema } from "@/lib/validations/marketTorah";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
+import type { MarketStage } from "./stages";
 
 /** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline (מיגרציה 058) */
 const MARKET_SELECT_EXT =
   "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, created_at";
-
-export type MarketStage =
-  | "image_pending"
-  | "new"
-  | "contacted"
-  | "negotiating"
-  | "deal_closed"
-  | "archived";
-
-export const MARKET_STAGE_LABELS: Record<MarketStage, string> = {
-  image_pending: "ממתין לתמונה",
-  new: "חדש",
-  contacted: "ביצירת קשר",
-  negotiating: "במשא ומתן",
-  deal_closed: "עסקה סגורה",
-  archived: "ארכיון",
-};
-
-export const MARKET_STAGE_ORDER: MarketStage[] = [
-  "image_pending",
-  "new",
-  "contacted",
-  "negotiating",
-  "deal_closed",
-  "archived",
-];
 
 export type MarketTorahBookRow = {
   id: string;

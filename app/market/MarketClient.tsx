@@ -25,15 +25,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { MarketTorahBookRow, MarketStage } from "./actions";
+import type { MarketTorahBookRow } from "./actions";
 import {
   createMarketTorahBook,
   updateMarketTorahBook,
   updateMarketStage,
   deleteMarketTorahBook,
+} from "./actions";
+import {
   MARKET_STAGE_LABELS,
   MARKET_STAGE_ORDER,
-} from "./actions";
+  type MarketStage,
+} from "./stages";
 import { UnifiedScribeSelect } from "@/components/crm/UnifiedScribeSelect";
 import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // formatMarketPriceK is intentionally NOT imported here.
