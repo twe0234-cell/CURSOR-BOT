@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PencilIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon } from "lucide-react";
+import { PencilIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon, ClipboardCopyIcon, CheckIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
@@ -70,6 +70,19 @@ export default function ApiIntegrationsTab({
   }, [searchParams]);
 
   const isConfigured = !!(greenApiId?.trim() && greenApiToken?.trim());
+  const [copied, setCopied] = useState(false);
+
+  const webhookBaseUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/whatsapp-webhook?token=`
+      : "/api/whatsapp-webhook?token=";
+
+  function copyWebhookUrl() {
+    navigator.clipboard.writeText(webhookBaseUrl + "YOUR_WEBHOOK_SECRET").then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -124,6 +137,9 @@ export default function ApiIntegrationsTab({
               <p className="text-sm text-muted-foreground">
                 Instance: {greenApiId ? maskToken(greenApiId) : "—"} · Token: {greenApiToken ? maskToken(greenApiToken) : "—"}
               </p>
+              {waMarketGroupId && (
+                <p className="text-xs text-muted-foreground">קבוצה: {waMarketGroupId}</p>
+              )}
             </div>
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${isConfigured ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
               {isConfigured ? "🟢 מוגדר" : "⚪ לא מוגדר"}
@@ -139,6 +155,28 @@ export default function ApiIntegrationsTab({
             <PencilIcon className="size-4 ml-1" />
             ערוך
           </Button>
+        </div>
+
+        {/* Webhook URL guidance */}
+        <div className="border-t border-border px-4 py-3 bg-muted/30">
+          <p className="text-xs font-medium text-foreground mb-1">
+            ⚙️ URL לשדה Webhook ב-Green API (הגדרות האינסטנס):
+          </p>
+          <div className="flex items-center gap-2 rounded-lg bg-background border border-border px-3 py-2 font-mono text-xs text-muted-foreground overflow-x-auto" dir="ltr">
+            <span className="flex-1 select-all truncate">{webhookBaseUrl}<span className="text-amber-600 font-semibold">YOUR_WEBHOOK_SECRET</span></span>
+            <button
+              type="button"
+              onClick={copyWebhookUrl}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              title="העתק URL"
+            >
+              {copied ? <CheckIcon className="size-4 text-green-600" /> : <ClipboardCopyIcon className="size-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            החלף <code className="bg-muted px-1 rounded text-amber-600">YOUR_WEBHOOK_SECRET</code> בערך של <code className="bg-muted px-1 rounded">WEBHOOK_SECRET</code> מהגדרות Vercel.{" "}
+            <span className="text-red-500">לאחר מכן ב-Green API: הפעל רק <strong>Incoming messages</strong>.</span>
+          </p>
         </div>
       </div>
 

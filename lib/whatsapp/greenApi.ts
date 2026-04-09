@@ -7,32 +7,40 @@ export function greenApiDispatchSpacingDelayMs(): number {
 
 /**
  * Green API expects chatId like 972501234567@c.us or group...@g.us
+ *
+ * Group IDs are long digit strings (>15 chars, e.g. 120363424204063915).
+ * Phone numbers are 9-15 digits. We distinguish by length.
  */
 export function normalizeWhatsAppChatId(raw: string): string {
   const s = raw.trim();
   if (!s) return s;
+  // Already has a suffix — return as-is
   if (s.includes("@g.us")) return s;
-
-  let phonePart = s;
   if (s.includes("@c.us")) {
-    phonePart = s.split("@c.us")[0] ?? s;
-  } else if (s.includes("@") && !s.includes("@c.us")) {
-    return s;
+    // Re-normalise the phone part only
+    const phonePart = s.split("@c.us")[0] ?? "";
+    const digits = phonePart.replace(/\D/g, "");
+    if (digits.startsWith("0") && digits.length >= 10) {
+      return `972${digits.slice(1)}@c.us`;
+    }
+    return `${digits}@c.us`;
   }
+  // Has some other @ domain — pass through
+  if (s.includes("@")) return s;
 
-  let digits = phonePart.replace(/\D/g, "");
+  const digits = s.replace(/\D/g, "");
   if (!digits) return s;
 
-  if (digits.startsWith("972")) {
-    return `${digits}@c.us`;
-  }
+  // WhatsApp group IDs are > 15 digits (typically 18)
+  if (digits.length > 15) return `${digits}@g.us`;
+
+  // Israeli number without country code
   if (digits.startsWith("0") && digits.length >= 10) {
-    digits = `972${digits.slice(1)}`;
-    return `${digits}@c.us`;
+    return `972${digits.slice(1)}@c.us`;
   }
-  if (digits.length >= 9 && digits.length <= 15) {
-    return `${digits}@c.us`;
-  }
+  // Already has country code or is a short international number
+  if (digits.length >= 9) return `${digits}@c.us`;
+
   return s;
 }
 
