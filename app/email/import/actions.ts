@@ -3,6 +3,9 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { getAccessToken } from "@/src/lib/gmail";
 import { revalidatePath } from "next/cache";
+import { parseMarketTorahMessage, parsedMessageIsActionable, listMissingParseFields } from "@/src/lib/market/parseWhatsAppMarketMessage";
+import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
+import { generateSku, marketSkuPrefix } from "@/lib/sku";
 
 export type GmailTriageContact = {
   email: string;
@@ -151,6 +154,59 @@ export async function ignoreEmail(email: string): Promise<
     if (error) return { success: false, error: error.message };
     revalidatePath("/email/import");
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+export async function importMarketTorahFromEmailMessage(
+  rawText: string,
+  sourceEmail?: string
+): Promise<{ success: true; sku: string } | { success: false; error: string }> {
+  try {
+    const text = String(rawText ?? "").trim();
+    if (!text) return { success: false, error: "נא להזין תוכן מייל" };
+
+    const parsed = parseMarketTorahMessage(text);
+    if (!parsedMessageIsActionable(parsed)) {
+      const missing = listMissingParseFields(parsed);
+      return { success: false, error: `לא זוהו מספיק נתונים. חסר: ${missing.join(" | ")}` };
+    }
+
+    const askFull = parsed.asking_price_full_shekels!;
+    const askDb = marketKToDb(marketDbToK(askFull));
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const sku = generateSku(marketSkuPrefix);
+    const { error } = await supabase.from("market_torah_books").insert({
+      user_id: user.id,
+      sku,
+      source_message_id: sourceEmail?.trim() || null,
+      sofer_id: null,
+      dealer_id: null,
+      external_sofer_name: null,
+      script_type: parsed.script_type,
+      torah_size: parsed.torah_size,
+      parchment_type: null,
+      influencer_style: null,
+      asking_price: askDb,
+      target_brokerage_price: null,
+      currency: "ILS",
+      expected_completion_date: null,
+      notes: text.slice(0, 5000),
+      last_contact_date: null,
+      negotiation_notes: null,
+      handwriting_image_url: null,
+    });
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/market");
+    revalidatePath("/email/import");
+    return { success: true, sku };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

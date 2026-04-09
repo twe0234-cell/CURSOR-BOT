@@ -5,6 +5,7 @@ import { fetchGmailTriageContacts } from "./actions";
 import TriageTable from "./TriageTable";
 import { Button } from "@/components/ui/button";
 import RefreshButton from "./RefreshButton";
+import EmailToMarketCard from "./EmailToMarketCard";
 
 export default async function GmailImportPage() {
   const supabase = await createClient();
@@ -37,6 +38,8 @@ export default async function GmailImportPage() {
             {res.error}
           </div>
         )}
+
+        <EmailToMarketCard />
 
         <TriageTable
           initialContacts={contacts}
