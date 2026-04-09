@@ -2,14 +2,27 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
-import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon, Kanban, ChevronRight, MessageSquareIcon } from "lucide-react";
+import {
+  ScrollText,
+  Plus,
+  Trash2,
+  ImageIcon,
+  X,
+  PencilIcon,
+  Kanban,
+  ChevronRight,
+  MessageSquareIcon,
+  MessageCircle,
+  Mail,
+} from "lucide-react";
 import MarketContactLog from "./MarketContactLog";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -46,6 +59,11 @@ import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // of 175. Use formatDisplayK (below) for values that are already in K.
 import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
 import { applyNumericTransform } from "@/lib/numericInput";
+import {
+  buildMarketTorahShareText,
+  mailtoOfferHref,
+  whatsappPrefillPath,
+} from "@/lib/market/shareOfferText";
 import {
   STAM_SEFER_TORAH_SIZES,
   MARKET_PARCHMENT_TYPES,
@@ -87,6 +105,43 @@ function SkuBadge({ sku }: { sku: string | null }) {
     >
       {sku}
     </span>
+  );
+}
+
+function MarketRowShareLinks({ row }: { row: MarketTorahBookRow }) {
+  const body = buildMarketTorahShareText(row);
+  const subject =
+    row.sku != null && String(row.sku).trim()
+      ? `ספר תורה — ${row.sku}`
+      : "ספר תורה מהמאגר";
+  const mailHref = mailtoOfferHref(subject, body);
+  const iconBtn = "shrink-0";
+  return (
+    <>
+      <Link
+        href={whatsappPrefillPath(body)}
+        prefetch={false}
+        title="שיתוף לוואטסאפ"
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon" }),
+          "text-emerald-600 hover:bg-emerald-50",
+          iconBtn
+        )}
+      >
+        <MessageCircle className="size-4" />
+      </Link>
+      <a
+        href={mailHref}
+        title="פתיחת הודעה במייל"
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon" }),
+          "text-slate-600 hover:bg-slate-100",
+          iconBtn
+        )}
+      >
+        <Mail className="size-4" />
+      </a>
+    </>
   );
 }
 
@@ -740,6 +795,9 @@ export default function MarketClient({ initialRows }: Props) {
                       {row.asking_price != null && (
                         <div className="text-xs font-bold text-primary">{formatK(row.asking_price)}</div>
                       )}
+                      <div className="flex gap-0.5 pt-0.5 items-center justify-center [&_a]:h-7 [&_a]:w-7 [&_a]:min-h-7 [&_svg]:size-3.5">
+                        <MarketRowShareLinks row={row} />
+                      </div>
                       <div className="flex gap-1 pt-0.5">
                         <Button
                           variant="outline"
@@ -806,7 +864,8 @@ export default function MarketClient({ initialRows }: Props) {
                   {row.potential_profit != null && (
                     <p className="text-xs text-emerald-600">רווח: {formatK(row.potential_profit)}</p>
                   )}
-                  <div className="flex gap-1 pt-1">
+                  <div className="flex gap-1 pt-1 items-center">
+                    <MarketRowShareLinks row={row} />
                     <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => setEditRow(row)}>
                       <PencilIcon className="size-3 ml-1" />ערוך
                     </Button>
@@ -908,7 +967,8 @@ export default function MarketClient({ initialRows }: Props) {
                         {formatK(row.potential_profit)}
                       </TableCell>
                       <TableCell className="py-3 px-4">
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-0.5 max-w-[9rem] justify-end">
+                          <MarketRowShareLinks row={row} />
                           <Button
                             type="button"
                             variant="ghost"

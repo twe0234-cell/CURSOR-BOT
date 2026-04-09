@@ -52,6 +52,9 @@ export async function uploadGalleryImage(formData: FormData): Promise<
     const path = `gallery/${user.id}/${contactId}/${Date.now()}.${ext}`;
 
     const admin = createAdminClient();
+    if (!admin) {
+      return { success: false, error: "העלאה לא זמינה — חסר מפתח שירות (SUPABASE_SERVICE_ROLE_KEY)" };
+    }
     const { error: uploadErr } = await admin.storage.from("media").upload(path, file, {
       contentType: file.type || "image/jpeg",
       upsert: false,

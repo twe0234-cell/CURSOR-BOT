@@ -41,6 +41,18 @@ import ExtraContactsEditor from "@/components/crm/ExtraContactsEditor";
 import ScribeGallery from "@/components/crm/ScribeGallery";
 import { StarRating } from "@/components/ui/StarRating";
 
+const PREFERRED_CONTACT_LABELS: Record<string, string> = {
+  WhatsApp: "וואטסאפ",
+  Email: "אימייל",
+  Phone: "טלפון",
+};
+
+const PREFERRED_CONTACT_OPTIONS = [
+  { value: "WhatsApp", label: "וואטסאפ" },
+  { value: "Email", label: "אימייל" },
+  { value: "Phone", label: "טלפון" },
+] as const;
+
 type Contact = {
   id: string;
   name: string;
@@ -306,6 +318,7 @@ export default function ContactDetailClient({
   const [editWa, setEditWa] = useState(contact.wa_chat_id ?? "");
   const [editEmail, setEditEmail] = useState(contact.email ?? "");
   const [editPhone, setEditPhone] = useState(contact.phone ?? "");
+  const [editPreferred, setEditPreferred] = useState(contact.preferred_contact);
   const [editTags, setEditTags] = useState(initialContact.tags.join(", "));
   const [editNotes, setEditNotes] = useState(contact.notes ?? "");
   const [editCertification, setEditCertification] = useState(contact.certification ?? "");
@@ -357,6 +370,7 @@ export default function ContactDetailClient({
         wa_chat_id: editWa.trim() || undefined,
         email: editEmail.trim() || undefined,
         phone: editPhone.trim() || undefined,
+        preferred_contact: editPreferred,
         tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
         notes: editNotes.trim() || undefined,
         certification: editCertification.trim() || undefined,
@@ -373,6 +387,7 @@ export default function ContactDetailClient({
         wa_chat_id: editWa.trim() || null,
         email: editEmail.trim() || null,
         phone: editPhone.trim() || null,
+        preferred_contact: editPreferred,
         tags: nextTags,
         notes: editNotes.trim() || null,
         certification: editCertification.trim() || null,
@@ -540,7 +555,8 @@ export default function ContactDetailClient({
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              מועדף: {contact.preferred_contact} · מזהה: {contact.id.slice(0, 8)}…
+              מועדף: {PREFERRED_CONTACT_LABELS[contact.preferred_contact] ?? contact.preferred_contact} · מזהה:{" "}
+              {contact.id.slice(0, 8)}…
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               {contact.phone && (
@@ -593,6 +609,20 @@ export default function ContactDetailClient({
         {editMode && (
           <CardContent className="border-t pt-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted-foreground">אמצעי קשר מועדף</label>
+                <select
+                  value={editPreferred}
+                  onChange={(e) => setEditPreferred(e.target.value)}
+                  className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {PREFERRED_CONTACT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-xs text-muted-foreground">WA Chat ID</label>
                 <Input value={editWa} onChange={(e) => setEditWa(e.target.value)} className="rounded-lg mt-1" />
