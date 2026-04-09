@@ -142,17 +142,13 @@ export async function POST(req: NextRequest) {
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
 
     if (!text) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
@@ -183,21 +179,16 @@ export async function POST(req: NextRequest) {
 
     if (insErr) {
       if (insErr.code === "23505") {
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
-        }
+        // Duplicate — already imported, still react OK
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-        }
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
-    if (!isOutgoing) {
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
-    }
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
