@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    let finalImageUrl = imageUrl ?? pendingRow?.handwriting_image_url ?? null;
+    const finalImageUrl = imageUrl ?? pendingRow?.handwriting_image_url ?? null;
     const successMsg = pendingRow ? MSG_OK_IMAGE : MSG_OK;
 
     if (pendingRow) {

@@ -730,7 +730,7 @@ export default function MarketClient({ initialRows }: Props) {
                     >
                       <div className="font-semibold truncate">{displayOwner(row)}</div>
                       <div className="flex gap-1 flex-wrap text-xs text-muted-foreground">
-                        {row.torah_size && <span className="bg-muted rounded px-1">{row.torah_size} ס"מ</span>}
+                        {row.torah_size && <span className="bg-muted rounded px-1">{row.torah_size} ס&quot;מ</span>}
                         {row.script_type && <span className="bg-muted rounded px-1">{row.script_type}</span>}
                       </div>
                       {row.asking_price != null && (
