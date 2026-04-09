@@ -36,6 +36,9 @@ import {
 } from "@/components/ui/collapsible";
 import type { CrmContactHistoryEntry } from "@/src/lib/types/crm";
 import { updateCrmContact, updateContactTags, addTransaction, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
+import { updateCrmExtraContacts } from "../galleryActions";
+import ExtraContactsEditor from "@/components/crm/ExtraContactsEditor";
+import ScribeGallery from "@/components/crm/ScribeGallery";
 import { StarRating } from "@/components/ui/StarRating";
 
 type Contact = {
@@ -309,6 +312,12 @@ export default function ContactDetailClient({
   const [editPhoneType, setEditPhoneType] = useState(contact.phone_type ?? "");
   const [editCity, setEditCity] = useState((contact as { city?: string | null }).city ?? "");
   const [editAddress, setEditAddress] = useState((contact as { address?: string | null }).address ?? "");
+  const [extraPhones, setExtraPhones] = useState<{ label: string; value: string }[]>(
+    (contact as { extra_phones?: { label: string; value: string }[] }).extra_phones ?? []
+  );
+  const [extraEmails, setExtraEmails] = useState<{ label: string; value: string }[]>(
+    (contact as { extra_emails?: { label: string; value: string }[] }).extra_emails ?? []
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [newTxAmount, setNewTxAmount] = useState("");
   const [newTxType, setNewTxType] = useState<"Debt" | "Credit">("Debt");
@@ -343,17 +352,20 @@ export default function ContactDetailClient({
   }, [history, logs]);
 
   const handleSaveProfile = async () => {
-    const res = await updateCrmContact(contact.id, {
-      wa_chat_id: editWa.trim() || undefined,
-      email: editEmail.trim() || undefined,
-      phone: editPhone.trim() || undefined,
-      tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
-      notes: editNotes.trim() || undefined,
-      certification: editCertification.trim() || undefined,
-      phone_type: editPhoneType.trim() || undefined,
-      city: editCity.trim() || null,
-      address: editAddress.trim() || null,
-    });
+    const [res] = await Promise.all([
+      updateCrmContact(contact.id, {
+        wa_chat_id: editWa.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        phone: editPhone.trim() || undefined,
+        tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
+        notes: editNotes.trim() || undefined,
+        certification: editCertification.trim() || undefined,
+        phone_type: editPhoneType.trim() || undefined,
+        city: editCity.trim() || null,
+        address: editAddress.trim() || null,
+      }),
+      updateCrmExtraContacts(contact.id, extraPhones, extraEmails),
+    ]);
     if (res.success) {
       const nextTags = editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean);
       setContact((prev) => ({
@@ -603,11 +615,25 @@ export default function ContactDetailClient({
                 הגדרות מתקדמות
                 {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 space-y-2">
+              <CollapsibleContent className="mt-3 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="עיר" className="rounded-lg" />
                   <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="כתובת (רחוב ומספר)" className="rounded-lg" />
                 </div>
+                <ExtraContactsEditor
+                  title="טלפונים נוספים"
+                  placeholder="05X-XXXXXXX"
+                  labelPlaceholder="סוג (נייד/בית…)"
+                  items={extraPhones}
+                  onChange={setExtraPhones}
+                />
+                <ExtraContactsEditor
+                  title="מיילים נוספים"
+                  placeholder="email@example.com"
+                  labelPlaceholder="סוג (עסקי/אישי…)"
+                  items={extraEmails}
+                  onChange={setExtraEmails}
+                />
                 <Input value={editCertification} onChange={(e) => setEditCertification(e.target.value)} placeholder="תעודה" className="rounded-lg" />
                 <Input value={editPhoneType} onChange={(e) => setEditPhoneType(e.target.value)} placeholder="סוג טלפון" className="rounded-lg" />
                 <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="הערות" className="rounded-lg" />
@@ -1082,6 +1108,17 @@ export default function ContactDetailClient({
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* גלריית כתב יד ותמונות */}
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">גלריית כתב יד ותמונות</h3>
+              <p className="text-xs text-muted-foreground">מספר תמונות בלתי מוגבל — מאורגן לפי סדר עלייה</p>
+            </CardHeader>
+            <CardContent>
+              <ScribeGallery contactId={contact.id} />
             </CardContent>
           </Card>
         </TabsContent>

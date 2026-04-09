@@ -183,8 +183,11 @@ export default function ApiIntegrationsTab({
             </button>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            החלף <code className="bg-muted px-1 rounded text-amber-600">YOUR_WEBHOOK_SECRET</code> בערך של <code className="bg-muted px-1 rounded">WEBHOOK_SECRET</code> מהגדרות Vercel.{" "}
-            <span className="text-red-500">לאחר מכן ב-Green API: הפעל רק <strong>Incoming messages</strong>.</span>
+            החלף <code className="bg-muted px-1 rounded text-amber-600">YOUR_WEBHOOK_SECRET</code> בערך של <code className="bg-muted px-1 rounded">WEBHOOK_SECRET</code> מהגדרות Vercel.
+          </p>
+          <p className="text-xs mt-1 font-medium text-amber-700 bg-amber-50 rounded px-2 py-1">
+            ⚠️ ב-Green API → Notifications: הפעל גם <strong>Incoming messages</strong> וגם <strong>Outgoing messages</strong>.
+            אם אתה שולח מהמכשיר שלך בלבד (קבוצה עצמית) — חייב להפעיל <strong>Outgoing</strong>.
           </p>
         </div>
       </div>
