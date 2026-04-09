@@ -30,7 +30,6 @@ function getErrorMessage(error: AuthError): string {
   if (code && ERROR_MESSAGES_HE[code]) {
     return ERROR_MESSAGES_HE[code];
   }
-  // Fallback for common English messages
   const msg = error.message.toLowerCase();
   if (msg.includes("already registered") || msg.includes("already exists")) {
     return ERROR_MESSAGES_HE.email_exists;
@@ -86,84 +85,161 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">
-          Broadcast Buddy
-        </h1>
-        <p className="mb-6 text-center text-slate-500">
-          {isSignUp ? "הרשמה למערכת" : "התחברות למערכת"}
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              אימייל
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              placeholder="you@example.com"
-            />
+    <div
+      dir="rtl"
+      className="flex min-h-screen items-center justify-center bg-background px-4"
+      style={{
+        backgroundImage:
+          "radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.73 0.13 80 / 8%), transparent)",
+      }}
+    >
+      <div className="w-full max-w-md animate-fade-in-up">
+        {/* Logo / Brand */}
+        <div className="mb-8 text-center">
+          <div
+            className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg"
+            style={{ background: "var(--navy)" }}
+          >
+            <span className="text-2xl font-bold" style={{ color: "var(--gold)" }}>
+              ה
+            </span>
           </div>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--navy)" }}>
+            הידור הסת״ם
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            {isSignUp ? "הרשמה למערכת" : "ברוך הבא — התחבר להמשיך"}
+          </p>
+        </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              סיסמה
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
-              {error}
+        {/* Card */}
+        <div
+          className="rounded-2xl border bg-card p-8 shadow-lg"
+          style={{ borderColor: "var(--glass-border)" }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: "var(--foreground)" }}
+              >
+                אימייל
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                dir="ltr"
+                className="w-full rounded-xl border bg-background px-4 py-2.5 text-sm transition-shadow focus:outline-none"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--foreground)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--gold)";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px oklch(0.73 0.13 80 / 15%)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+                placeholder="you@example.com"
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-teal-600 px-4 py-2 font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
-          >
-            {loading
-              ? isSignUp
-                ? "נרשם..."
-                : "מתחבר..."
-              : isSignUp
-                ? "הרשמה"
-                : "התחבר"}
-          </button>
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: "var(--foreground)" }}
+              >
+                סיסמה
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete={isSignUp ? "new-password" : "current-password"}
+                dir="ltr"
+                className="w-full rounded-xl border bg-background px-4 py-2.5 text-sm transition-shadow focus:outline-none"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--foreground)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--gold)";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px oklch(0.73 0.13 80 / 15%)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              />
+            </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-            }}
-            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            {isSignUp ? "כבר יש לך חשבון? התחבר" : "אין לך חשבון? הרשם"}
-          </button>
-        </form>
+            {error && (
+              <div className="rounded-xl bg-destructive/8 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50"
+              style={{
+                background: "var(--navy)",
+                color: "var(--primary-foreground)",
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) e.currentTarget.style.background = "var(--navy-light)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--navy)";
+              }}
+            >
+              {loading
+                ? isSignUp
+                  ? "נרשם..."
+                  : "מתחבר..."
+                : isSignUp
+                  ? "הרשמה"
+                  : "התחבר"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+              }}
+              className="w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors"
+              style={{
+                borderColor: "var(--border)",
+                color: "var(--muted-foreground)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--muted)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              {isSignUp ? "כבר יש לך חשבון? התחבר" : "אין לך חשבון? הרשם"}
+            </button>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-6 text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+          מערכת ERP/CRM לסת״ם — גרסה מאובטחת
+        </p>
       </div>
     </div>
   );

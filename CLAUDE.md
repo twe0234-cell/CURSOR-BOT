@@ -213,10 +213,27 @@ npm run db:apply-view # Apply sale_profit_view
 
 ## 13. MCP זמין — השתמש לפני CLI
 
-| MCP | שימוש |
-|-----|-------|
-| **Supabase MCP** | execute_sql, apply_migration, list_tables, get_logs |
-| **Vercel MCP** | list_deployments, get_deployment, get_runtime_logs |
+| MCP | שימוש | חיסכון טוקנים |
+|-----|-------|---------------|
+| **Supabase MCP** | execute_sql, apply_migration, list_tables, get_logs | גבוה — קרא DB ישירות במקום לנחש מקבצי migration |
+| **Vercel MCP** | list_deployments, get_deployment, get_runtime_logs | בינוני — בדיקת builds/errors בלי `gh` |
+| **Playwright MCP** | browser screenshots, DOM inspection, visual QA | גבוה — ראה UI ישירות במקום לנחש מהקוד |
+
+### הפעלת Playwright MCP
+מוגדר אוטומטית ב-`.claude/settings.json`. לוודא שהחבילה מותקנת:
+```bash
+npx @playwright/mcp@latest --version
+```
+
+---
+
+## 13.5. Slash Commands (Skills) זמינים
+
+| פקודה | מטרה |
+|-------|-------|
+| `/deploy-check` | בדיקת Vercel deployment אחרי push — סטטוס, URL, שגיאות |
+| `/db-safe` | בדיקת בטיחות לפני migration — מבנה טבלה, כמות שורות, FK |
+| `/lint-fix` | הרצת lint, תיקון אוטומטי, דיווח על מה שנשאר ידני |
 
 ---
 
