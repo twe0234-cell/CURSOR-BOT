@@ -307,6 +307,8 @@ export default function ContactDetailClient({
   const [editNotes, setEditNotes] = useState(contact.notes ?? "");
   const [editCertification, setEditCertification] = useState(contact.certification ?? "");
   const [editPhoneType, setEditPhoneType] = useState(contact.phone_type ?? "");
+  const [editCity, setEditCity] = useState((contact as { city?: string | null }).city ?? "");
+  const [editAddress, setEditAddress] = useState((contact as { address?: string | null }).address ?? "");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [newTxAmount, setNewTxAmount] = useState("");
   const [newTxType, setNewTxType] = useState<"Debt" | "Credit">("Debt");
@@ -349,6 +351,8 @@ export default function ContactDetailClient({
       notes: editNotes.trim() || undefined,
       certification: editCertification.trim() || undefined,
       phone_type: editPhoneType.trim() || undefined,
+      city: editCity.trim() || null,
+      address: editAddress.trim() || null,
     });
     if (res.success) {
       const nextTags = editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean);
@@ -600,6 +604,10 @@ export default function ContactDetailClient({
                 {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="עיר" className="rounded-lg" />
+                  <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="כתובת (רחוב ומספר)" className="rounded-lg" />
+                </div>
                 <Input value={editCertification} onChange={(e) => setEditCertification(e.target.value)} placeholder="תעודה" className="rounded-lg" />
                 <Input value={editPhoneType} onChange={(e) => setEditPhoneType(e.target.value)} placeholder="סוג טלפון" className="rounded-lg" />
                 <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="הערות" className="rounded-lg" />

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon, Kanban, ChevronRight } from "lucide-react";
+import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon, Kanban, ChevronRight, MessageSquareIcon } from "lucide-react";
+import MarketContactLog from "./MarketContactLog";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -1087,12 +1088,19 @@ export default function MarketClient({ initialRows }: Props) {
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">יומן משא ומתן</p>
+                <p className="text-xs text-muted-foreground mb-1">הערות משא ומתן (שדה חופשי)</p>
                 <Textarea
                   value={editForm.negotiation_notes}
                   onChange={(e) => setEditForm((f) => ({ ...f, negotiation_notes: e.target.value }))}
-                  rows={3}
+                  rows={2}
                 />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3 border-t pt-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-1">
+                  <MessageSquareIcon className="size-4 text-sky-600" />
+                  יומן מגעים (עם תאריך)
+                </div>
+                <MarketContactLog bookId={editRow!.id} />
               </div>
               <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
                 <Button

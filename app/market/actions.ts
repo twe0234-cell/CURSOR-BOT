@@ -338,6 +338,86 @@ export async function deleteMarketTorahBook(id: string): Promise<
   }
 }
 
+// ─── יומן מגעים ─────────────────────────────────────────────────────────────
+
+export type MarketContactLogEntry = {
+  id: string;
+  note: string;
+  contacted_at: string;
+};
+
+export async function fetchMarketContactLogs(bookId: string): Promise<
+  { success: true; logs: MarketContactLogEntry[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("market_contact_logs")
+      .select("id, note, contacted_at")
+      .eq("book_id", bookId)
+      .eq("user_id", user.id)
+      .order("contacted_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, logs: (data ?? []) as MarketContactLogEntry[] };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function addMarketContactLog(
+  bookId: string,
+  note: string,
+  contactedAt?: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const trimmed = note.trim();
+    if (!trimmed) return { success: false, error: "הזן הערה" };
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase.from("market_contact_logs").insert({
+      user_id: user.id,
+      book_id: bookId,
+      note: trimmed,
+      contacted_at: contactedAt ? new Date(contactedAt).toISOString() : new Date().toISOString(),
+    });
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function deleteMarketContactLog(logId: string): Promise<
+  { success: true } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_contact_logs")
+      .delete()
+      .eq("id", logId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 export async function updateMarketStage(
   id: string,
   stage: MarketStage

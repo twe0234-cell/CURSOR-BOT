@@ -102,6 +102,7 @@ export type UpdateCrmContactInput = Partial<{
   phone_type: string;
   handwriting_image_url: string | null;
   city: string | null;
+  address: string | null;
 }>;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -586,6 +587,9 @@ export async function updateCrmContact(
     }
     if (input.city !== undefined) {
       payload.city = input.city?.trim() ? input.city.trim() : null;
+    }
+    if (input.address !== undefined) {
+      payload.address = input.address?.trim() ? input.address.trim() : null;
     }
 
     const { error } = await supabase
