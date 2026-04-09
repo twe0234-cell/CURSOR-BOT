@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   extractTextFromGreenIncomingWebhookMessageData,
-  extractImageUrlFromMessageData,
   greenApiSetMessageReaction,
+  normalizeWhatsAppChatId,
 } from "@/lib/whatsapp/greenApi";
 import { logWarn } from "@/lib/logger";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
@@ -40,7 +40,7 @@ async function sendReactionSafe(
 }
 
 function normalizeWaId(raw: string): string {
-  return raw.trim().toLowerCase();
+  return normalizeWhatsAppChatId(raw).trim().toLowerCase();
 }
 
 /**
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     const senderData = b.senderData as Record<string, unknown> | undefined;
-    const chatIdRaw = String(senderData?.chatId ?? "").trim();
+    const chatIdRaw = String(senderData?.chatId ?? b.chatId ?? "").trim();
     const chatIdNorm = normalizeWaId(chatIdRaw);
     const configuredGroupNorm = normalizeWaId(configuredGroup);
 
@@ -119,19 +119,16 @@ export async function POST(req: NextRequest) {
       return ok200();
     }
 
-    const chatId = chatIdRaw;
+    const chatId = normalizeWhatsAppChatId(chatIdRaw);
 
     const instanceWid = normalizeWaId(String(instanceData?.wid ?? ""));
     const senderId = normalizeWaId(String(senderData?.sender ?? ""));
 
-    // For incoming messages: skip if the sender IS the bot itself (prevents loops).
-    // For outgoing messages: senderData.sender is absent — skip this check entirely.
-    if (isIncoming && senderId && instanceWid && senderId === instanceWid) {
+    if (!senderId && isIncoming) {
       return ok200();
     }
-    // Outgoing messages from the API (not from the user's phone) have typeMessage="apiMessage" — skip those too.
-    if (isIncoming && !senderId) {
-      // Unknown sender on incoming — skip
+
+    if (isIncoming && instanceWid && senderId === instanceWid) {
       return ok200();
     }
 
@@ -141,16 +138,19 @@ export async function POST(req: NextRequest) {
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
-    const imageUrl = extractImageUrlFromMessageData(b.messageData);
 
     if (!text) {
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      if (!isOutgoing) {
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      }
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      if (!isOutgoing) {
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      }
       return ok200();
     }
 
@@ -176,21 +176,26 @@ export async function POST(req: NextRequest) {
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
-      handwriting_image_url: imageUrl ?? null,
+      handwriting_image_url: null,
     });
 
     if (insErr) {
       if (insErr.code === "23505") {
-        // Duplicate — already imported, still react OK
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        if (!isOutgoing) {
+          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        }
       } else {
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        if (!isOutgoing) {
+          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        }
       }
       return ok200();
     }
 
-    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    if (!isOutgoing) {
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    }
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
