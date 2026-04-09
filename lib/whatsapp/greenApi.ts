@@ -102,6 +102,36 @@ export function fileNameForImageUrl(url: string): string {
 
 const GREEN_API_BASE = "https://api.green-api.com";
 
+// ── Chat list ────────────────────────────────────────────────────────────────
+
+export type GreenApiChat = {
+  id: string;          // e.g. "972501234567@c.us" or "120363...@g.us"
+  name?: string | null;
+  lastMessageTime?: number | null; // Unix timestamp (seconds)
+  type?: string | null;            // "contact" | "group" | etc.
+};
+
+/**
+ * Returns all chats for the instance (sorted by recency).
+ * @see https://green-api.com/en/docs/api/journals/GetChats/
+ */
+export async function greenApiGetChats(
+  instanceId: string,
+  apiToken: string
+): Promise<{ ok: true; chats: GreenApiChat[] } | { ok: false; error: string }> {
+  const url = `${GREEN_API_BASE}/waInstance${instanceId}/getChats/${apiToken}`;
+  try {
+    const res = await fetch(url, { method: "GET" });
+    const body = await res.text();
+    if (!res.ok) return { ok: false, error: extractJsonErrorMessage(body) };
+    const data = JSON.parse(body) as unknown;
+    if (!Array.isArray(data)) return { ok: false, error: "getChats: unexpected response" };
+    return { ok: true, chats: data as GreenApiChat[] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
+  }
+}
+
 /** מבנים מקוננים — Green-API (במיוחד outgoing) לעיתים שמים כיתוב תחת imageMessage וכו׳ */
 export type GreenMediaCaption = { caption?: string | null } | null | undefined;
 
