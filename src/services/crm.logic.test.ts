@@ -34,6 +34,7 @@ import {
 import {
   columnsCountForTorahSheetNumber,
   TORAH_SHEET_COUNT,
+  type TorahSheetStatus,
 } from "@/src/lib/types/torah";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -802,7 +803,7 @@ describe("computeTorahScribePace", () => {
   const sheets62 = () =>
     Array.from({ length: 62 }, (_, i) => ({
       columns_count: i === 0 || i === 60 || i === 61 ? 3 : 4,
-      status: "not_started" as const,
+      status: "not_started" as TorahSheetStatus,
     }));
 
   it("returns unknown when startDate is missing and target not past", () => {
