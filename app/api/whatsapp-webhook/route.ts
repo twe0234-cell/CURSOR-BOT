@@ -123,11 +123,14 @@ export async function POST(req: NextRequest) {
     const instanceWid = normalizeWaId(String(instanceData?.wid ?? ""));
     const senderId = normalizeWaId(String(senderData?.sender ?? ""));
 
-    if (!senderId) {
+    // For incoming messages: skip if the sender IS the bot itself (prevents loops).
+    // For outgoing messages: senderData.sender is absent — skip this check entirely.
+    if (isIncoming && senderId && instanceWid && senderId === instanceWid) {
       return ok200();
     }
-
-    if (isIncoming && instanceWid && senderId === instanceWid) {
+    // Outgoing messages from the API (not from the user's phone) have typeMessage="apiMessage" — skip those too.
+    if (isIncoming && !senderId) {
+      // Unknown sender on incoming — skip
       return ok200();
     }
 
