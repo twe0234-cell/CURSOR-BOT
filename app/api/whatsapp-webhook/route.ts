@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   extractTextFromGreenIncomingWebhookMessageData,
+  extractImageUrlFromMessageData,
   greenApiSetMessageReaction,
 } from "@/lib/whatsapp/greenApi";
 import { logWarn } from "@/lib/logger";
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest) {
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
+    const imageUrl = extractImageUrlFromMessageData(b.messageData);
 
     if (!text) {
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
@@ -174,7 +176,7 @@ export async function POST(req: NextRequest) {
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
-      handwriting_image_url: null,
+      handwriting_image_url: imageUrl ?? null,
     });
 
     if (insErr) {
