@@ -25,6 +25,7 @@ export type {
   UpdateCrmContactInput,
   AddHistoryEntryInput,
   AddHistoryEntryResult,
+  DuplicateGroup,
 } from "@/src/services/crm.service";
 
 // ─── Read-only actions (no cache invalidation needed) ────────────────────────

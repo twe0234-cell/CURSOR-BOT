@@ -14,8 +14,8 @@ import {
   findDuplicateCrmContacts,
   mergeCrmContacts,
   type CrmContact,
+  type DuplicateGroup,
 } from "./actions";
-import type { DuplicateGroup } from "@/src/services/crm.service";
 import {
   Dialog,
   DialogContent,

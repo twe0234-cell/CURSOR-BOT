@@ -3,6 +3,7 @@ import {
   extractTextFromGreenIncomingWebhookMessageData,
   extractImageUrlFromMessageData,
   greenApiSendChatMessage,
+  normalizeWhatsAppChatId,
 } from "@/lib/whatsapp/greenApi";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
@@ -92,19 +93,20 @@ export async function POST(req: NextRequest) {
     }
 
     const senderData = b.senderData as Record<string, unknown> | undefined;
-    const chatId = String(senderData?.chatId ?? b.chatId ?? "").trim();
+    const chatId = normalizeWhatsAppChatId(String(senderData?.chatId ?? b.chatId ?? "").trim());
+    const normalizedConfigured = normalizeWhatsAppChatId(configuredGroup);
     const idMessage = String(b.idMessage ?? "").trim();
 
-    console.info(`${LOG} chatId="${chatId}" configuredGroup="${configuredGroup}" idMessage="${idMessage}"`);
+    console.info(`${LOG} chatId="${chatId}" configuredGroup="${normalizedConfigured}" idMessage="${idMessage}"`);
 
     await admin.from("sys_logs").insert({
       level: "INFO",
       module: "whatsapp-webhook",
       message: "message received",
-      metadata: { chatId, configuredGroup, typeWebhook: webhookType, idMessage },
+      metadata: { chatId, configuredGroup: normalizedConfigured, typeWebhook: webhookType, idMessage },
     }).then(() => {});
 
-    if (!chatId || !configuredGroup || chatId !== configuredGroup) {
+    if (!chatId || !normalizedConfigured || chatId !== normalizedConfigured) {
       await admin.from("sys_logs").insert({
         level: "WARN",
         module: "whatsapp-webhook",
