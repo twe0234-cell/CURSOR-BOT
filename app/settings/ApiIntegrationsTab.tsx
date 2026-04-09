@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { saveUserSettings, disconnectGmail } from "./actions";
+import { saveUserSettings, disconnectGmail, fetchRecentWebhookGroups } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PencilIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon, ClipboardCopyIcon, CheckIcon } from "lucide-react";
+import { PencilIcon, ChevronDownIcon, ChevronUpIcon, KeyIcon, MailIcon, ClipboardCopyIcon, CheckIcon, RefreshCwIcon, AlertTriangleIcon } from "lucide-react";
 
 type Props = {
   defaultGreenApiId: string;
@@ -44,6 +44,8 @@ export default function ApiIntegrationsTab({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [credentialsEditOpen, setCredentialsEditOpen] = useState(false);
+  const [recentGroups, setRecentGroups] = useState<{ chatId: string; hits: number; lastSeen: string }[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(true);
   const searchParams = useSearchParams();
 
@@ -107,6 +109,13 @@ export default function ApiIntegrationsTab({
       setLoading(false);
     }
   }
+
+  const loadRecentGroups = async () => {
+    setLoadingGroups(true);
+    const res = await fetchRecentWebhookGroups();
+    setLoadingGroups(false);
+    if (res.success) setRecentGroups(res.groups);
+  };
 
   const addTag = () => {
     const t = newTag.trim();
@@ -215,22 +224,60 @@ export default function ApiIntegrationsTab({
               <label
                 htmlFor="wa_market_group_id"
                 className="mb-2 block text-sm font-medium text-slate-700"
-                title="The group ID usually ends with @g.us"
               >
                 קבוצת וואטסאפ למאגר (Chat ID)
-                <span className="mr-1 text-xs font-normal text-muted-foreground">
-                  — The group ID usually ends with @g.us
-                </span>
               </label>
+
+              {/* אזהרה אם ה-ID הנוכחי לא נראה בטראפיק */}
+              {waMarketGroupId && recentGroups.length > 0 && !recentGroups.some(g => g.chatId === waMarketGroupId) && (
+                <div className="mb-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  <AlertTriangleIcon className="size-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span>ה-ID המוגדר לא נראה בלוגים האחרונים — כנראה שגוי. בחר מהרשימה למטה.</span>
+                </div>
+              )}
+
               <input
                 id="wa_market_group_id"
                 type="text"
                 value={waMarketGroupId}
                 onChange={(e) => setWaMarketGroupId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 mb-2"
                 dir="ltr"
                 placeholder="למשל xxxxx@g.us"
               />
+
+              {/* בחירה מקבוצות שנראו לאחרונה */}
+              <button
+                type="button"
+                onClick={loadRecentGroups}
+                disabled={loadingGroups}
+                className="mb-2 flex items-center gap-1.5 text-xs text-teal-700 hover:text-teal-900 font-medium"
+              >
+                <RefreshCwIcon className={`size-3.5 ${loadingGroups ? "animate-spin" : ""}`} />
+                {loadingGroups ? "טוען קבוצות…" : "הצג קבוצות שנראו לאחרונה בוובהוק"}
+              </button>
+
+              {recentGroups.length > 0 && (
+                <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-xs text-muted-foreground font-medium mb-1 px-1">בחר קבוצה:</p>
+                  {recentGroups.map((g) => (
+                    <button
+                      key={g.chatId}
+                      type="button"
+                      onClick={() => setWaMarketGroupId(g.chatId)}
+                      className={`w-full text-right rounded-lg px-3 py-2 text-xs transition-all ${
+                        waMarketGroupId === g.chatId
+                          ? "bg-teal-600 text-white"
+                          : "bg-white hover:bg-teal-50 border border-slate-200"
+                      }`}
+                      dir="ltr"
+                    >
+                      <span className="font-mono">{g.chatId}</span>
+                      <span className="mr-2 opacity-70">({g.hits} הודעות)</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">תגיות מערכת</label>
