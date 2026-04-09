@@ -177,21 +177,23 @@ export default function TransactionsClient() {
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoadingData(true);
-    Promise.all([
+    const [e, m, p] = await Promise.all([
       fetchOpenEntities(),
       fetchMarketBooksForTx(),
       fetchRecentPayments(),
-    ]).then(([e, m, p]) => {
-      if (e.success) setEntities(e.entities);
-      if (m.success) setMarketBooks(m.books);
-      if (p.success) setPayments(p.payments);
-      setLoadingData(false);
-    });
+    ]);
+    if (e.success) setEntities(e.entities);
+    if (m.success) setMarketBooks(m.books);
+    if (p.success) setPayments(p.payments);
+    setLoadingData(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // סינון ישויות לפי mode
   const filteredEntities = entities.filter((e) => {
