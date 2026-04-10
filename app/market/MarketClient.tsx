@@ -18,6 +18,7 @@ import {
   Mail,
 } from "lucide-react";
 import MarketContactLog from "./MarketContactLog";
+import { HScrollBar } from "@/components/ui/HScrollBar";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -747,9 +748,8 @@ export default function MarketClient({ initialRows }: Props) {
 
       {kanbanMode ? (
         /* ── Kanban Board ────────────────────────────────────────────── */
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-3 min-w-max">
-            {MARKET_STAGE_ORDER.map((stage) => {
+        <HScrollBar contentClassName="flex gap-3 flex-nowrap items-start pb-4">
+          {MARKET_STAGE_ORDER.map((stage) => {
               const stageRows = filteredRows.filter(
                 (r) => (r.market_stage ?? "new") === stage
               );
@@ -827,9 +827,8 @@ export default function MarketClient({ initialRows }: Props) {
                   )}
                 </div>
               );
-            })}
-          </div>
-        </div>
+          })}
+        </HScrollBar>
       ) : viewMode === "grid" ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredRows.map((row, i) => (

@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
+import { HScrollBar } from "@/components/ui/HScrollBar";
 
 // ── Tag configuration ─────────────────────────────────────────────────────────
 //
@@ -343,79 +344,81 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
 
       {/* ── Tag filter bar ───────────────────────────────────────────────── */}
       {allFilterTags.length > 0 && (
-        <div className="mb-5 flex flex-wrap gap-2 items-center">
-          {/* "All" chip */}
-          <button
-            onClick={() => setSelectedTags([])}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              selectedTags.length === 0
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary"
-            }`}
-          >
-            הכל
-            <span className="mr-1 opacity-70">({contacts.length})</span>
-          </button>
-
-          {/* One chip per tag */}
-          {allFilterTags.map((tag) => {
-            const count = contacts.filter((c) =>
-              contactAllTags(c).includes(tag)
-            ).length;
-            const active = selectedTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                onClick={() => toggleFilterTag(tag)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "bg-teal-600 text-white border-teal-600"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700"
-                }`}
-              >
-                {tagLabel(tag)}
-                <span className={`mr-1 ${active ? "opacity-80" : "opacity-50"}`}>
-                  ({count})
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Clear link (shown only when something is active) */}
-          {selectedTags.length > 0 && (
+        <div className="mb-5">
+          <HScrollBar>
+            {/* "All" chip */}
             <button
               onClick={() => setSelectedTags([])}
-              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-slate-700 mr-1"
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                selectedTags.length === 0
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary"
+              }`}
             >
-              נקה סינון
+              הכל
+              <span className="mr-1 opacity-70">({contacts.length})</span>
             </button>
-          )}
 
-          {/* OR / AND toggle – shown only when 2+ tags are selected */}
-          {selectedTags.length >= 2 && (
-            <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 mr-1">
+            {/* One chip per tag */}
+            {allFilterTags.map((tag) => {
+              const count = contacts.filter((c) =>
+                contactAllTags(c).includes(tag)
+              ).length;
+              const active = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleFilterTag(tag)}
+                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-teal-600 text-white border-teal-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700"
+                  }`}
+                >
+                  {tagLabel(tag)}
+                  <span className={`mr-1 ${active ? "opacity-80" : "opacity-50"}`}>
+                    ({count})
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* Clear link (shown only when something is active) */}
+            {selectedTags.length > 0 && (
               <button
-                onClick={() => setFilterMode("or")}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  filterMode === "or"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                onClick={() => setSelectedTags([])}
+                className="shrink-0 text-xs text-muted-foreground underline underline-offset-2 hover:text-slate-700 mr-1 whitespace-nowrap"
               >
-                OR
+                נקה סינון
               </button>
-              <button
-                onClick={() => setFilterMode("and")}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  filterMode === "and"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                AND
-              </button>
-            </div>
-          )}
+            )}
+
+            {/* OR / AND toggle – shown only when 2+ tags are selected */}
+            {selectedTags.length >= 2 && (
+              <div className="shrink-0 flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 mr-1">
+                <button
+                  onClick={() => setFilterMode("or")}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    filterMode === "or"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  OR
+                </button>
+                <button
+                  onClick={() => setFilterMode("and")}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    filterMode === "and"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  AND
+                </button>
+              </div>
+            )}
+          </HScrollBar>
         </div>
       )}
 
