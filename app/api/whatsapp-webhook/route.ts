@@ -55,18 +55,30 @@ export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const expected = process.env.WEBHOOK_SECRET ?? "";
   if (!token || token !== expected) {
+    // Log auth failure to help diagnose token mismatch
+    console.warn("[whatsapp-webhook] 401 token mismatch — received:", token?.slice(0, 6), "expected_len:", expected.length);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const admin = createAdminClient();
+
+  // Helper: write diagnostic entry to sys_logs (fire-and-forget)
+  const dbg = (message: string, metadata?: Record<string, unknown>) => {
+    if (!admin) return;
+    void admin.from("sys_logs").insert({ level: "DEBUG", module: "wa-webhook", message, metadata: metadata ?? {} });
+  };
 
   try {
     let body: unknown;
     try {
       body = await req.json();
     } catch {
+      await dbg("parse-error: failed to parse JSON body");
       return ok200();
     }
 
     if (!body || typeof body !== "object") {
+      await dbg("parse-error: body not object");
       return ok200();
     }
 
@@ -75,7 +87,11 @@ export async function POST(req: NextRequest) {
     const typeWebhook = String(b.typeWebhook ?? "");
     const isIncoming = typeWebhook === "incomingMessageReceived";
     const isOutgoing = typeWebhook === "outgoingMessageReceived";
+
+    await dbg("received", { typeWebhook, idMessage: b.idMessage });
+
     if (!isIncoming && !isOutgoing) {
+      // Other webhook types (status, qr, etc.) — silently ignore
       return ok200();
     }
 
@@ -86,8 +102,8 @@ export async function POST(req: NextRequest) {
         ? String(idInstanceRaw).trim()
         : "";
 
-    const admin = createAdminClient();
     if (!admin || !instanceId) {
+      await dbg("skip: no admin or instanceId", { instanceId });
       return ok200();
     }
 
@@ -103,6 +119,7 @@ export async function POST(req: NextRequest) {
     const configuredGroup = String(settings?.wa_market_group_id ?? "").trim();
 
     if (!greenApiToken || !userId) {
+      await dbg("skip: no settings for instanceId", { instanceId, found: !!settings });
       return ok200();
     }
 
@@ -115,7 +132,9 @@ export async function POST(req: NextRequest) {
       logWarn("whatsapp-webhook", "chatId mismatch - ignoring", {
         user_id: userId,
         chatId: chatIdRaw || null,
+        chatIdNorm: chatIdNorm || null,
         configuredGroup: configuredGroup || null,
+        configuredGroupNorm: configuredGroupNorm || null,
       });
       return ok200();
     }
@@ -126,20 +145,25 @@ export async function POST(req: NextRequest) {
     const senderId = normalizeWaId(String(senderData?.sender ?? ""));
 
     if (!senderId && isIncoming) {
+      await dbg("skip: incoming with no sender", { typeWebhook });
       return ok200();
     }
 
     if (isIncoming && instanceWid && senderId === instanceWid) {
+      await dbg("skip: incoming self-message (echo)", { senderId, instanceWid });
       return ok200();
     }
 
     const idMessage = String(b.idMessage ?? "").trim();
     if (!idMessage) {
+      await dbg("skip: no idMessage");
       return ok200();
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
     const imageUrl = extractImageUrlFromMessageData(b.messageData);
+
+    await dbg("processing message", { typeWebhook, idMessage, textLen: text.length, hasImage: !!imageUrl });
 
     if (!text) {
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
@@ -148,6 +172,7 @@ export async function POST(req: NextRequest) {
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
+      await dbg("not-actionable", { parsed });
       await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
@@ -179,18 +204,22 @@ export async function POST(req: NextRequest) {
 
     if (insErr) {
       if (insErr.code === "23505") {
+        await dbg("duplicate sku — reacting OK", { idMessage });
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
+        await dbg("insert error", { code: insErr.code, message: insErr.message });
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
+    await dbg("success — inserted", { sku, idMessage });
     await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
+    await dbg("unhandled-error", { error: String(e) });
     return ok200();
   }
 }
