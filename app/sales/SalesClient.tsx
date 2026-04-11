@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import {
   fetchSales,
   createSale,
@@ -82,15 +83,20 @@ export default function SalesClient() {
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
   const [editSale, setEditSale] = useState<SaleRecord | null>(null);
-  const [editBuyerId, setEditBuyerId] = useState("");
-  const [editSellerId, setEditSellerId] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editBuyerId, setEditBuyerId] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editSellerId, setEditSellerId] = useState("");
   const [editSaleDate, setEditSaleDate] = useState("");
-  const [editTotalPrice, setEditTotalPrice] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editTotalPrice, setEditTotalPrice] = useState("");
   const [editSalePrice, setEditSalePrice] = useState("");
   const [editQuantity, setEditQuantity] = useState("1");
-  const [editStatus, setEditStatus] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editStatus, setEditStatus] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  const [editItemDescription, setEditItemDescription] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_editItemDescription, setEditItemDescription] = useState("");
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -891,6 +897,8 @@ export default function SalesClient() {
           setNewSaleBuyerId(c.id);
         }}
       />
+
+      <ScrollToTop />
     </div>
   );
 }

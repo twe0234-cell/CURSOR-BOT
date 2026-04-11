@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -838,6 +839,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
           </FormProvider>
         </DialogContent>
       </Dialog>
+
+      <ScrollToTop />
     </div>
   );
 }

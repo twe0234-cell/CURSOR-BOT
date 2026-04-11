@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { HScrollBar } from "@/components/ui/HScrollBar";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 
 // ── Tag configuration ─────────────────────────────────────────────────────────
 //
@@ -751,6 +752,8 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ScrollToTop />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -711,6 +712,8 @@ export default function SoferimClient({ initialRows }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ScrollToTop />
     </div>
   );
 }
