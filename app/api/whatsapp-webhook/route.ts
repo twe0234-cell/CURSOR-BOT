@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   // Helper: write diagnostic entry to sys_logs (fire-and-forget)
   const dbg = (message: string, metadata?: Record<string, unknown>) => {
     if (!admin) return;
-    void admin.from("sys_logs").insert({ level: "DEBUG", module: "wa-webhook", message, metadata: metadata ?? {} });
+    void admin.from("sys_logs").insert({ level: "DEBUG", module: "whatsapp-webhook", message, metadata: metadata ?? {} });
   };
 
   try {
