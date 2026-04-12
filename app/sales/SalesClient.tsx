@@ -46,7 +46,8 @@ import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon } from "lucide-react";
+import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon } from "lucide-react";
+import { buildPaymentRequestText, buildCalendarEventUrl, mailtoPaymentHref } from "@/lib/sales/paymentRequest";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -412,13 +413,39 @@ export default function SalesClient() {
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex gap-1 pt-1 flex-wrap">
                           <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
                             <PencilIcon className="size-3.5 ml-1" />ערוך
                           </Button>
                           <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
                             <BanknoteIcon className="size-3.5 ml-1" />תשלום
                           </Button>
+                          {/* שלח לאישור — WA */}
+                          <a
+                            href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
+                            title="שלח בקשת תשלום בוואטסאפ"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 text-xs transition-colors"
+                          >
+                            <MessageCircleIcon className="size-3.5" />
+                          </a>
+                          {/* שלח במייל */}
+                          <a
+                            href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
+                            title="שלח בקשת תשלום במייל"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 text-xs transition-colors"
+                          >
+                            <MailIcon className="size-3.5" />
+                          </a>
+                          {/* הוסף ליומן */}
+                          <a
+                            href={buildCalendarEventUrl({ title: `תשלום: ${getSaleDisplay(s)}`, date: s.sale_date, details: `קונה: ${s.buyer_name ?? "—"}\nסכום: ${(s.total_price ?? s.sale_price).toLocaleString("he-IL")} ₪\nיתרה: ${(s.remaining_balance ?? 0).toLocaleString("he-IL")} ₪` })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="הוסף תזכורת ליומן Google"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 text-xs transition-colors"
+                          >
+                            <CalendarIcon className="size-3.5" />
+                          </a>
                         </div>
                       </div>
                     );
@@ -477,6 +504,22 @@ export default function SalesClient() {
                                 <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
                                   <BanknoteIcon className="size-3.5 ml-1" />תשלום
                                 </Button>
+                                <a
+                                  href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
+                                  title="שלח בקשת תשלום בוואטסאפ"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                ><MessageCircleIcon className="size-3.5" /></a>
+                                <a
+                                  href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
+                                  title="שלח בקשת תשלום במייל"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 transition-colors"
+                                ><MailIcon className="size-3.5" /></a>
+                                <a
+                                  href={buildCalendarEventUrl({ title: `תשלום: ${getSaleDisplay(s)}`, date: s.sale_date, details: `קונה: ${s.buyer_name ?? "—"}\nסכום: ${(s.total_price ?? s.sale_price).toLocaleString("he-IL")} ₪` })}
+                                  target="_blank" rel="noopener noreferrer"
+                                  title="הוסף ליומן Google"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                ><CalendarIcon className="size-3.5" /></a>
                               </div>
                             </TableCell>
                           </TableRow>

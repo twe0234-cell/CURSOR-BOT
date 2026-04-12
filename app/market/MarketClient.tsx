@@ -46,6 +46,8 @@ import {
   updateMarketTorahBook,
   updateMarketStage,
   deleteMarketTorahBook,
+  linkBookToSale,
+  fetchRecentSalesForLink,
 } from "./actions";
 import {
   MARKET_STAGE_LABELS,
@@ -197,6 +199,11 @@ export default function MarketClient({ initialRows }: Props) {
   // ─────────────────────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(false);
+  // ── Sale link picker ─────────────────────────────────────────────────────
+  const [linkBookId, setLinkBookId] = useState<string | null>(null);
+  const [linkSales, setLinkSales] = useState<{ id: string; label: string }[]>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkSelectedSaleId, setLinkSelectedSaleId] = useState("");
   const [form, setForm] = useState(emptyForm());
 
   // Edit mode state
@@ -344,6 +351,27 @@ export default function MarketClient({ initialRows }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function openLinkSale(bookId: string) {
+    setLinkBookId(bookId);
+    setLinkSelectedSaleId("");
+    setLinkLoading(true);
+    const res = await fetchRecentSalesForLink();
+    setLinkLoading(false);
+    if (res.success) setLinkSales(res.sales);
+    else toast.error(res.error);
+  }
+
+  async function handleLinkSale() {
+    if (!linkBookId) return;
+    setLinkLoading(true);
+    const res = await linkBookToSale(linkBookId, linkSelectedSaleId || null);
+    setLinkLoading(false);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success(linkSelectedSaleId ? "הספר קושר למכירה ✓" : "הקישור הוסר");
+    setRows((prev) => prev.map((r) => r.id === linkBookId ? { ...r, sale_id: linkSelectedSaleId || null } : r));
+    setLinkBookId(null);
   }
 
   async function handleDelete(id: string) {
@@ -820,6 +848,21 @@ export default function MarketClient({ initialRows }: Props) {
                           </Button>
                         )}
                       </div>
+                      {stage === "deal_closed" && (
+                        <Button
+                          variant={row.sale_id ? "default" : "outline"}
+                          size="sm"
+                          className={cn(
+                            "h-6 text-xs w-full mt-0.5",
+                            row.sale_id
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                          )}
+                          onClick={() => openLinkSale(row.id)}
+                        >
+                          {row.sale_id ? "✓ מקושר למכירה" : "⊕ קשר למכירה"}
+                        </Button>
+                      )}
                     </div>
                   ))}
                   {stageRows.length === 0 && (
@@ -1178,6 +1221,38 @@ export default function MarketClient({ initialRows }: Props) {
                 </Button>
               </div>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Link to Sale Dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!linkBookId} onOpenChange={(o) => !o && setLinkBookId(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>קשר ספר תורה למכירה</DialogTitle>
+          </DialogHeader>
+          {linkLoading ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">טוען מכירות...</p>
+          ) : (
+            <div className="space-y-3 mt-2">
+              <p className="text-sm text-muted-foreground">בחר מכירה קיימת לקישור, או השאר ריק להסרת קישור.</p>
+              <select
+                value={linkSelectedSaleId}
+                onChange={(e) => setLinkSelectedSaleId(e.target.value)}
+                className="w-full rounded-xl border border-border px-3 py-2 text-sm bg-background"
+              >
+                <option value="">— ללא קישור —</option>
+                {linkSales.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" onClick={() => setLinkBookId(null)}>ביטול</Button>
+                <Button onClick={handleLinkSale} disabled={linkLoading}>
+                  {linkSelectedSaleId ? "קשר" : "הסר קישור"}
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
