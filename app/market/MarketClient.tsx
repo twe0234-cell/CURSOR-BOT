@@ -683,20 +683,21 @@ export default function MarketClient({
 
             {/* Notes */}
             <div className="sm:col-span-2 lg:col-span-3">
-              <p className="text-xs text-muted-foreground mb-1">הערות</p>
+              <p className="text-xs text-muted-foreground mb-1">הערות כלליות</p>
               <Textarea
                 value={form.notes}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, notes: e.target.value }))
                 }
                 rows={2}
+                placeholder="פרטים קבועים על הספר, מצב, מקור..."
               />
             </div>
 
             {/* Negotiation notes */}
             <div className="sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-muted-foreground mb-1">
-                הערות / יומן משא ומתן (גמישות מחיר וכו׳)
+                הערות מו״מ
               </p>
               <Textarea
                 value={form.negotiation_notes}
@@ -707,7 +708,7 @@ export default function MarketClient({
                   }))
                 }
                 rows={3}
-                placeholder="תיעוד שיחות, תנאים, גמישות..."
+                placeholder="תיעוד שיחות, תנאים, גמישות מחיר..."
               />
             </div>
 
@@ -1206,19 +1207,21 @@ export default function MarketClient({
                 </div>
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">הערות</p>
+                <p className="text-xs text-muted-foreground mb-1">הערות כלליות</p>
                 <Textarea
                   value={editForm.notes}
                   onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
                   rows={2}
+                  placeholder="פרטים קבועים על הספר, מצב, מקור..."
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">הערות משא ומתן (שדה חופשי)</p>
+                <p className="text-xs text-muted-foreground mb-1">הערות מו״מ</p>
                 <Textarea
                   value={editForm.negotiation_notes}
                   onChange={(e) => setEditForm((f) => ({ ...f, negotiation_notes: e.target.value }))}
                   rows={2}
+                  placeholder="תיעוד שיחות, תנאים, גמישות מחיר..."
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3 border-t pt-3">

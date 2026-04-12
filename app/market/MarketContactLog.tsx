@@ -47,10 +47,20 @@ export default function MarketContactLog({ bookId }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  // datetime-local value ("2026-04-12T20:01") has no timezone — parse as local
+  // time and let the Date constructor convert to UTC correctly via toISOString().
+  function localDtToUtcIso(localDt: string): string {
+    const [datePart, timePart] = localDt.split("T");
+    const [year, month, day] = (datePart ?? "").split("-").map(Number);
+    const [hours, minutes] = (timePart ?? "00:00").split(":").map(Number);
+    return new Date(year!, month! - 1, day!, hours!, minutes!).toISOString();
+  }
+
   const onAdd = () => {
     if (!note.trim()) { toast.error("הזן הערה"); return; }
     startTransition(async () => {
-      const res = await addMarketContactLog(bookId, note, contactedAt);
+      const utcIso = localDtToUtcIso(contactedAt);
+      const res = await addMarketContactLog(bookId, note, utcIso);
       if (res.success) {
         toast.success("נרשם");
         setNote("");
