@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import type { MarketTorahBookRow, MarketStage } from "../actions";
+import type { MarketTorahBookRow } from "../actions";
+import type { MarketStage } from "../stages";
 import { updateMarketStage } from "../actions";
 
 // ─── Stage config ───────────────────────────────────────────────────────────
