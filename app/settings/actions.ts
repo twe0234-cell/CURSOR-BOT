@@ -4,42 +4,6 @@ import { createClient } from "@/src/lib/supabase/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
-export type WebhookLogEntry = {
-  id: string;
-  level: string;
-  message: string;
-  metadata: Record<string, unknown>;
-  created_at: string;
-};
-
-/** שולף 30 שורות אחרונות מה-sys_logs של הwebhook */
-export async function fetchWebhookLogs(): Promise<
-  { success: true; logs: WebhookLogEntry[] } | { success: false; error: string }
-> {
-  const admin = createAdminClient();
-  if (!admin) return { success: false, error: "Admin client unavailable" };
-
-  const { data, error } = await admin
-    .from("sys_logs")
-    .select("id, level, message, metadata, created_at")
-    .eq("module", "whatsapp-webhook")
-    .order("created_at", { ascending: false })
-    .limit(30);
-
-  if (error) return { success: false, error: error.message };
-
-  return {
-    success: true,
-    logs: (data ?? []).map((r) => ({
-      id: r.id,
-      level: r.level ?? "INFO",
-      message: r.message ?? "",
-      metadata: (r.metadata as Record<string, unknown>) ?? {},
-      created_at: r.created_at ?? "",
-    })),
-  };
-}
-
 export type SettingsActionResult =
   | { success: true }
   | { success: false; error: string };
@@ -139,53 +103,6 @@ export async function saveWhatsappNumber(whatsappNumber: string): Promise<Settin
     revalidatePath("/settings");
     revalidatePath("/p");
     return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
-  }
-}
-
-export async function fetchRecentWebhookGroups(): Promise<
-  { success: true; groups: { chatId: string; hits: number; lastSeen: string }[] } | { success: false; error: string }
-> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "יש להתחבר" };
-
-    const { data, error } = await supabase.rpc("get_recent_webhook_groups" as never, {
-      p_user_id: user.id,
-    } as never);
-
-    if (error || !data) {
-      // fallback: direct query via sys_logs
-      const { data: logs } = await supabase
-        .from("sys_logs")
-        .select("metadata, created_at")
-        .eq("module", "whatsapp-webhook")
-        .eq("message", "chatId mismatch - ignoring")
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      const counts = new Map<string, { hits: number; lastSeen: string }>();
-      for (const row of logs ?? []) {
-        const meta = row.metadata as Record<string, string> | null;
-        const chatId = meta?.chatId;
-        const uid = meta?.user_id;
-        if (!chatId || uid !== user.id) continue;
-        const existing = counts.get(chatId);
-        if (!existing) {
-          counts.set(chatId, { hits: 1, lastSeen: row.created_at ?? "" });
-        } else {
-          existing.hits += 1;
-        }
-      }
-      const groups = [...counts.entries()]
-        .map(([chatId, { hits, lastSeen }]) => ({ chatId, hits, lastSeen }))
-        .sort((a, b) => b.hits - a.hits)
-        .slice(0, 15);
-      return { success: true, groups };
-    }
-    return { success: true, groups: data as { chatId: string; hits: number; lastSeen: string }[] };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
