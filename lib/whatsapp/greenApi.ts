@@ -248,7 +248,11 @@ const pushTrim = (parts: string[], v: unknown) => {
 };
 
 /**
- * חילוץ טקסט מ־messageData ב־webhook incomingMessageReceived (טקסט / מורחב / כיתוב מדיה).
+ * חילוץ טקסט מ־messageData ב־webhook (incoming ו-outgoing).
+ *
+ * Green API:
+ *   incoming → messageData.textMessageData.textMessage
+ *   outgoing → messageData.textMessage  (ישירות ברמה הראשונה של messageData)
  */
 export function extractTextFromGreenIncomingWebhookMessageData(
   messageData: unknown
@@ -257,6 +261,10 @@ export function extractTextFromGreenIncomingWebhookMessageData(
   const md = messageData as Record<string, unknown>;
   const parts: string[] = [];
 
+  // outgoing format: messageData.textMessage (flat)
+  pushTrim(parts, md.textMessage);
+
+  // incoming format: messageData.textMessageData.textMessage (nested)
   const textMessageData = md.textMessageData as Record<string, unknown> | undefined;
   pushTrim(parts, textMessageData?.textMessage);
 
@@ -274,5 +282,12 @@ export function extractTextFromGreenIncomingWebhookMessageData(
     pushTrim(parts, block?.caption);
   }
 
-  return parts.join("\n").trim();
+  // deduplicate (outgoing and incoming nesting sometimes overlap)
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const p of parts) {
+    if (!seen.has(p)) { seen.add(p); unique.push(p); }
+  }
+
+  return unique.join("\n").trim();
 }
