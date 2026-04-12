@@ -177,7 +177,7 @@ export default function GroupManagementTab({ initialGroups }: Props) {
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <UsersIcon className="w-5 h-5 text-indigo-500" />
+            <UsersIcon className="w-5 h-5 text-sky-500" />
             <div>
               <h2 className="text-base font-semibold text-slate-700">קבוצות WhatsApp</h2>
               <p className="text-sm text-muted-foreground">ניהול קבוצות וייבוא מ-WhatsApp</p>
@@ -197,7 +197,7 @@ export default function GroupManagementTab({ initialGroups }: Props) {
             <Button
               onClick={handleOpenImport}
               disabled={importLoading}
-              className="rounded-xl bg-indigo-600 hover:bg-indigo-700"
+              className="rounded-xl bg-sky-600 hover:bg-sky-700"
             >
               <DownloadIcon className={cn("size-4 ml-1", importLoading && "animate-spin")} />
               ייבוא מ-WhatsApp
@@ -247,7 +247,7 @@ export default function GroupManagementTab({ initialGroups }: Props) {
           <div className="flex flex-col flex-1 min-h-0 space-y-4">
             {importLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="size-12 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+                <div className="size-12 animate-spin rounded-full border-4 border-sky-200 border-t-sky-600" />
                 <p className="text-muted-foreground">טוען קבוצות מ-Green API...</p>
               </div>
             ) : importError ? (
@@ -262,7 +262,7 @@ export default function GroupManagementTab({ initialGroups }: Props) {
               </div>
             ) : importGroups.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <UsersIcon className="size-16 text-indigo-400" />
+                <UsersIcon className="size-16 text-sky-400" />
                 <p className="text-center font-medium text-slate-700">אין קבוצות חדשות לייבא</p>
                 <p className="text-center text-sm text-muted-foreground max-w-xs">
                   כל הקבוצות מ-WhatsApp כבר קיימות במערכת.

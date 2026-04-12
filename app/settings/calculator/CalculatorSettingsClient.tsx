@@ -314,7 +314,7 @@ export default function CalculatorSettingsClient({
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-xl bg-indigo-600 hover:bg-indigo-700"
+          className="rounded-xl bg-sky-600 hover:bg-sky-700"
         >
           <SaveIcon className="size-4 ml-2" />
           {saving ? "שומר..." : "שמור שינויים"}

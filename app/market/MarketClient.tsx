@@ -16,6 +16,7 @@ import {
   MessageSquareIcon,
   MessageCircle,
   Mail,
+  AlertTriangleIcon,
 } from "lucide-react";
 import MarketContactLog from "./MarketContactLog";
 import { HScrollBar } from "@/components/ui/HScrollBar";
@@ -80,6 +81,8 @@ function todayISODate(): string {
 
 type Props = {
   initialRows: MarketTorahBookRow[];
+  /** כשל בשליפה מהשרת — מוצג במקום להעלים שגיאה כרשימה ריקה */
+  initialFetchError?: string | null;
 };
 
 function displayOwner(row: MarketTorahBookRow): string {
@@ -166,7 +169,10 @@ const emptyForm = () => ({
   negotiation_notes: "",
 });
 
-export default function MarketClient({ initialRows }: Props) {
+export default function MarketClient({
+  initialRows,
+  initialFetchError = null,
+}: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   useEffect(() => {
@@ -453,6 +459,22 @@ export default function MarketClient({ initialRows }: Props) {
           הבעלים; אחרת הבעלים הוא הסופר.
         </p>
       </div>
+
+      {initialFetchError ? (
+        <div
+          className="mb-6 flex gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          <AlertTriangleIcon className="size-5 shrink-0" />
+          <div>
+            <p className="font-medium">לא ניתן לטעון את המאגר</p>
+            <p className="mt-1 opacity-90">{initialFetchError}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              הרשימה למטה עשויה להיות ריקה בגלל שגיאה — לא בהכרח בגלל שאין נתונים.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <Card className="mb-8 rounded-2xl border border-border bg-card shadow-sm">
         <CardContent className="pt-6">

@@ -380,7 +380,7 @@ export default function BroadcastTab({
         <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <RadioIcon className="w-5 h-5 text-indigo-500" />
+              <RadioIcon className="w-5 h-5 text-sky-500" />
               <CardTitle className="text-base font-semibold text-slate-700">בחירת קהל יעד</CardTitle>
             </div>
             <CardDescription>בחר תגיות או קבוצות ספציפיות</CardDescription>
@@ -527,7 +527,7 @@ export default function BroadcastTab({
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="שלום {Name}, ..."
                 rows={5}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
               />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
@@ -541,7 +541,7 @@ export default function BroadcastTab({
                 accept="image/*"
                 onChange={handleFileChange}
                 disabled={uploading}
-                className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
               />
               {uploading && <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>}
               {imageUrl && !uploading && (
@@ -555,7 +555,7 @@ export default function BroadcastTab({
                       toast.error("לא ניתן לטעון תצוגה מקדימה — בדוק את קישור האחסון");
                     }}
                   />
-                  <p className="text-sm text-indigo-600 truncate" title={imageUrl}>
+                  <p className="text-sm text-sky-600 truncate" title={imageUrl}>
                     {imageFile?.name || "תמונה הועלתה"}
                   </p>
                   <p className="text-xs text-muted-foreground break-all">{imageUrl}</p>
@@ -568,7 +568,7 @@ export default function BroadcastTab({
         <Button
           onClick={handleSend}
           disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
-          className="w-full rounded-xl bg-indigo-600 py-6 text-base font-semibold hover:bg-indigo-700 hover:shadow-lg"
+          className="w-full rounded-xl bg-sky-600 py-6 text-base font-semibold hover:bg-sky-700 hover:shadow-lg"
         >
           <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
           {loading && sendProgress

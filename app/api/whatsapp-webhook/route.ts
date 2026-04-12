@@ -13,11 +13,14 @@ import {
   parseMarketTorahMessage,
   parsedMessageIsActionable,
 } from "@/src/lib/market/parseWhatsAppMarketMessage";
+import { STAM_SEFER_TORAH_SIZES } from "@/src/lib/stam/catalog";
 
 export const dynamic = "force-dynamic";
 
 const REACTION_OK = "✅";
 const REACTION_FAIL = "❌";
+
+const ALLOWED_MARKET_TORAH_SIZES = new Set<string>(STAM_SEFER_TORAH_SIZES);
 
 function ok200(): NextResponse {
   return NextResponse.json({ ok: true }, { status: 200 });
@@ -180,6 +183,10 @@ export async function POST(req: NextRequest) {
     const askFull = parsed.asking_price_full_shekels!;
     const askDb = marketKToDb(marketDbToK(askFull));
     const sku = generateSku(marketSkuPrefix);
+    const torahSizeDb =
+      parsed.torah_size != null && ALLOWED_MARKET_TORAH_SIZES.has(parsed.torah_size)
+        ? parsed.torah_size
+        : null;
 
     const { error: insErr } = await admin.from("market_torah_books").insert({
       user_id: userId,
@@ -189,7 +196,7 @@ export async function POST(req: NextRequest) {
       dealer_id: null,
       external_sofer_name: null,
       script_type: parsed.script_type,
-      torah_size: parsed.torah_size,
+      torah_size: torahSizeDb,
       parchment_type: null,
       influencer_style: null,
       asking_price: askDb,

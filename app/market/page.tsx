@@ -11,7 +11,11 @@ export default async function MarketPage() {
   if (!user) redirect("/login");
 
   const booksRes = await fetchMarketTorahBooks();
-  const rows = booksRes.success ? booksRes.rows : [];
 
-  return <MarketClient initialRows={rows} />;
+  return (
+    <MarketClient
+      initialRows={booksRes.success ? booksRes.rows : []}
+      initialFetchError={booksRes.success ? null : booksRes.error}
+    />
+  );
 }

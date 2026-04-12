@@ -171,7 +171,7 @@ export default function CampaignsClient({ initialContacts, signature }: Props) {
   if (!gmailConnected) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <KeyIcon className="size-16 text-indigo-500" />
+        <KeyIcon className="size-16 text-sky-500" />
         <h3 className="text-lg font-semibold text-slate-700">חיבור Gmail</h3>
         <p className="text-center text-muted-foreground max-w-md">
           לחיבור Gmail – הגדר OAuth בהגדרות

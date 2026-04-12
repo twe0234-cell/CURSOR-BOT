@@ -1,3 +1,5 @@
+import { STAM_SCRIPT_TYPES } from "@/src/lib/stam/catalog";
+
 /**
  * פענוח הודעת WhatsApp למאגר ס״ת — פורמט קבוע, ירידת שורה כמפריד.
  *
@@ -24,9 +26,10 @@ const TORAH_SIZES = new Set(["24", "30", "36", "42", "48", "56"]);
 
 function parseScript(raw: string): string | null {
   const t = raw.trim();
-  if (/^(ארי|אר[""״]י)$/u.test(t)) return "ארי";
-  if (/^(ב[""״]י|בי|בית\s*יוסף)$/u.test(t)) return 'ב"י';
-  if (/^ספרדי$/.test(t)) return "ספרדי";
+  if (/^(ארי|אר[""״]י)$/u.test(t)) return STAM_SCRIPT_TYPES[0];
+  // חייב להתאים ל־CHECK ב־Postgres (ב״י עם גרשיים עבריים, לא מירכאות ASCII)
+  if (/^(ב[""״]י|בי|בית\s*יוסף)$/u.test(t)) return STAM_SCRIPT_TYPES[1];
+  if (/^ספרדי$/.test(t)) return STAM_SCRIPT_TYPES[2];
   return null;
 }
 

@@ -94,7 +94,7 @@ export default function CampaignsTab({ initialContacts }: Props) {
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <MailIcon className="w-5 h-5 text-indigo-500" />
+            <MailIcon className="w-5 h-5 text-sky-500" />
             <div>
               <h2 className="text-base font-semibold text-slate-700">קמפיין אימייל</h2>
               <p className="text-sm text-muted-foreground">שליחת קמפיין לנמענים מנויים (ללא הסירו מנוי)</p>
@@ -165,14 +165,14 @@ export default function CampaignsTab({ initialContacts }: Props) {
               <Button
                 onClick={handleSendCampaign}
                 disabled={sending || !campaignSubject.trim() || targetCount === 0}
-                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 w-full py-6"
+                className="rounded-xl bg-sky-600 hover:bg-sky-700 w-full py-6"
               >
                 {sending ? "שולח..." : "שלח קמפיין"}
               </Button>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <KeyIcon className="size-16 text-indigo-500" />
+              <KeyIcon className="size-16 text-sky-500" />
               <h3 className="text-lg font-semibold text-slate-700">חיבור Gmail</h3>
               <p className="text-center text-muted-foreground max-w-md">
                 לחיבור Gmail שלך להפעלת שליחת אימיילים – הגדר OAuth בהגדרות.

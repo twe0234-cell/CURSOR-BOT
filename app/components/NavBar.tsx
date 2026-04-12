@@ -21,6 +21,7 @@ import {
   BookOpen,
   Users,
   ArrowLeftRight,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +38,7 @@ export default function NavBar() {
 
   /** Order: core → תקשורת → ERP */
   const navItems = [
-    { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
+    { href: "/", label: "לוח בקרה", icon: Home },
     { href: "/transactions", label: "תנועות", icon: ArrowLeftRight },
     { href: "/audience", label: "נמענים", icon: Users },
     { href: "/whatsapp", label: "WhatsApp", icon: Radio },
