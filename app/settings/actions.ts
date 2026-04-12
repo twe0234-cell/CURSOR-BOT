@@ -1,7 +1,44 @@
 "use server";
 
 import { createClient } from "@/src/lib/supabase/server";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+
+export type WebhookLogEntry = {
+  id: string;
+  level: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+/** שולף 30 שורות אחרונות מה-sys_logs של הwebhook */
+export async function fetchWebhookLogs(): Promise<
+  { success: true; logs: WebhookLogEntry[] } | { success: false; error: string }
+> {
+  const admin = createAdminClient();
+  if (!admin) return { success: false, error: "Admin client unavailable" };
+
+  const { data, error } = await admin
+    .from("sys_logs")
+    .select("id, level, message, metadata, created_at")
+    .eq("module", "whatsapp-webhook")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) return { success: false, error: error.message };
+
+  return {
+    success: true,
+    logs: (data ?? []).map((r) => ({
+      id: r.id,
+      level: r.level ?? "INFO",
+      message: r.message ?? "",
+      metadata: (r.metadata as Record<string, unknown>) ?? {},
+      created_at: r.created_at ?? "",
+    })),
+  };
+}
 
 export type SettingsActionResult =
   | { success: true }

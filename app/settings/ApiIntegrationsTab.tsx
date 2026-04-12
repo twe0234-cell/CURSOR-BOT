@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { saveUserSettings, disconnectGmail, fetchRecentWebhookGroups } from "./actions";
+import { saveUserSettings, disconnectGmail, fetchRecentWebhookGroups, fetchWebhookLogs, type WebhookLogEntry } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +47,9 @@ export default function ApiIntegrationsTab({
   const [recentGroups, setRecentGroups] = useState<{ chatId: string; hits: number; lastSeen: string }[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(true);
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -115,6 +118,13 @@ export default function ApiIntegrationsTab({
     const res = await fetchRecentWebhookGroups();
     setLoadingGroups(false);
     if (res.success) setRecentGroups(res.groups);
+  };
+
+  const loadWebhookLogs = async () => {
+    setLogsLoading(true);
+    const res = await fetchWebhookLogs();
+    setLogsLoading(false);
+    if (res.success) setWebhookLogs(res.logs);
   };
 
   const addTag = () => {
@@ -362,6 +372,78 @@ export default function ApiIntegrationsTab({
                 </Button>
               </a>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Webhook Live Log ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => { setLogsOpen((o) => !o); if (!logsOpen) loadWebhookLogs(); }}
+          className="flex w-full items-center justify-between p-4 text-right hover:bg-muted/50 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            🔍 לוג Webhook חי — מאגר ס״ת
+          </span>
+          <div className="flex items-center gap-2">
+            {logsOpen && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); loadWebhookLogs(); }}
+                className="rounded-lg border border-border px-2 py-1 text-xs hover:bg-muted"
+              >
+                <RefreshCwIcon className={`size-3.5 ${logsLoading ? "animate-spin" : ""}`} />
+              </button>
+            )}
+            {logsOpen ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
+          </div>
+        </button>
+        {logsOpen && (
+          <div className="border-t border-border p-4">
+            {logsLoading ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">טוען...</p>
+            ) : webhookLogs.length === 0 ? (
+              <div className="py-6 text-center space-y-2">
+                <p className="text-sm font-semibold text-amber-600">⚠️ אין רשומות — הwebhook לא מקבל בקשות כלל</p>
+                <p className="text-xs text-muted-foreground">בדוק שה-URL בGreen API מכיל את ה-token הנכון</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-96 overflow-y-auto font-mono text-xs">
+                {webhookLogs.map((log) => {
+                  const isWarn = log.level === "WARN" || log.message.includes("mismatch");
+                  const isErr = log.level === "ERROR";
+                  const meta = log.metadata;
+                  return (
+                    <div
+                      key={log.id}
+                      className={`rounded-lg px-3 py-2 border ${
+                        isErr ? "bg-red-50 border-red-200 text-red-800" :
+                        isWarn ? "bg-amber-50 border-amber-200 text-amber-800" :
+                        "bg-muted/40 border-border text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold truncate">{log.message}</span>
+                        <span className="text-muted-foreground shrink-0 text-[10px]">
+                          {new Date(log.created_at).toLocaleTimeString("he-IL")}
+                        </span>
+                      </div>
+                      {Object.keys(meta).length > 0 && (
+                        <div className="mt-0.5 text-[10px] opacity-70 truncate">
+                          {Object.entries(meta).map(([k, v]) =>
+                            v != null ? `${k}=${String(v).slice(0, 40)}` : null
+                          ).filter(Boolean).join(" · ")}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground mt-3 text-center">
+              מציג 30 רשומות אחרונות מ-sys_logs (module=whatsapp-webhook)
+            </p>
           </div>
         )}
       </div>
