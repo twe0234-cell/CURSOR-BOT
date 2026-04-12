@@ -1,11 +1,13 @@
 "use server";
 
 import { createClient } from "@/src/lib/supabase/server";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 import { getAccessToken } from "@/src/lib/gmail";
 import { logInfo, logError } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function buildMimeMessage(
   to: string,
@@ -48,12 +50,28 @@ function buildMimeMessage(
   return mime;
 }
 
-const HTML_WRAPPER = (body: string) =>
-  `<div style="direction: rtl; text-align: right; max-width: 600px; margin: auto; font-family: sans-serif; font-size: 16px;">${body}</div>`;
+const HTML_WRAPPER = (body: string, trackingPixelUrl: string) =>
+  `<div style="direction:rtl;text-align:right;max-width:600px;margin:auto;font-family:Arial,sans-serif;font-size:16px;line-height:1.6;color:#222;">
+${body}
+<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />
+</div>`;
 
 export type SendGmailCampaignResult =
-  | { success: true; sent: number; failed: number }
+  | { success: true; sent: number; failed: number; campaignId: string }
   | { success: false; error: string };
+
+export type CampaignStat = {
+  id: string;
+  subject: string;
+  created_at: string;
+  sent_at: string | null;
+  sent_count: number;
+  failed_count: number;
+  open_count: number;
+  mobile_count: number;
+  desktop_count: number;
+  tablet_count: number;
+};
 
 export async function sendGmailCampaignAction(
   subject: string,
@@ -89,7 +107,7 @@ export async function sendGmailCampaignAction(
     const fromEmail = settings.gmail_email ?? "noreply@example.com";
     const signature = sysSettings?.email_signature ?? "";
     const signatureHtml = signature
-      ? `<div dir="rtl" style="margin-top:24px;border-top:1px solid #eee;padding-top:16px;">${signature}</div>`
+      ? `<div dir="rtl" style="margin-top:24px;border-top:1px solid #eee;padding-top:16px;font-size:14px;color:#555;">${signature}</div>`
       : "";
 
     const { data: contacts } = await supabase
@@ -109,6 +127,42 @@ export async function sendGmailCampaignAction(
       return { success: false, error: "לא נמצאו נמענים פעילים" };
     }
 
+    // ── Create campaign record ──────────────────────────────────────────
+    const { data: campaign, error: campaignErr } = await supabase
+      .from("email_campaigns")
+      .insert({
+        user_id: user.id,
+        subject,
+        body_html: htmlBody,
+        sent_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (campaignErr || !campaign) {
+      logError("EmailCampaign", "Failed to create campaign", { error: campaignErr?.message });
+      return { success: false, error: "שגיאה ביצירת קמפיין" };
+    }
+
+    const campaignId = campaign.id as string;
+
+    // ── Pre-create email_log rows (one per recipient) ─────────────────
+    const adminSupabase = createAdminClient();
+    const logRows = toSend.map((c) => ({
+      campaign_id: campaignId,
+      contact_id: c.id,
+      status: "sent",
+    }));
+
+    const { data: insertedLogs } = adminSupabase
+      ? await adminSupabase.from("email_logs").insert(logRows).select("id, contact_id")
+      : { data: null };
+
+    // Build logId map: contact_id → log_id
+    const logIdMap = new Map<string, string>(
+      (insertedLogs ?? []).map((l: { id: string; contact_id: string }) => [l.contact_id, l.id])
+    );
+
     const attBuffers = (attachments ?? []).map((a) => ({
       filename: a.filename,
       content: Buffer.from(a.contentBase64, "base64"),
@@ -118,20 +172,16 @@ export async function sendGmailCampaignAction(
     let failed = 0;
 
     for (const c of toSend) {
+      const logId = logIdMap.get(c.id) ?? "";
+      const trackingPixelUrl = logId
+        ? `${APP_URL}/api/email/track/${logId}`
+        : `${APP_URL}/api/email/track/noop`;
+
       const subj = subject.replace(/\{\{name\}\}/g, c.name);
-      const body = HTML_WRAPPER(
-        (htmlBody || "<p></p>").replace(/\{\{name\}\}/g, c.name) + signatureHtml
-      );
+      const bodyWithName = (htmlBody || "<p></p>").replace(/\{\{name\}\}/g, c.name);
+      const fullBody = HTML_WRAPPER(bodyWithName + signatureHtml, trackingPixelUrl);
 
-      const mime = buildMimeMessage(
-        c.email,
-        subj,
-        body,
-        fromEmail,
-        "Broadcast Buddy",
-        attBuffers
-      );
-
+      const mime = buildMimeMessage(c.email, subj, fullBody, fromEmail, "הידור הסת״ם", attBuffers);
       const raw = Buffer.from(mime, "utf8")
         .toString("base64")
         .replace(/\+/g, "-")
@@ -150,34 +200,94 @@ export async function sendGmailCampaignAction(
 
         if (res.ok) {
           sent++;
-          logInfo("EmailCampaign", "Email sent", { to: c.email, userId: user.id });
+          logInfo("EmailCampaign", "Email sent", { to: c.email, campaignId });
         } else {
           failed++;
           const errText = await res.text();
           logError("EmailCampaign", "Send failed", { to: c.email, error: errText });
+          // Mark log as failed
+          if (logId && adminSupabase) {
+            await adminSupabase.from("email_logs").update({ status: "failed" } as never).eq("id", logId);
+          }
         }
       } catch (err) {
         failed++;
         logError("EmailCampaign", "Send error", { to: c.email, error: String(err) });
       }
 
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 800));
     }
 
-    logInfo("EmailCampaign", "Campaign completed", {
-      userId: user.id,
-      sent,
-      failed,
-      total: toSend.length,
-    });
+    // Update campaign stats
+    await supabase
+      .from("email_campaigns")
+      .update({ sent_count: sent, failed_count: failed })
+      .eq("id", campaignId);
 
+    logInfo("EmailCampaign", "Campaign completed", { userId: user.id, sent, failed, campaignId });
     revalidatePath("/email");
     revalidatePath("/email/campaigns");
-    return { success: true, sent, failed };
+    return { success: true, sent, failed, campaignId };
   } catch (err) {
     return {
       success: false,
       error: err instanceof Error ? err.message : "שגיאה בשליחה",
     };
+  }
+}
+
+/** Fetch campaign history with open/device stats */
+export async function fetchCampaignStats(): Promise<
+  { success: true; campaigns: CampaignStat[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: campaigns, error } = await supabase
+      .from("email_campaigns")
+      .select("id, subject, created_at, sent_at, sent_count, failed_count")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) return { success: false, error: error.message };
+
+    // For each campaign get log aggregates via email_logs
+    const adminSupa = createAdminClient();
+    const enriched: CampaignStat[] = await Promise.all(
+      (campaigns ?? []).map(async (c) => {
+        let open_count = 0, mobile_count = 0, desktop_count = 0, tablet_count = 0;
+        if (adminSupa) {
+          const { data: logs } = await adminSupa
+            .from("email_logs")
+            .select("status, device_type")
+            .eq("campaign_id", c.id);
+          for (const l of logs ?? []) {
+            if (l.status === "open") open_count++;
+            if (l.device_type === "mobile") mobile_count++;
+            if (l.device_type === "desktop") desktop_count++;
+            if (l.device_type === "tablet") tablet_count++;
+          }
+        }
+        return {
+          id: c.id,
+          subject: c.subject,
+          created_at: c.created_at,
+          sent_at: c.sent_at ?? null,
+          sent_count: c.sent_count ?? 0,
+          failed_count: c.failed_count ?? 0,
+          open_count,
+          mobile_count,
+          desktop_count,
+          tablet_count,
+        };
+      })
+    );
+
+    return { success: true, campaigns: enriched };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }

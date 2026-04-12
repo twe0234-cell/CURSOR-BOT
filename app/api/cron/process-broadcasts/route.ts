@@ -42,6 +42,7 @@ export async function GET(req: Request) {
       .from("broadcast_queue")
       .select("id, user_id, payload")
       .eq("status", "pending")
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
       .order("created_at", { ascending: true })
       .limit(1)
       .single();

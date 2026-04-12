@@ -232,6 +232,7 @@ export type BroadcastLog = {
   scribe_code: string | null;
   internal_notes: string | null;
   message_snippet: string | null;
+  message_text: string | null;
   created_at: string;
   status?: string;
   log_details?: unknown;
@@ -262,7 +263,7 @@ export async function fetchBroadcastLogs(): Promise<
 
     const { data, error } = await supabase
       .from("broadcast_logs")
-      .select("id, sent, failed, errors, tags, scribe_code, internal_notes, message_snippet, created_at")
+      .select("id, sent, failed, errors, tags, scribe_code, internal_notes, message_snippet, message_text, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -277,6 +278,7 @@ export async function fetchBroadcastLogs(): Promise<
       scribe_code: r.scribe_code ?? null,
       internal_notes: r.internal_notes ?? null,
       message_snippet: (r as { message_snippet?: string | null }).message_snippet ?? null,
+      message_text: (r as { message_text?: string | null }).message_text ?? null,
       created_at: r.created_at ?? "",
     }));
     return { success: true, logs };
@@ -577,6 +579,7 @@ export async function insertBroadcastLog(
       scribe_code: scribeCode?.trim() || null,
       internal_notes: internalNotes?.trim() || null,
       message_snippet: snippet,
+      message_text: messageTextForSnippet?.trim() || null,
     });
 
     if (error) return { success: false, error: error.message };
@@ -608,6 +611,59 @@ export async function deleteBroadcastLog(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/broadcast");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** Schedule a future broadcast — inserted into broadcast_queue with scheduled_at */
+export async function scheduleBroadcastAction(
+  tags: string[],
+  groupIds: string[],
+  messageText: string,
+  imageUrl: string | null,
+  scheduledAt: string // ISO string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const tagTargets = tags.length > 0 ? await fetchTargetsByTags(tags) : { success: true as const, targets: [] };
+    const groupTargets = groupIds.length > 0 ? await fetchTargetsByGroupIds(groupIds) : { success: true as const, targets: [] };
+
+    if (!tagTargets.success) return { success: false, error: tagTargets.error };
+    if (!groupTargets.success) return { success: false, error: groupTargets.error };
+
+    const seen = new Set<string>();
+    const targets = [...tagTargets.targets, ...groupTargets.targets].filter((t) => {
+      if (seen.has(t.wa_chat_id)) return false;
+      seen.add(t.wa_chat_id);
+      return true;
+    });
+
+    if (targets.length === 0) return { success: false, error: "אין נמענים" };
+
+    const { error } = await supabase.from("broadcast_queue").insert({
+      user_id: user.id,
+      scheduled_at: scheduledAt,
+      payload: {
+        targets,
+        messageText,
+        imageUrl: imageUrl || null,
+        tags,
+        scribeCode: null,
+      },
+    });
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/broadcast");
+    logInfo("Broadcast", "Scheduled broadcast queued", {
+      userId: user.id,
+      scheduledAt,
+      targets: targets.length,
+    });
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
