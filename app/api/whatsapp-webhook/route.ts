@@ -50,7 +50,8 @@ function normalizeWaId(raw: string): string {
 /**
  * Green API → סנכרון מאגר ס״ת.
  * מעבדים `incomingMessageReceived` + `outgoingMessageReceived` (כדי לייבא גם הודעות שנשלחו ע"י המשתמש לקבוצה).
- * כדי למנוע לולאה, תגובת אימוג׳י נשלחת רק להודעות incoming.
+ * תגובת אימוג׳י נשלחת לכל הודעה (incoming ו-outgoing) — אין סכנת לולאה כי SetMessageReaction
+ * מחזיר webhook מסוג `outgoingReactionReceived` שאינו מעובד כאן.
  * אימות: `?token=` חייב להתאים ל־WEBHOOK_SECRET; אחרת 401.
  * לאחר אימות — תמיד 200 ל-Green API.
  */
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     await dbg("received", { typeWebhook, idMessage: b.idMessage });
 
     if (!isIncoming && !isOutgoing) {
-      // Other webhook types (status, qr, etc.) — silently ignore
+      // Other webhook types (status, qr, reaction, etc.) — silently ignore
       return ok200();
     }
 
@@ -166,11 +167,11 @@ export async function POST(req: NextRequest) {
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
     const imageUrl = extractImageUrlFromMessageData(b.messageData);
 
-    await dbg("processing message", { typeWebhook, idMessage, textLen: text.length, hasImage: !!imageUrl });
+    await dbg("processing message", { typeWebhook, idMessage, textLen: text.length, hasImage: !!imageUrl, senderId });
 
-    // תמונה בלי כיתוב = ספר תורה ממתין לפרטים (image_pending) — אין צורך בטקסט
+    // תמונה בלי כיתוב = ספר תורה ממתין לפרטים (image_pending) — שומרים sender_wa_id לשיוך עתידי עם טקסט
     if (!text && imageUrl) {
-      await dbg("image-only — creating image_pending entry", { idMessage });
+      await dbg("image-only — creating image_pending entry", { idMessage, senderId });
       const skuImg = generateSku(marketSkuPrefix);
       const { error: imgErr } = await admin.from("market_torah_books").insert({
         user_id: userId,
@@ -182,26 +183,27 @@ export async function POST(req: NextRequest) {
         expected_completion_date: null, notes: null, last_contact_date: null,
         negotiation_notes: null, handwriting_image_url: imageUrl,
         market_stage: "image_pending",
+        sender_wa_id: senderId || null,
       });
       if (!imgErr || imgErr.code === "23505") {
-        if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
         await dbg("image-only insert error", { code: imgErr.code, message: imgErr.message });
-        if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
     if (!text) {
       await dbg("skip: no text and no image");
-      if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
       await dbg("not-actionable", { parsed });
-      if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
@@ -213,13 +215,83 @@ export async function POST(req: NextRequest) {
         ? parsed.torah_size
         : null;
 
+    // ─── שיוך בעלים — match לאיש קשר קיים, או יצירה אוטומטית ───────────────
+    const ownerName = parsed.owner_name?.trim() ?? null;
+    let soferId: string | null = null;
+    if (ownerName) {
+      const { data: existing } = await admin
+        .from("crm_contacts")
+        .select("id")
+        .eq("user_id", userId)
+        .ilike("name", ownerName)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing?.id) {
+        soferId = existing.id as string;
+        await dbg("contact matched by name", { name: ownerName, contactId: soferId });
+      } else {
+        // יצירת איש קשר חדש אוטומטית
+        const { data: created, error: createErr } = await admin
+          .from("crm_contacts")
+          .insert({ user_id: userId, name: ownerName, wa_chat_id: senderId || null })
+          .select("id")
+          .maybeSingle();
+        if (!createErr && created?.id) {
+          soferId = created.id as string;
+          await dbg("contact auto-created", { name: ownerName, contactId: soferId });
+        } else if (createErr) {
+          await dbg("contact create failed", { name: ownerName, error: createErr.message });
+        }
+      }
+    }
+
+    // ─── שיוך תמונה ממתינה — תמונה + טקסט שנשלחו בנפרד ─────────────────────
+    if (senderId && !imageUrl) {
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: pendingImg } = await admin
+        .from("market_torah_books")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("market_stage", "image_pending")
+        .eq("sender_wa_id", senderId)
+        .gte("created_at", thirtyMinutesAgo)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingImg?.id) {
+        const { error: updateErr } = await admin
+          .from("market_torah_books")
+          .update({
+            source_message_id: idMessage,
+            script_type: parsed.script_type,
+            torah_size: torahSizeDb,
+            asking_price: askDb,
+            expected_completion_date: parsed.ready_date ?? null,
+            external_sofer_name: ownerName,
+            sofer_id: soferId,
+            market_stage: "new",
+          })
+          .eq("id", pendingImg.id as string);
+
+        if (!updateErr || updateErr.code === "23505") {
+          await dbg("combined text with pending image", { bookId: pendingImg.id, idMessage });
+          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+          return ok200();
+        }
+        await dbg("image_pending update failed — falling through to insert", { code: updateErr.code, message: updateErr.message });
+      }
+    }
+
+    // ─── הוספת רשומה חדשה ────────────────────────────────────────────────────
     const { error: insErr } = await admin.from("market_torah_books").insert({
       user_id: userId,
       sku,
       source_message_id: idMessage,
-      sofer_id: null,
+      sofer_id: soferId,
       dealer_id: null,
-      external_sofer_name: null,
+      external_sofer_name: ownerName,
       script_type: parsed.script_type,
       torah_size: torahSizeDb,
       parchment_type: null,
@@ -227,16 +299,17 @@ export async function POST(req: NextRequest) {
       asking_price: askDb,
       target_brokerage_price: null,
       currency: "ILS",
-      expected_completion_date: null,
+      expected_completion_date: parsed.ready_date ?? null,
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
       handwriting_image_url: imageUrl ?? null,
+      sender_wa_id: senderId || null,
     });
 
     if (insErr) {
       if (insErr.code === "23505") {
-        await dbg("duplicate sku — reacting OK", { idMessage });
+        await dbg("duplicate source_message_id — reacting OK", { idMessage });
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
         await dbg("insert error", { code: insErr.code, message: insErr.message });
@@ -246,8 +319,8 @@ export async function POST(req: NextRequest) {
       return ok200();
     }
 
-    await dbg("success — inserted", { sku, idMessage });
-    if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    await dbg("success — inserted", { sku, idMessage, ownerName, soferId });
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
