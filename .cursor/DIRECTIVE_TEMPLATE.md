@@ -1,4 +1,23 @@
 # [DIRECTIVE: AUTONOMOUS FEATURE DEVELOPMENT - {שם המודול}]
+
+## [TRIPLE-AI ORCHESTRATION PROTOCOL]
+Claude (אורקסטרטור) ← MCP → Codex CLI (מבצע) + Gemini Pro (יועץ/מבקר)
+
+**לפני כתיבת קוד:**
+- `gemini_brainstorm(problem)` — קבל 2-3 גישות מ-Gemini, השווה עם שיקולים שלך
+- `ask_gpt(question)` — רעיונות מהירים מ-GPT-4o-mini
+
+**ביצוע:**
+- `codex_execute(task)` — שלח ל-Codex CLI משימה מפורטת, הוא יכתוב את הקוד
+
+**בדיקה:**
+- `git_diff()` — קרא מה Codex שינה
+- `gemini_review(diff)` — קבל ביקורת שנייה מ-Gemini
+- אם הכל OK → `git commit`
+- אם יש בעיה → `codex_execute()` עם תיקון
+
+---
+
 Build the {שם המודול} module.
 
 ## [PHASE 1: SCAFFOLDING & TYPES]

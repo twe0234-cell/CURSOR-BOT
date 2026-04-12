@@ -231,16 +231,30 @@ export async function greenApiSetMessageReaction(
 }
 
 /**
- * חילוץ URL תמונה מ־messageData (imageMessageData).
- * מחזיר את downloadUrl אם קיים, אחרת null.
+ * חילוץ URL תמונה מ־messageData.
+ * תומך בשני פורמטים של Green API:
+ *   - incoming:  messageData.imageMessageData.downloadUrl
+ *   - outgoing:  messageData.fileMessageData.downloadUrl  (תמונה שנשלחה מהמכשיר)
  */
 export function extractImageUrlFromMessageData(messageData: unknown): string | null {
   if (!messageData || typeof messageData !== "object") return null;
   const md = messageData as Record<string, unknown>;
+
+  // incoming image
   const img = md.imageMessageData as Record<string, unknown> | undefined;
-  if (!img) return null;
-  const url = img.downloadUrl ?? img.jpegThumbnail;
-  return typeof url === "string" && url.trim() ? url.trim() : null;
+  if (img) {
+    const url = img.downloadUrl ?? img.jpegThumbnail;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+
+  // outgoing image / file (fileMessageData)
+  const file = md.fileMessageData as Record<string, unknown> | undefined;
+  if (file) {
+    const url = file.downloadUrl ?? file.jpegThumbnail;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+
+  return null;
 }
 
 const pushTrim = (parts: string[], v: unknown) => {
@@ -277,6 +291,7 @@ export function extractTextFromGreenIncomingWebhookMessageData(
     "imageMessageData",
     "videoMessageData",
     "documentMessageData",
+    "fileMessageData",   // outgoing messages (image/file sent from device)
   ] as const) {
     const block = md[key] as Record<string, unknown> | undefined;
     pushTrim(parts, block?.caption);
