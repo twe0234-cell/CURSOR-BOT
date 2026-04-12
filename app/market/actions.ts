@@ -79,6 +79,7 @@ function mapBookRow(
     expected_completion_date: (b.expected_completion_date as string | null) ?? null,
     notes: (b.notes as string | null) ?? null,
     handwriting_image_url: (b.handwriting_image_url as string | null) ?? null,
+    market_stage: (b.market_stage as string | null) ?? "new",
     created_at: (b.created_at as string) ?? "",
     market_stage: (b.market_stage as MarketStage | null) ?? null,
     sale_id: (b.sale_id as string | null) ?? null,
@@ -310,6 +311,34 @@ export async function updateMarketTorahBook(
     }
 
     revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export type MarketStage = 'image_pending' | 'new' | 'contacted' | 'negotiating' | 'deal_closed' | 'archived';
+
+export async function updateMarketStage(
+  id: string,
+  stage: MarketStage
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_torah_books")
+      .update({ market_stage: stage })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    revalidatePath("/market/kanban");
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
