@@ -158,6 +158,84 @@ export async function updateEmailContactTags(
   }
 }
 
+/** מיזוג תגיות ללא כפילויות — לפילוח רשימות (VIP, סוחרים קרים וכו׳) */
+export async function bulkAddTagsToEmailContacts(
+  ids: string[],
+  tagsToAdd: string[]
+): Promise<ActionResult> {
+  const add = [...new Set(tagsToAdd.map((t) => t.trim()).filter(Boolean))];
+  if (!ids.length) return { success: false, error: "בחר אנשי קשר" };
+  if (!add.length) return { success: false, error: "הזן תגית אחת לפחות" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      const { data: rows, error: selErr } = await supabase
+        .from("email_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selErr) return { success: false, error: selErr.message };
+      for (const row of rows ?? []) {
+        const cur = (row.tags ?? []) as string[];
+        const merged = [...new Set([...cur, ...add])];
+        const { error: upErr } = await supabase
+          .from("email_contacts")
+          .update({ tags: merged, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (upErr) return { success: false, error: upErr.message };
+      }
+    }
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
+/** הסרת תגית אחת מכל הנבחרים — להפרדת רשימות */
+export async function bulkRemoveTagFromEmailContacts(
+  ids: string[],
+  tagToRemove: string
+): Promise<ActionResult> {
+  const tag = tagToRemove.trim();
+  if (!ids.length) return { success: false, error: "בחר אנשי קשר" };
+  if (!tag) return { success: false, error: "הזן תגית להסרה" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      const { data: rows, error: selErr } = await supabase
+        .from("email_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selErr) return { success: false, error: selErr.message };
+      for (const row of rows ?? []) {
+        const cur = (row.tags ?? []) as string[];
+        const next = cur.filter((t) => t !== tag);
+        const { error: upErr } = await supabase
+          .from("email_contacts")
+          .update({ tags: next.length ? next : ["כללי"], updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (upErr) return { success: false, error: upErr.message };
+      }
+    }
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
 export async function importGmailContactsForEmail(): Promise<
   { success: true; imported: number } | { success: false; error: string }
 > {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -26,10 +26,12 @@ import {
   importGmailContactsForEmail,
   deleteEmailContact,
   bulkDeleteEmailContacts,
+  bulkAddTagsToEmailContacts,
+  bulkRemoveTagFromEmailContacts,
   type EmailContact,
 } from "./actions";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon } from "lucide-react";
+import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon, TagIcon } from "lucide-react";
 
 type Props = {
   initialContacts: EmailContact[];
@@ -44,6 +46,11 @@ export default function ContactsTab({ initialContacts }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [gmailImportLoading, setGmailImportLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tagAddOpen, setTagAddOpen] = useState(false);
+  const [tagRemoveOpen, setTagRemoveOpen] = useState(false);
+  const [tagAddInput, setTagAddInput] = useState("");
+  const [tagRemoveInput, setTagRemoveInput] = useState("");
+  const [tagActionLoading, setTagActionLoading] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search) return contacts;
@@ -56,6 +63,15 @@ export default function ContactsTab({ initialContacts }: Props) {
         (c.tags ?? []).some((t) => t.toLowerCase().includes(q))
     );
   }, [contacts, search]);
+
+  // Prune selection to only visible (filtered) IDs — prevents bulk actions on hidden rows
+  useEffect(() => {
+    const visibleIds = new Set(filtered.map((c) => c.id));
+    setSelected((prev) => {
+      if ([...prev].every((id) => visibleIds.has(id))) return prev;
+      return new Set([...prev].filter((id) => visibleIds.has(id)));
+    });
+  }, [filtered]);
 
   const subscribedCount = useMemo(
     () => filtered.filter((c) => c.subscribed !== false).length,
@@ -134,12 +150,42 @@ export default function ContactsTab({ initialContacts }: Props) {
 
   const handleBulkDelete = async () => {
     if (selected.size === 0) return;
+    const count = selected.size;
     const res = await bulkDeleteEmailContacts([...selected]);
+    if (!res.success) { toast.error(res.error); return; }
     setDeleteOpen(false);
+    setContacts((prev) => prev.filter((c) => !selected.has(c.id)));
+    setSelected(new Set());
+    toast.success(`${count} אנשי קשר נמחקו`);
+  };
+
+  const handleBulkAddTags = async () => {
+    const parts = tagAddInput.split(/[,|]/).map((t) => t.trim()).filter(Boolean);
+    if (selected.size === 0 || parts.length === 0) return;
+    setTagActionLoading(true);
+    const res = await bulkAddTagsToEmailContacts([...selected], parts);
+    setTagActionLoading(false);
     if (res.success) {
-      setContacts((prev) => prev.filter((c) => !selected.has(c.id)));
-      setSelected(new Set());
-      toast.success(`${selected.size} אנשי קשר נמחקו`);
+      toast.success("תגיות נוספו");
+      setTagAddOpen(false);
+      setTagAddInput("");
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
+    } else toast.error(res.error);
+  };
+
+  const handleBulkRemoveTag = async () => {
+    const tag = tagRemoveInput.trim();
+    if (selected.size === 0 || !tag) return;
+    setTagActionLoading(true);
+    const res = await bulkRemoveTagFromEmailContacts([...selected], tag);
+    setTagActionLoading(false);
+    if (res.success) {
+      toast.success(`התגית "${tag}" הוסרה מהנבחרים`);
+      setTagRemoveOpen(false);
+      setTagRemoveInput("");
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
     } else toast.error(res.error);
   };
 
@@ -236,15 +282,34 @@ export default function ContactsTab({ initialContacts }: Props) {
                 : "בחר הכל"}
             </Button>
             {selected.size > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteOpen(true)}
-                className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
-              >
-                <Trash2Icon className="size-4 ml-1" />
-                מחק ({selected.size})
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTagAddOpen(true)}
+                  className="rounded-xl border-sky-200 text-sky-700 hover:bg-sky-50"
+                >
+                  <TagIcon className="size-4 ml-1" />
+                  הוסף תגיות ({selected.size})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTagRemoveOpen(true)}
+                  className="rounded-xl border-amber-200 text-amber-800 hover:bg-amber-50"
+                >
+                  הסר תגית
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteOpen(true)}
+                  className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  <Trash2Icon className="size-4 ml-1" />
+                  מחק ({selected.size})
+                </Button>
+              </>
             )}
             <span className="text-sm text-muted-foreground">
               {subscribedCount} מנויים פעילים
@@ -371,6 +436,55 @@ export default function ContactsTab({ initialContacts }: Props) {
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>ביטול</Button>
             <Button variant="destructive" onClick={handleBulkDelete}>מחק</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagAddOpen} onOpenChange={setTagAddOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הוספת תגיות לנבחרים</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mb-2">
+            מופרד בפסיק — התגיות יתווספו לכל {selected.size} הנבחרים (ללא מחיקת תגיות קיימות). לדוגמה:{" "}
+            <strong>VIP, סוחרים_קרים</strong>
+          </p>
+          <Input
+            value={tagAddInput}
+            onChange={(e) => setTagAddInput(e.target.value)}
+            placeholder="VIP, לקוחות_פעילים"
+            className="rounded-xl"
+            dir="rtl"
+          />
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => setTagAddOpen(false)}>ביטול</Button>
+            <Button onClick={() => void handleBulkAddTags()} disabled={tagActionLoading}>
+              {tagActionLoading ? "שומר…" : "הוסף"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagRemoveOpen} onOpenChange={setTagRemoveOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הסרת תגית אחת מהנבחרים</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mb-2">
+            שם תגית מדויק כפי שמופיע ברשימה. אם לא תישאר אף תגית — תוגדר &quot;כללי&quot;.
+          </p>
+          <Input
+            value={tagRemoveInput}
+            onChange={(e) => setTagRemoveInput(e.target.value)}
+            placeholder="למשל: VIP"
+            className="rounded-xl"
+            dir="rtl"
+          />
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => setTagRemoveOpen(false)}>ביטול</Button>
+            <Button onClick={() => void handleBulkRemoveTag()} disabled={tagActionLoading}>
+              {tagActionLoading ? "מעדכן…" : "הסר"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

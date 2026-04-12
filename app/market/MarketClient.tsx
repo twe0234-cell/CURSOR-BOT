@@ -194,8 +194,10 @@ export default function MarketClient({
   const filteredRows = rows.filter((row) => {
     if (filterText) {
       const q = filterText.toLowerCase();
-      const hit = [row.sofer_name, row.dealer_name, row.external_sofer_name, row.script_type]
-        .some((v) => v?.toLowerCase().includes(q));
+      const hit = [
+        row.sofer_name, row.dealer_name, row.external_sofer_name,
+        row.script_type, row.sku, row.notes, row.negotiation_notes, row.torah_size,
+      ].some((v) => v?.toLowerCase().includes(q));
       if (!hit) return false;
     }
     if (filterParchment && row.parchment_type !== filterParchment) return false;

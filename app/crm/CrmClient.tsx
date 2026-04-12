@@ -263,7 +263,6 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
     setMergeLoading(false);
     if (!res.success) { toast.error(res.error); return; }
     toast.success(`אוחדו ${res.merged} רשומות`);
-    setDupeGroups((prev) => prev.filter((_, i) => i !== groupIndex));
     setMergePrimary((prev) => {
       const next: Record<number, string> = {};
       Object.entries(prev).forEach(([k, v]) => {
@@ -273,7 +272,11 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
       return next;
     });
     await refreshContacts();
-    if (dupeGroups.length <= 1) setMergeOpen(false);
+    setDupeGroups((prev) => {
+      const next = prev.filter((_, i) => i !== groupIndex);
+      if (next.length === 0) setMergeOpen(false);
+      return next;
+    });
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -441,7 +444,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2.5">
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                        {c.name[0]}
+                        {c.name?.trim()[0]?.toUpperCase() ?? "?"}
                       </div>
                       <p className="font-semibold truncate">{c.name}</p>
                     </div>
@@ -482,7 +485,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                 <Card className="border-border hover:border-primary/30 hover:bg-muted/30 transition-all cursor-pointer">
                   <CardContent className="py-2.5 px-4 flex items-center gap-3 min-w-0">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                      {c.name[0]}
+                      {c.name?.trim()[0]?.toUpperCase() ?? "?"}
                     </div>
                     <p className="font-semibold text-sm min-w-[8rem] truncate shrink-0">{c.name}</p>
                     {c.phone && (

@@ -312,8 +312,8 @@ export default function ContactDetailClient({
   const [tagsLine, setTagsLine] = useState(() => initialContact.tags.join(", "));
   const [tagsSaving, setTagsSaving] = useState(false);
 
-  const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + t.amount, 0);
-  const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
+  const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const [editMode, setEditMode] = useState(false);
   const [editWa, setEditWa] = useState(contact.wa_chat_id ?? "");
   const [editEmail, setEditEmail] = useState(contact.email ?? "");
@@ -365,13 +365,14 @@ export default function ContactDetailClient({
   }, [history, logs]);
 
   const handleSaveProfile = async () => {
-    const [res] = await Promise.all([
+    const nextTags = editTags.split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
+    const [res, extraRes] = await Promise.all([
       updateCrmContact(contact.id, {
         wa_chat_id: editWa.trim() || undefined,
         email: editEmail.trim() || undefined,
         phone: editPhone.trim() || undefined,
         preferred_contact: editPreferred,
-        tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
+        tags: nextTags,
         notes: editNotes.trim() || undefined,
         certification: editCertification.trim() || undefined,
         phone_type: editPhoneType.trim() || undefined,
@@ -380,27 +381,26 @@ export default function ContactDetailClient({
       }),
       updateCrmExtraContacts(contact.id, extraPhones, extraEmails),
     ]);
-    if (res.success) {
-      const nextTags = editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean);
-      setContact((prev) => ({
-        ...prev,
-        wa_chat_id: editWa.trim() || null,
-        email: editEmail.trim() || null,
-        phone: editPhone.trim() || null,
-        preferred_contact: editPreferred,
-        tags: nextTags,
-        notes: editNotes.trim() || null,
-        certification: editCertification.trim() || null,
-        phone_type: editPhoneType.trim() || null,
-      }));
-      setTagsLine(nextTags.join(", "));
-      setEditMode(false);
-      toast.success("נשמר");
-    } else toast.error(res.error);
+    if (!res.success) { toast.error(res.error); return; }
+    if (!extraRes.success) toast.warning?.(`פרטי קשר נוספים: ${extraRes.error}`);
+    setContact((prev) => ({
+      ...prev,
+      wa_chat_id: editWa.trim() || null,
+      email: editEmail.trim() || null,
+      phone: editPhone.trim() || null,
+      preferred_contact: editPreferred,
+      tags: nextTags,
+      notes: editNotes.trim() || null,
+      certification: editCertification.trim() || null,
+      phone_type: editPhoneType.trim() || null,
+    }));
+    setTagsLine(nextTags.join(", "));
+    setEditMode(false);
+    toast.success("נשמר");
   };
 
   const handleSaveTagsOnly = async () => {
-    const tags = tagsLine.split(/[,]+/).map((t) => t.trim()).filter(Boolean);
+    const tags = tagsLine.split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
     setTagsSaving(true);
     const res = await updateContactTags(contact.id, tags);
     setTagsSaving(false);
