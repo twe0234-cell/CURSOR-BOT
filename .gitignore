@@ -45,3 +45,4 @@ next-env.d.ts
 # Local spreadsheets (do not commit)
 *.csv
 *.xlsx
+bt-contacts-bridge/.gradle/

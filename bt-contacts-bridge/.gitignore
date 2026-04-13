@@ -1,0 +1,14 @@
+# Gradle build cache and outputs
+.gradle/
+build/
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+*.iws
+*.ipr
+
+# APK outputs (built by CI, not committed)
+*.apk
+*.aab
