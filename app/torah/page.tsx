@@ -18,8 +18,13 @@ export default async function TorahPage() {
     fetchTorahParchmentLabelsFromCalculator(),
   ]);
   const projects = result.success ? result.projects : [];
+  const fetchError = !result.success ? result.error : undefined;
 
   return (
-    <TorahClient initialProjects={projects} parchmentLabels={parchmentLabels} />
+    <TorahClient
+      initialProjects={projects}
+      parchmentLabels={parchmentLabels}
+      fetchError={fetchError}
+    />
   );
 }

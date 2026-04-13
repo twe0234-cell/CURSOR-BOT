@@ -86,9 +86,21 @@ export async function deleteGalleryImage(imageId: string): Promise<
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
+    const { data: imgRow } = await supabase
+      .from("crm_scribe_gallery")
+      .select("contact_id")
+      .eq("id", imageId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const { error } = await supabase.from("crm_scribe_gallery").delete()
       .eq("id", imageId).eq("user_id", user.id);
     if (error) return { success: false, error: error.message };
+
+    if (imgRow?.contact_id) {
+      revalidatePath(`/crm/${imgRow.contact_id}`);
+      revalidatePath("/soferim");
+    }
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };

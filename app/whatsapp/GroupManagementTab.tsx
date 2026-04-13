@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useCallback, useLayoutEffect, memo, useRef } from "react";
 import { toast } from "sonner";
 import {
@@ -174,13 +175,21 @@ export default function GroupManagementTab({ initialGroups }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 text-sm text-slate-700">
+        <strong className="text-slate-800">כאן רק קבוצות:</strong> ייבוא וסנכרון לרשימת קבוצות לשידור.
+        לנמענים יחידים, תגיות ופילוח מלא —{" "}
+        <Link href="/audience" className="font-medium text-sky-700 underline underline-offset-2">
+          מסך ניהול קהל
+        </Link>
+        . אותו ייבוא קבוצות קיים גם שם תחת &quot;פעולות&quot; — אין צורך לבצע פעמיים.
+      </div>
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <UsersIcon className="w-5 h-5 text-sky-500" />
             <div>
               <h2 className="text-base font-semibold text-slate-700">קבוצות WhatsApp</h2>
-              <p className="text-sm text-muted-foreground">ניהול קבוצות וייבוא מ-WhatsApp</p>
+              <p className="text-sm text-muted-foreground">ייבוא מ-Green API וסנכרון לטבלת הקהל</p>
             </div>
           </div>
           <div className="flex gap-2">

@@ -20,6 +20,8 @@ export const soferProfileUpsertSchema = z.object({
     z.coerce.number().nonnegative().optional().nullable()
   ),
   pricing_notes: z.string().max(4000).optional().nullable(),
+  writing_constraints: z.string().max(2000).optional().nullable(),
+  past_writings: z.string().max(4000).optional().nullable(),
 });
 
 export const newScribeContactSchema = z.object({

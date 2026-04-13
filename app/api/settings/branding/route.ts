@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     const ext = file.name.endsWith(".ico") ? "ico" : "png";
-    const path = `branding/logo.${ext}`;
+    const path = `branding/logo-${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)

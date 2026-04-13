@@ -41,10 +41,7 @@ export default async function GmailImportPage() {
 
         <EmailToMarketCard />
 
-        <TriageTable
-          initialContacts={contacts}
-          onContactsChange={() => {}}
-        />
+        <TriageTable initialContacts={contacts} />
 
         {contacts.length === 0 && res.success && (
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white p-12 text-center">

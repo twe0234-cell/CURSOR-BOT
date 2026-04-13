@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/src/lib/supabase/server";
-import { createAdminClient } from "@/src/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 export type SettingsActionResult =
@@ -55,6 +54,10 @@ export async function saveUserSettings(
     }
 
     revalidatePath("/settings");
+    if (Array.isArray(allowedTags)) {
+      revalidatePath("/audience");
+      revalidatePath("/whatsapp");
+    }
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
@@ -154,6 +157,7 @@ export async function updateAllowedTags(allowedTags: string[]): Promise<Settings
 
     revalidatePath("/settings");
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";

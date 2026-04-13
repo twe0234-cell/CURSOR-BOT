@@ -284,11 +284,9 @@ export default function BroadcastClient({
       const errors: string[] = [];
       const finalScribe = scribeCode.trim() || undefined;
 
-      const progressInterval = 5;
+      setSendProgress({ current: 0, total });
       for (let i = 0; i < targets.length; i++) {
-        if (i % progressInterval === 0 || i === targets.length - 1) {
-          setSendProgress({ current: i + 1, total });
-        }
+        setSendProgress({ current: i + 1, total });
         const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };

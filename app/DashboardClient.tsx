@@ -67,7 +67,8 @@ export default function DashboardClient({
   recentInventory,
   categoryCostRevenue,
   monthlyRealizedProfit,
-}: Props) {
+  dashboardError,
+}: Props & { dashboardError?: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ScribeSearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -112,6 +113,11 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-8">
+      {dashboardError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+          <strong>שגיאה בטעינת נתוני לוח הבקרה:</strong> {dashboardError}
+        </div>
+      )}
       {/* Hero KPI Cards - Cost, Revenue, Profit */}
       <motion.div
         className="grid gap-4 sm:grid-cols-3"

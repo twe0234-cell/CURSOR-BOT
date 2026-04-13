@@ -48,8 +48,11 @@ export default function ApiIntegrationsTab({
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    setGreenApiId(defaultGreenApiId);
+    setGreenApiToken(defaultGreenApiToken);
     setWaMarketGroupId(defaultWaMarketGroupId);
-  }, [defaultWaMarketGroupId]);
+    setAllowedTags(Array.isArray(defaultAllowedTags) ? defaultAllowedTags : []);
+  }, [defaultGreenApiId, defaultGreenApiToken, defaultWaMarketGroupId, defaultAllowedTags]);
 
   useEffect(() => {
     const gmail = searchParams.get("gmail");
@@ -233,7 +236,13 @@ export default function ApiIntegrationsTab({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">תגיות מערכת</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                תגיות מוצעות לשידור וואטסאפ
+              </label>
+              <p className="mb-2 text-xs text-muted-foreground leading-relaxed">
+                משמשות לפילוח בשידור ובמסך ניהול הקהל. <strong className="text-foreground">לא</strong> מעורבבות עם
+                תגיות אימייל (קמפיינים — שדה נפרד במערכת).
+              </p>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"

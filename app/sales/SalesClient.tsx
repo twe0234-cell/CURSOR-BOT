@@ -84,20 +84,10 @@ export default function SalesClient() {
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
   const [editSale, setEditSale] = useState<SaleRecord | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editBuyerId, setEditBuyerId] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editSellerId, setEditSellerId] = useState("");
   const [editSaleDate, setEditSaleDate] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editTotalPrice, setEditTotalPrice] = useState("");
   const [editSalePrice, setEditSalePrice] = useState("");
   const [editQuantity, setEditQuantity] = useState("1");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editStatus, setEditStatus] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editItemDescription, setEditItemDescription] = useState("");
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -131,21 +121,11 @@ export default function SalesClient() {
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!editSale) return;
-    setEditBuyerId(editSale.buyer_id ?? "");
-    setEditSellerId(editSale.seller_id ?? "");
     setEditSaleDate(editSale.sale_date ? editSale.sale_date.slice(0, 10) : "");
     const qty = editSale.quantity ?? 1;
-    const unitPrice = editSale.sale_price;
-    const total =
-      editSale.total_price != null
-        ? editSale.total_price
-        : unitPrice * qty;
-    setEditTotalPrice(String(total));
-    setEditSalePrice(String(unitPrice));
+    setEditSalePrice(String(editSale.sale_price));
     setEditQuantity(String(qty));
-    setEditStatus(editSale.status ?? "");
     setEditNotes(editSale.notes ?? "");
-    setEditItemDescription(editSale.item_description ?? "");
   }, [editSale]);
   /* eslint-enable react-hooks/set-state-in-effect */
 

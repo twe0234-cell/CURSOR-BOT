@@ -2,8 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
 import ContactsTab from "./ContactsTab";
-import CampaignsTab from "./CampaignsTab";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 
 export default async function EmailPage() {
@@ -50,34 +48,13 @@ export default async function EmailPage() {
               </Button>
             </Link>
             <Link href="/email/campaigns">
-              <Button variant="outline" className="rounded-xl border-border/80 hover:border-primary/25 hover:bg-muted/50">
-                עורך קמפיין
+              <Button className="rounded-xl">
+                עורך קמפיין ושליחה
               </Button>
             </Link>
           </div>
         </div>
-        <Tabs defaultValue="contacts" className="w-full">
-          <TabsList className="mb-6 rounded-xl bg-muted/60 p-1 ring-1 ring-border/50">
-            <TabsTrigger
-              value="contacts"
-              className="rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border/60"
-            >
-              אנשי קשר
-            </TabsTrigger>
-            <TabsTrigger
-              value="campaigns"
-              className="rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border/60"
-            >
-              קמפיינים
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="contacts" className="mt-0">
-            <ContactsTab initialContacts={mapped} />
-          </TabsContent>
-          <TabsContent value="campaigns" className="mt-0">
-            <CampaignsTab initialContacts={mapped} />
-          </TabsContent>
-        </Tabs>
+        <ContactsTab initialContacts={mapped} />
       </div>
     </div>
   );

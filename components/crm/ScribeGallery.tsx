@@ -3,7 +3,6 @@
 import { useState, useTransition, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PlusIcon, Trash2Icon, ImageIcon, LoaderIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { uploadGalleryImage, fetchGalleryImages, deleteGalleryImage } from "@/app/crm/galleryActions";
 

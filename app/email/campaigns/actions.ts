@@ -5,6 +5,12 @@ import { createAdminClient } from "@/src/lib/supabase/admin";
 import { getAccessToken } from "@/src/lib/gmail";
 import { logInfo, logError } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
+import {
+  chunkRecipients,
+  dedupeRecipients,
+  throttleBetweenSends,
+  type CampaignRecipient,
+} from "@/src/services/emailCampaign.engine";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -73,6 +79,31 @@ export type CampaignStat = {
   tablet_count: number;
 };
 
+export async function saveCampaignSignatureAction(
+  signature: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("sys_settings")
+      .upsert(
+        { id: "default", email_signature: signature.trim(), updated_at: new Date().toISOString() },
+        { onConflict: "id" }
+      );
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/email");
+    revalidatePath("/email/campaigns");
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 export async function sendGmailCampaignAction(
   subject: string,
   htmlBody: string,
@@ -117,11 +148,12 @@ export async function sendGmailCampaignAction(
       .eq("subscribed", true)
       .in("id", recipientIds);
 
-    const toSend = (contacts ?? []).filter((c) => c?.email).map((c) => ({
+    const rawRecipients: CampaignRecipient[] = (contacts ?? []).filter((c) => c?.email).map((c) => ({
       id: c.id,
       email: c.email!,
       name: c.name ?? "",
     }));
+    const toSend = dedupeRecipients(rawRecipients);
 
     if (toSend.length === 0) {
       return { success: false, error: "לא נמצאו נמענים פעילים" };
@@ -171,51 +203,54 @@ export async function sendGmailCampaignAction(
     let sent = 0;
     let failed = 0;
 
-    for (const c of toSend) {
-      const logId = logIdMap.get(c.id) ?? "";
-      const trackingPixelUrl = logId
-        ? `${APP_URL}/api/email/track/${logId}`
-        : `${APP_URL}/api/email/track/noop`;
+    const recipientChunks = chunkRecipients(toSend);
+    for (const chunk of recipientChunks) {
+      for (const c of chunk.items) {
+        const logId = logIdMap.get(c.id) ?? "";
+        const trackingPixelUrl = logId
+          ? `${APP_URL}/api/email/track/${logId}`
+          : `${APP_URL}/api/email/track/noop`;
 
-      const subj = subject.replace(/\{\{name\}\}/g, c.name);
-      const bodyWithName = (htmlBody || "<p></p>").replace(/\{\{name\}\}/g, c.name);
-      const fullBody = HTML_WRAPPER(bodyWithName + signatureHtml, trackingPixelUrl);
+        const subj = subject.replace(/\{\{name\}\}/g, c.name);
+        const bodyWithName = (htmlBody || "<p></p>").replace(/\{\{name\}\}/g, c.name);
+        const fullBody = HTML_WRAPPER(bodyWithName + signatureHtml, trackingPixelUrl);
 
-      const mime = buildMimeMessage(c.email, subj, fullBody, fromEmail, "הידור הסת״ם", attBuffers);
-      const raw = Buffer.from(mime, "utf8")
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
+        const mime = buildMimeMessage(c.email, subj, fullBody, fromEmail, "הידור הסת״ם", attBuffers);
+        const raw = Buffer.from(mime, "utf8")
+          .toString("base64")
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/, "");
 
-      try {
-        const res = await fetch(GMAIL_SEND_URL, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ raw }),
-        });
+        try {
+          const res = await fetch(GMAIL_SEND_URL, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ raw }),
+          });
 
-        if (res.ok) {
-          sent++;
-          logInfo("EmailCampaign", "Email sent", { to: c.email, campaignId });
-        } else {
-          failed++;
-          const errText = await res.text();
-          logError("EmailCampaign", "Send failed", { to: c.email, error: errText });
-          // Mark log as failed
-          if (logId && adminSupabase) {
-            await adminSupabase.from("email_logs").update({ status: "failed" } as never).eq("id", logId);
+          if (res.ok) {
+            sent++;
+            logInfo("EmailCampaign", "Email sent", { to: c.email, campaignId });
+          } else {
+            failed++;
+            const errText = await res.text();
+            logError("EmailCampaign", "Send failed", { to: c.email, error: errText });
+            // Mark log as failed
+            if (logId && adminSupabase) {
+              await adminSupabase.from("email_logs").update({ status: "failed" } as never).eq("id", logId);
+            }
           }
+        } catch (err) {
+          failed++;
+          logError("EmailCampaign", "Send error", { to: c.email, error: String(err) });
         }
-      } catch (err) {
-        failed++;
-        logError("EmailCampaign", "Send error", { to: c.email, error: String(err) });
-      }
 
-      await new Promise((r) => setTimeout(r, 800));
+        await throttleBetweenSends();
+      }
     }
 
     // Update campaign stats

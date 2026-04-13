@@ -18,10 +18,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HScrollBar } from "@/components/ui/HScrollBar";
 import { cn } from "@/lib/utils";
-import { fetchEmailContacts, getGmailStatus } from "@/app/email/actions";
-import { sendGmailCampaignAction, fetchCampaignStats, type CampaignStat } from "./actions";
+import {
+  fetchEmailContacts,
+  getGmailStatus,
+  saveEmailCampaignTagPresets,
+  type EmailContact,
+} from "@/app/email/actions";
+import { sendGmailCampaignAction, fetchCampaignStats, saveCampaignSignatureAction, type CampaignStat } from "./actions";
 import EmailComposer from "./EmailComposer";
-import type { EmailContact } from "@/app/email/actions";
 import {
   KeyIcon,
   SparklesIcon,
@@ -30,11 +34,17 @@ import {
   MonitorIcon,
   TabletIcon,
   TagsIcon,
+  SaveIcon,
+  PenSquareIcon,
+  RocketIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 
 type Props = {
   initialContacts: EmailContact[];
   signature: string | null;
+  /** תגיות מוצעות לקמפיין אימייל בלבד (לא תגיות קהל וואטסאפ) */
+  initialEmailTagPresets: string[];
 };
 
 /** תבניות פילוח — התגיות נשמרות ב־email_contacts.tags; ניתן לנהל בכרטיסייה ״אנשי קשר״ */
@@ -63,7 +73,7 @@ function stripHtmlRough(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200);
 }
 
-export default function CampaignsClient({ initialContacts, signature }: Props) {
+export default function CampaignsClient({ initialContacts, signature, initialEmailTagPresets }: Props) {
   const [contacts, setContacts] = useState(initialContacts);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [subject, setSubject] = useState("");
@@ -88,7 +98,14 @@ export default function CampaignsClient({ initialContacts, signature }: Props) {
   const [campaigns, setCampaigns] = useState<CampaignStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [contactsError, setContactsError] = useState<string | null>(null);
+  const contactsError: string | null = null;
+  const [signatureDraft, setSignatureDraft] = useState(signature ?? "");
+  const [savingSignature, setSavingSignature] = useState(false);
+  const [campaignTagInput, setCampaignTagInput] = useState("");
+  const [emailTagPresets, setEmailTagPresets] = useState<string[]>(
+    [...new Set((initialEmailTagPresets ?? []).map((t) => t.trim()).filter(Boolean))]
+  );
+  const [savingAllowedTags, setSavingAllowedTags] = useState(false);
 
   const subscribedContacts = useMemo(
     () => contacts.filter((c) => c.subscribed !== false),
@@ -130,14 +147,6 @@ export default function CampaignsClient({ initialContacts, signature }: Props) {
   useEffect(() => {
     getGmailStatus().then((r) => {
       if (r.success) setGmailConnected(r.connected);
-    });
-    fetchEmailContacts().then((r) => {
-      if (r.success) {
-        setContacts(r.contacts);
-      } else {
-        setContactsError(r.error);
-        toast.error(`שגיאה בטעינת אנשי קשר: ${r.error}`);
-      }
     });
   }, []);
 
@@ -193,6 +202,55 @@ export default function CampaignsClient({ initialContacts, signature }: Props) {
     setFilterSegmentTags(tags);
     setSegmentMode("or");
     toast.message("סינון הוחל — בחר נמענים או שלח לכל הקבוצה המסוננת");
+  };
+
+  const quickStartSuggested = useMemo(() => {
+    const preferred = ["VIP", "לקוחות_פעילים", "סוחרים"];
+    return preferred.filter((t) => allDiscoveredTags.includes(t)).slice(0, 2);
+  }, [allDiscoveredTags]);
+
+  const applyQuickStart = () => {
+    const tags = quickStartSuggested;
+    if (tags.length > 0) {
+      setFilterSegmentTags(tags);
+      setSegmentMode("or");
+    }
+    if (!subject.trim()) {
+      setSubject("הצעה חדשה - הידור הסת\"ם");
+    }
+    toast.success("הגדרת פתיחה מהירה הוחלה");
+  };
+
+  const addCampaignTag = () => {
+    const value = campaignTagInput.trim();
+    if (!value) return;
+    if (emailTagPresets.includes(value)) {
+      setCampaignTagInput("");
+      return;
+    }
+    setEmailTagPresets((prev) => [...prev, value]);
+    setCampaignTagInput("");
+  };
+
+  const removeCampaignTag = (tag: string) => {
+    setEmailTagPresets((prev) => prev.filter((t) => t !== tag));
+    setFilterSegmentTags((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const saveEmailTagPresetsFromCampaign = async () => {
+    setSavingAllowedTags(true);
+    const res = await saveEmailCampaignTagPresets(emailTagPresets);
+    setSavingAllowedTags(false);
+    if (res.success) toast.success("תגיות מוצעות לאימייל נשמרו");
+    else toast.error(res.error);
+  };
+
+  const saveSignatureInline = async () => {
+    setSavingSignature(true);
+    const res = await saveCampaignSignatureAction(signatureDraft);
+    setSavingSignature(false);
+    if (res.success) toast.success("חתימת המייל נשמרה");
+    else toast.error(res.error);
   };
 
   const openConfirmDialog = () => {
@@ -523,6 +581,107 @@ export default function CampaignsClient({ initialContacts, signature }: Props) {
               </CardContent>
             </Card>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <Card className="shadow-sm rounded-xl border-slate-200">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <RocketIcon className="size-4 text-indigo-600" />
+                  קמפיין ראשון - פתיחה מהירה
+                </CardTitle>
+                <CardDescription>מגדיר נושא וסגמנט מומלץ בלחיצה אחת.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  מומלץ למייל ראשון: סגמנט OR עם {quickStartSuggested.length > 0 ? quickStartSuggested.join(", ") : "כל המנויים"}.
+                </p>
+                <Button variant="outline" className="rounded-xl gap-2" onClick={applyQuickStart}>
+                  <WandSparklesIcon className="size-4" />
+                  החל הגדרת פתיחה מהירה
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm rounded-xl border-slate-200">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <PenSquareIcon className="size-4 text-sky-600" />
+                  חתימת מייל בתוך המודול
+                </CardTitle>
+                <CardDescription>החתימה תצורף אוטומטית לכל קמפיין.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  dir="rtl"
+                  rows={4}
+                  value={signatureDraft}
+                  onChange={(e) => setSignatureDraft(e.target.value)}
+                  placeholder="בברכה, הידור הסת״ם..."
+                />
+                <Button onClick={() => void saveSignatureInline()} disabled={savingSignature} className="rounded-xl gap-2">
+                  <SaveIcon className="size-4" />
+                  {savingSignature ? "שומר..." : "שמור חתימה"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="shadow-sm rounded-xl border-slate-200 mt-6">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <TagsIcon className="size-4 text-emerald-600" />
+                תגיות מוצעות לקמפיין אימייל
+              </CardTitle>
+              <CardDescription>
+                רשימה זו שמורה נפרדת מתגיות קהל הוואטסאפ (Green API). היא משמשת רק כהצעות וניהול
+                פילוח ל־<code className="text-xs bg-muted px-1 rounded">email_contacts.tags</code>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  value={campaignTagInput}
+                  onChange={(e) => setCampaignTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCampaignTag();
+                    }
+                  }}
+                  placeholder="הוסף תגית (למשל VIP, גבאים)..."
+                  className="rounded-xl"
+                />
+                <Button type="button" variant="outline" onClick={addCampaignTag} className="rounded-xl">
+                  הוסף
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {emailTagPresets.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => removeCampaignTag(tag)}
+                    className="rounded-full border px-3 py-1 text-xs bg-muted/40 hover:bg-muted"
+                    title="לחץ להסרה"
+                  >
+                    {tag} ×
+                  </button>
+                ))}
+                {emailTagPresets.length === 0 && (
+                  <p className="text-xs text-muted-foreground">אין תגיות מוצעות — הוסף או הסתמך על התגיות שמופיעות אצל אנשי הקשר.</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                onClick={() => void saveEmailTagPresetsFromCampaign()}
+                disabled={savingAllowedTags}
+                className="rounded-xl gap-2"
+              >
+                <SaveIcon className="size-4" />
+                {savingAllowedTags ? "שומר..." : "שמור תגיות מוצעות"}
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="stats">

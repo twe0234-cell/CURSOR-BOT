@@ -50,7 +50,7 @@ function normalizeWaId(raw: string): string {
 /**
  * Green API → סנכרון מאגר ס״ת.
  * מעבדים `incomingMessageReceived` + `outgoingMessageReceived` (כדי לייבא גם הודעות שנשלחו ע"י המשתמש לקבוצה).
- * כדי למנוע לולאה, תגובת אימוג׳י נשלחת רק להודעות incoming.
+ * תגובת אימוג׳י נשלחת גם ל-incoming וגם ל-outgoing.
  * אימות: `?token=` חייב להתאים ל־WEBHOOK_SECRET; אחרת 401.
  * לאחר אימות — תמיד 200 ל-Green API.
  */
@@ -184,24 +184,24 @@ export async function POST(req: NextRequest) {
         market_stage: "image_pending",
       });
       if (!imgErr || imgErr.code === "23505") {
-        if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
       } else {
         await dbg("image-only insert error", { code: imgErr.code, message: imgErr.message });
-        if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       }
       return ok200();
     }
 
     if (!text) {
       await dbg("skip: no text and no image");
-      if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
       await dbg("not-actionable", { parsed });
-      if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
     }
 
     await dbg("success — inserted", { sku, idMessage });
-    if (!isOutgoing) await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);

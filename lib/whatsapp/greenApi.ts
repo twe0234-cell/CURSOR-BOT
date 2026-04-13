@@ -85,7 +85,8 @@ export function interpretGreenApiSendResult(
     }
     return { ok: true };
   } catch {
-    return { ok: true };
+    // Non-JSON body — treat as unknown; log the raw text for debugging
+    return { ok: false, error: `תגובה לא צפויה: ${trimmed.slice(0, 120)}` };
   }
 }
 

@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
 import BroadcastTab from "@/app/whatsapp/BroadcastTab";
 import GroupManagementTab from "@/app/whatsapp/GroupManagementTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 
 type Props = { searchParams: Promise<{ message?: string }> };
 
@@ -48,6 +50,26 @@ export default async function WhatsAppPage({ searchParams }: Props) {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50/50">
       <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">שידור וואטסאפ</h1>
+            <p className="mt-1 text-muted-foreground text-[15px] max-w-xl">
+              פילוח לפי תגיות על נמענים בקהל או לפי קבוצות. תגיות אימייל ותגיות וואטסאפ נשמרות בנפרד.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Link href="/audience">
+              <Button variant="outline" className="rounded-xl">
+                ניהול קהל ותגיות
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button variant="outline" className="rounded-xl">
+                הגדרות Green API ותגיות מוצעות
+              </Button>
+            </Link>
+          </div>
+        </div>
         <Tabs defaultValue="broadcast" className="w-full">
           <TabsList className="mb-6 rounded-xl bg-slate-100 p-1">
             <TabsTrigger value="broadcast" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
@@ -61,6 +83,7 @@ export default async function WhatsAppPage({ searchParams }: Props) {
             <BroadcastTab
               key={prefilledMessage}
               allTags={allTags}
+              allowedTags={allowedTags}
               prefilledMessage={prefilledMessage}
               groups={groupOptions}
             />

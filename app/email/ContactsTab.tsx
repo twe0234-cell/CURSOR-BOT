@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -64,14 +64,10 @@ export default function ContactsTab({ initialContacts }: Props) {
     );
   }, [contacts, search]);
 
-  // Prune selection to only visible (filtered) IDs — prevents bulk actions on hidden rows
-  useEffect(() => {
-    const visibleIds = new Set(filtered.map((c) => c.id));
-    setSelected((prev) => {
-      if ([...prev].every((id) => visibleIds.has(id))) return prev;
-      return new Set([...prev].filter((id) => visibleIds.has(id)));
-    });
-  }, [filtered]);
+  const visibleSelectedIds = useMemo(() => {
+    const visible = new Set(filtered.map((c) => c.id));
+    return [...selected].filter((id) => visible.has(id));
+  }, [selected, filtered]);
 
   const subscribedCount = useMemo(
     () => filtered.filter((c) => c.subscribed !== false).length,
@@ -89,7 +85,7 @@ export default function ContactsTab({ initialContacts }: Props) {
 
   const toggleSelectAll = () => {
     const selectable = filtered.filter((c) => c.subscribed !== false);
-    if (selected.size === selectable.length && selectable.length > 0) {
+    if (visibleSelectedIds.length === selectable.length && selectable.length > 0) {
       setSelected(new Set());
     } else {
       setSelected(new Set(selectable.map((c) => c.id)));
@@ -112,10 +108,11 @@ export default function ContactsTab({ initialContacts }: Props) {
     const res = await importEmailContacts(rows);
     setImportLoading(false);
     if (res.success) {
-      toast.success(`${rows.length} אנשי קשר יובאו`);
       setImportOpen(false);
       setImportText("");
       const updated = await fetchEmailContacts();
+      const actualCount = updated.success ? updated.contacts.length - contacts.length : rows.length;
+      toast.success(`יובאו ${Math.max(0, actualCount)} אנשי קשר חדשים`);
       if (updated.success) setContacts(updated.contacts);
     } else {
       toast.error(res.error);
@@ -149,21 +146,22 @@ export default function ContactsTab({ initialContacts }: Props) {
   };
 
   const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
-    const count = selected.size;
-    const res = await bulkDeleteEmailContacts([...selected]);
+    if (visibleSelectedIds.length === 0) return;
+    const count = visibleSelectedIds.length;
+    const res = await bulkDeleteEmailContacts(visibleSelectedIds);
     if (!res.success) { toast.error(res.error); return; }
     setDeleteOpen(false);
-    setContacts((prev) => prev.filter((c) => !selected.has(c.id)));
+    const idsToDelete = new Set(visibleSelectedIds);
+    setContacts((prev) => prev.filter((c) => !idsToDelete.has(c.id)));
     setSelected(new Set());
     toast.success(`${count} אנשי קשר נמחקו`);
   };
 
   const handleBulkAddTags = async () => {
     const parts = tagAddInput.split(/[,|]/).map((t) => t.trim()).filter(Boolean);
-    if (selected.size === 0 || parts.length === 0) return;
+    if (visibleSelectedIds.length === 0 || parts.length === 0) return;
     setTagActionLoading(true);
-    const res = await bulkAddTagsToEmailContacts([...selected], parts);
+    const res = await bulkAddTagsToEmailContacts(visibleSelectedIds, parts);
     setTagActionLoading(false);
     if (res.success) {
       toast.success("תגיות נוספו");
@@ -176,9 +174,9 @@ export default function ContactsTab({ initialContacts }: Props) {
 
   const handleBulkRemoveTag = async () => {
     const tag = tagRemoveInput.trim();
-    if (selected.size === 0 || !tag) return;
+    if (visibleSelectedIds.length === 0 || !tag) return;
     setTagActionLoading(true);
-    const res = await bulkRemoveTagFromEmailContacts([...selected], tag);
+    const res = await bulkRemoveTagFromEmailContacts(visibleSelectedIds, tag);
     setTagActionLoading(false);
     if (res.success) {
       toast.success(`התגית "${tag}" הוסרה מהנבחרים`);
@@ -277,11 +275,11 @@ export default function ContactsTab({ initialContacts }: Props) {
               onClick={toggleSelectAll}
               className="rounded-xl"
             >
-              {selected.size === filtered.filter((c) => c.subscribed !== false).length && filtered.filter((c) => c.subscribed !== false).length > 0
+              {visibleSelectedIds.length === filtered.filter((c) => c.subscribed !== false).length && filtered.filter((c) => c.subscribed !== false).length > 0
                 ? "בטל בחירה"
                 : "בחר הכל"}
             </Button>
-            {selected.size > 0 && (
+            {visibleSelectedIds.length > 0 && (
               <>
                 <Button
                   variant="outline"
@@ -290,7 +288,7 @@ export default function ContactsTab({ initialContacts }: Props) {
                   className="rounded-xl border-sky-200 text-sky-700 hover:bg-sky-50"
                 >
                   <TagIcon className="size-4 ml-1" />
-                  הוסף תגיות ({selected.size})
+                  הוסף תגיות ({visibleSelectedIds.length})
                 </Button>
                 <Button
                   variant="outline"
@@ -307,7 +305,7 @@ export default function ContactsTab({ initialContacts }: Props) {
                   className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
                 >
                   <Trash2Icon className="size-4 ml-1" />
-                  מחק ({selected.size})
+                  מחק ({visibleSelectedIds.length})
                 </Button>
               </>
             )}
@@ -324,7 +322,7 @@ export default function ContactsTab({ initialContacts }: Props) {
                     <TableHead className="w-10">
                       <Checkbox
                         checked={
-                          selected.size === filtered.filter((c) => c.subscribed !== false).length &&
+                          visibleSelectedIds.length === filtered.filter((c) => c.subscribed !== false).length &&
                           filtered.filter((c) => c.subscribed !== false).length > 0
                         }
                         onCheckedChange={toggleSelectAll}
@@ -431,7 +429,7 @@ export default function ContactsTab({ initialContacts }: Props) {
             <DialogTitle>מחיקת אנשי קשר</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            האם למחוק {selected.size} אנשי קשר?
+            האם למחוק {visibleSelectedIds.length} אנשי קשר?
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>ביטול</Button>
@@ -446,7 +444,7 @@ export default function ContactsTab({ initialContacts }: Props) {
             <DialogTitle>הוספת תגיות לנבחרים</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground mb-2">
-            מופרד בפסיק — התגיות יתווספו לכל {selected.size} הנבחרים (ללא מחיקת תגיות קיימות). לדוגמה:{" "}
+            מופרד בפסיק — התגיות יתווספו לכל {visibleSelectedIds.length} הנבחרים (ללא מחיקת תגיות קיימות). לדוגמה:{" "}
             <strong>VIP, סוחרים_קרים</strong>
           </p>
           <Input

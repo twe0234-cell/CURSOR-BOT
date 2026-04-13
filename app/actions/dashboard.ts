@@ -149,19 +149,9 @@ export async function fetchDashboardKpis(): Promise<
         cashFlowRequired,
       },
     };
-  } catch {
-    return {
-      success: true,
-      kpis: {
-        totalInvested: 0,
-        expectedRevenue: 0,
-        potentialProfit: 0,
-        monthlySales: 0,
-        monthlyNetProfit: 0,
-        activeInvestmentsBalance: 0,
-        cashFlowRequired: [],
-      },
-    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "שגיאה בטעינת לוח בקרה";
+    return { success: false, error: msg };
   }
 }
 
@@ -192,8 +182,8 @@ export async function fetchCategoryCostRevenue(): Promise<
       revenue: v.revenue,
     }));
     return { success: true, data: result };
-  } catch {
-    return { success: true, data: [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 
@@ -223,8 +213,8 @@ export async function fetchInventoryDistribution(): Promise<
       fill: colors[i % colors.length],
     }));
     return { success: true, data: result };
-  } catch {
-    return { success: true, data: [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 
@@ -249,8 +239,8 @@ export async function fetchRecentInventory(): Promise<
       created_at: r.created_at ?? "",
     }));
     return { success: true, data: items };
-  } catch {
-    return { success: true, data: [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 
@@ -301,8 +291,8 @@ export async function fetchIncomeExpensesChart(): Promise<
     }
 
     return { success: true, data: months };
-  } catch {
-    return { success: true, data: [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 
@@ -420,8 +410,8 @@ export async function fetchTorahDashboardStats(): Promise<
         aggregateProfitabilityEstimate,
       },
     };
-  } catch {
-    return { success: true, stats: empty };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }
 
@@ -454,7 +444,7 @@ export async function fetchMonthlyRealizedProfit(): Promise<
     }));
 
     return { success: true, data: rows };
-  } catch {
-    return { success: true, data: [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }

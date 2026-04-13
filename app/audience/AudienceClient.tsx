@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useMemo, useRef, useLayoutEffect, memo, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -155,6 +156,7 @@ export default function AudienceClient({
       toast.error("בחר נמענים והעתק תגיות קודם");
       return;
     }
+    const n = selected.size;
     setBulkLoading(true);
     const res = await bulkApplyTags([...selected], copiedTags);
     setBulkLoading(false);
@@ -167,7 +169,7 @@ export default function AudienceClient({
         )
       );
       setSelected(new Set());
-      toast.success("התגיות הודבקו", { description: `ל־${selected.size} נמענים` });
+      toast.success("התגיות הודבקו", { description: `ל־${n} נמענים` });
       setApplyOpen(false);
     } else {
       toast.error(res.error);
@@ -186,6 +188,7 @@ export default function AudienceClient({
       toast.error("בחר נמענים ובחר/הזן תגיות");
       return;
     }
+    const n = selected.size;
     setBulkLoading(true);
     const res = await bulkApplyTags([...selected], tags);
     setBulkLoading(false);
@@ -200,7 +203,7 @@ export default function AudienceClient({
       setSelected(new Set());
       setTagsToAdd("");
       setSelectedTagsToApply(new Set());
-      toast.success("התגיות הוחלו", { description: `ל־${selected.size} נמענים` });
+      toast.success("התגיות הוחלו", { description: `ל־${n} נמענים` });
       setApplyOpen(false);
     } else {
       toast.error(res.error);
@@ -236,7 +239,7 @@ export default function AudienceClient({
     if (res.success) {
       setAudience((prev) => prev.filter((r) => !selected.has(r.id)));
       setSelected(new Set());
-      toast.success(`${selected.size} נמענים נמחקו`);
+      toast.success(`${count} נמענים נמחקו`);
     } else {
       toast.error(res.error);
     }
@@ -392,7 +395,10 @@ export default function AudienceClient({
         <div className="space-y-4">
           {(allowedTags ?? []).length > 0 && (
             <div>
-              <p className="mb-2 text-sm font-medium text-foreground">תגיות מערכת</p>
+              <p className="mb-2 text-sm font-medium text-foreground">תגיות מוצעות לוואטסאפ</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                מסונכרנות מההגדרות (לא קשור לאימייל). אפשר גם להזין תגית חופשית למטה.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {(allowedTags ?? []).map((tag) => (
                   <label
@@ -532,8 +538,18 @@ export default function AudienceClient({
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 pb-28 md:pb-8 min-w-0 overflow-hidden">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">נמענים</h1>
-        <p className="text-muted-foreground">נהל את רשימת הנמענים והייבוא מ-WhatsApp</p>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">ניהול קהל (וואטסאפ)</h1>
+        <p className="text-muted-foreground max-w-2xl">
+          נמענים ותגיות לשידור דרך Green API. תגיות <strong className="text-foreground font-medium">אימייל</strong>{" "}
+          נמצאות במודול דיוור אימייל — לא כאן. רשימת תגיות מוצעות לוואטסאפ נערכת ב־
+          <Link href="/settings" className="text-primary underline mx-1">
+            הגדרות → Green API
+          </Link>
+          ; כאן משייכים תגיות לכל נמען.{" "}
+          <Link href="/whatsapp" className="text-primary underline">
+            מסך שידור
+          </Link>
+        </p>
       </div>
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
