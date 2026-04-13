@@ -1,0 +1,62 @@
+name: Build BT Contacts Bridge APK
+
+on:
+  # Run automatically when bt-contacts-bridge code changes
+  push:
+    branches: [ main, claude/car-assistant-setup-DOYjW ]
+    paths:
+      - 'bt-contacts-bridge/**'
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout code ─────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Java 17 (required for Android Gradle Plugin 8.x) ───────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── 3. Cache Gradle dependencies (speeds up subsequent builds) ────────
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('bt-contacts-bridge/**/*.gradle*', 'bt-contacts-bridge/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-
+
+      # ── 4. Build debug APK ────────────────────────────────────────────────
+      - name: Build debug APK
+        working-directory: bt-contacts-bridge
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # ── 5. Upload APK as artifact (downloadable for 7 days) ───────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bt-contacts-bridge-debug
+          path: bt-contacts-bridge/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
+
+      # ── 6. Print APK info ─────────────────────────────────────────────────
+      - name: APK info
+        run: |
+          APK=bt-contacts-bridge/app/build/outputs/apk/debug/app-debug.apk
+          echo "APK size: $(du -h $APK | cut -f1)"
+          echo "APK path: $APK"
+          echo ""
+          echo "To install: transfer to USB stick → plug into Topway TS18 → open File Manager → tap APK"
