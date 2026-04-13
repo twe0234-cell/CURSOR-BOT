@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ── Bluetooth (covers pre-12 and Android 12+) ──────────────────────── -->
+    <!-- ── Bluetooth ──────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
@@ -16,9 +16,21 @@
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
 
+    <!-- ── Phone / Call detection ────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
+    <!-- ── Overlay (for caller display on screen) ────────────────────────── -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ── Network (for UDP to unit 17) ──────────────────────────────────── -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- ── Background / Service ───────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
@@ -41,17 +53,19 @@
             </intent-filter>
         </activity>
 
-        <!-- ── Foreground sync service ────────────────────────────────────── -->
+        <!-- ── BT contact sync service ────────────────────────────────────── -->
         <service
             android:name=".ContactSyncService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
-        <!--
-            BtReceiver: exported=false is safe for system broadcasts.
-            ACTION_ACL_CONNECTED is a "protected broadcast" — only system sends it,
-            so an exported=false receiver still receives it (Android 8+ exemption).
-        -->
+        <!-- ── Caller display service (overlay + UDP to unit 17) ──────────── -->
+        <service
+            android:name=".CallerService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+
+        <!-- ── BT connection receiver (auto-sync on connect) ─────────────── -->
         <receiver
             android:name=".BtReceiver"
             android:exported="false">
@@ -61,7 +75,16 @@
             </intent-filter>
         </receiver>
 
-        <!-- ── SyncAdapter stub (required to write contacts) ─────────────── -->
+        <!-- ── Phone call state receiver (caller ID from BT phone) ───────── -->
+        <receiver
+            android:name=".PhoneCallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── SyncAdapter stub ───────────────────────────────────────────── -->
         <service
             android:name=".SyncAdapterService"
             android:exported="true">
@@ -73,10 +96,10 @@
                 android:resource="@xml/syncadapter" />
         </service>
 
-        <!-- ── AccountAuthenticator stub (required by AccountManager) ───── -->
+        <!-- ── AccountAuthenticator stub ─────────────────────────────────── -->
         <service
             android:name=".AuthenticatorService"
-            android:exported="true">  <!-- must be exported for AccountManager to bind -->
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.accounts.AccountAuthenticator" />
             </intent-filter>

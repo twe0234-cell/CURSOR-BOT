@@ -12,6 +12,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
@@ -61,6 +62,8 @@ class MainActivity : AppCompatActivity() {
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.WRITE_CONTACTS)
         add(Manifest.permission.GET_ACCOUNTS)
+        add(Manifest.permission.READ_PHONE_STATE)
+        add(Manifest.permission.READ_CALL_LOG)
     }
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -83,7 +86,72 @@ class MainActivity : AppCompatActivity() {
             pickVcf.launch("*/*")   // wide filter — some devices don't register text/x-vcard
         }
 
+        setupCallerDisplaySettings()
         requestMissingPermissions()
+    }
+
+    // ─── Caller display settings ──────────────────────────────────────────────
+
+    private fun setupCallerDisplaySettings() {
+        val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
+
+        // Overlay toggle
+        binding.switchCallerOverlay.isChecked =
+            prefs.getBoolean(CallerService.PREF_SHOW_OVERLAY, true)
+        binding.switchCallerOverlay.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(CallerService.PREF_SHOW_OVERLAY, checked).apply()
+        }
+
+        // Grant overlay permission button — opens system settings
+        binding.btnGrantOverlay.setOnClickListener {
+            if (Settings.canDrawOverlays(this)) {
+                toast("הרשאת חלון כבר ניתנה ✓")
+            } else {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+        }
+
+        // UDP toggle — show/hide IP+port fields
+        val udpEnabled = prefs.getBoolean(CallerService.PREF_SEND_UDP, false)
+        binding.switchSendUdp.isChecked = udpEnabled
+        setUdpFieldsVisible(udpEnabled)
+
+        binding.switchSendUdp.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(CallerService.PREF_SEND_UDP, checked).apply()
+            setUdpFieldsVisible(checked)
+        }
+
+        // Pre-fill saved UDP values
+        binding.etUdpHost.setText(prefs.getString(CallerService.PREF_UDP_HOST, ""))
+        val savedPort = prefs.getInt(CallerService.PREF_UDP_PORT, CallerService.DEFAULT_UDP_PORT)
+        binding.etUdpPort.setText(savedPort.toString())
+
+        // Save on focus-lost
+        binding.etUdpHost.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                prefs.edit()
+                    .putString(CallerService.PREF_UDP_HOST, binding.etUdpHost.text.toString().trim())
+                    .apply()
+            }
+        }
+        binding.etUdpPort.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val port = binding.etUdpPort.text.toString().toIntOrNull()
+                    ?: CallerService.DEFAULT_UDP_PORT
+                prefs.edit().putInt(CallerService.PREF_UDP_PORT, port).apply()
+            }
+        }
+    }
+
+    private fun setUdpFieldsVisible(visible: Boolean) {
+        val v = if (visible) View.VISIBLE else View.GONE
+        binding.tilUdpHost.visibility = v
+        binding.tilUdpPort.visibility = v
     }
 
     override fun onResume() {
