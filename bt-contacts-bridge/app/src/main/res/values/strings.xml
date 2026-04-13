@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">גשר אנשי קשר BT</string>
+    <string name="app_title">גשר אנשי קשר Bluetooth</string>
+    <string name="app_subtitle">מסנכרן את הטלפון הכשר → Google Gemini</string>
+    <string name="bt_checking">בודק חיבור Bluetooth…</string>
+    <string name="no_contacts_yet">אנשי קשר: טרם סונכרן</string>
+    <string name="no_sync_yet">טרם בוצע סנכרון</string>
+    <string name="sync_now">סנכרן עכשיו</string>
+    <string name="auto_sync_label">סנכרון אוטומטי בחיבור BT</string>
+    <string name="info_text">
+        לאחר סנכרון, אמור לגוגל ג\'מיני:\n
+        \"חייג לדוד\" — והוא ימצא את איש הקשר מהטלפון הכשר.
+    </string>
+</resources>
