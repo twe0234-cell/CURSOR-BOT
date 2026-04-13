@@ -337,6 +337,108 @@ export type SendCampaignResult =
   | { success: true; sent: number; failed: number }
   | { success: false; error: string };
 
+/**
+ * ייבוא אנשי קשר מ-CRM (שיש להם אימייל) לרשימת תפוצה.
+ * מבצע upsert — אנשי קשר קיימים ברשימה לא ימחקו.
+ * מחזיר כמה נוספו/עדכנו.
+ */
+export async function importCrmContactsToEmail(): Promise<
+  | { success: true; added: number; total: number }
+  | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: crmRows, error: fetchErr } = await supabase
+      .from("crm_contacts")
+      .select("id, name, email, phone")
+      .eq("user_id", user.id)
+      .not("email", "is", null)
+      .neq("email", "");
+
+    if (fetchErr) return { success: false, error: fetchErr.message };
+
+    const valid = (crmRows ?? []).filter(
+      (r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim())
+    );
+
+    if (valid.length === 0) {
+      return { success: true, added: 0, total: 0 };
+    }
+
+    const { data: existing } = await supabase
+      .from("email_contacts")
+      .select("email")
+      .eq("user_id", user.id);
+    const existingSet = new Set(
+      (existing ?? []).map((r) => (r.email ?? "").toLowerCase().trim())
+    );
+
+    const toInsert = valid.map((r) => ({
+      user_id: user.id,
+      email: String(r.email).trim().toLowerCase(),
+      name: (r.name ?? "").trim() || null,
+      phone: (r.phone ?? "").trim() || null,
+      tags: ["CRM"],
+      subscribed: true,
+      source: "crm",
+    }));
+
+    const { error: upsertErr } = await supabase.from("email_contacts").upsert(toInsert, {
+      onConflict: "user_id,email",
+      ignoreDuplicates: false,
+    });
+
+    if (upsertErr) return { success: false, error: upsertErr.message };
+
+    const added = toInsert.filter((r) => !existingSet.has(r.email)).length;
+    revalidatePath("/email");
+    return { success: true, added, total: toInsert.length };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/**
+ * הוספת איש קשר בודד מ-CRM לרשימת תפוצה.
+ */
+export async function addCrmContactToEmailList(
+  name: string,
+  email: string,
+  phone?: string | null
+): Promise<ActionResult> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return { success: false, error: "אימייל לא תקין" };
+  }
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase.from("email_contacts").upsert(
+      {
+        user_id: user.id,
+        email: cleanEmail,
+        name: name.trim() || null,
+        phone: (phone ?? "").trim() || null,
+        tags: ["CRM"],
+        subscribed: true,
+        source: "crm",
+      },
+      { onConflict: "user_id,email" }
+    );
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
 /** תגיות מוצעות לקמפייני אימייל בלבד — לא מערבב עם allowed_tags של וואטסאפ */
 export async function saveEmailCampaignTagPresets(
   presets: string[]

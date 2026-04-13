@@ -27,6 +27,8 @@ import {
   ChevronUp,
   UserIcon,
   ScrollTextIcon,
+  SendIcon,
+  PlusCircleIcon,
 } from "lucide-react";
 import { isDealDelivered } from "@/src/services/crm.logic";
 import {
@@ -37,6 +39,7 @@ import {
 import type { CrmContactHistoryEntry } from "@/src/lib/types/crm";
 import { updateCrmContact, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
 import { updateCrmExtraContacts } from "../galleryActions";
+import { addCrmContactToEmailList } from "@/app/email/actions";
 import ExtraContactsEditor from "@/components/crm/ExtraContactsEditor";
 import ScribeGallery from "@/components/crm/ScribeGallery";
 import { StarRating } from "@/components/ui/StarRating";
@@ -317,6 +320,20 @@ export default function ContactDetailClient({
     sample_image_url: initialSoferProfile?.sample_image_url ?? "",
   });
   const [soferLoading, setSoferLoading] = useState(false);
+  const [addToEmailListLoading, setAddToEmailListLoading] = useState(false);
+
+  const handleAddToEmailList = async () => {
+    if (!contact.email) return;
+    setAddToEmailListLoading(true);
+    const res = await addCrmContactToEmailList(contact.name, contact.email, contact.phone);
+    setAddToEmailListLoading(false);
+    if (res.success) {
+      toast.success("נוסף לרשימת תפוצה");
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const [editMode, setEditMode] = useState(false);
@@ -545,6 +562,33 @@ export default function ContactDetailClient({
                 </span>
               )}
             </div>
+            {contact.email && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors"
+                >
+                  <SendIcon className="size-3.5" />
+                  שלח מייל
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void handleAddToEmailList()}
+                  disabled={addToEmailListLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                >
+                  <PlusCircleIcon className="size-3.5" />
+                  {addToEmailListLoading ? "מוסיף..." : "הוסף לרשימת תפוצה"}
+                </button>
+                <a
+                  href={`/email/campaigns?preselect=${encodeURIComponent(contact.email)}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+                >
+                  <MailIcon className="size-3.5" />
+                  קמפיין אישי
+                </a>
+              </div>
+            )}
           </div>
           <Button
             variant="outline"

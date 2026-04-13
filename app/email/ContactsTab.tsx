@@ -24,6 +24,7 @@ import {
   fetchEmailContacts,
   importEmailContacts,
   importGmailContactsForEmail,
+  importCrmContactsToEmail,
   getGmailStatus,
   deleteEmailContact,
   bulkDeleteEmailContacts,
@@ -49,12 +50,31 @@ export default function ContactsTab({ initialContacts }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [gmailImportLoading, setGmailImportLoading] = useState(false);
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
+  const [crmImportLoading, setCrmImportLoading] = useState(false);
 
   useEffect(() => {
     getGmailStatus().then((r) => {
       if (r.success) setGmailConnected(r.connected);
     });
   }, []);
+
+  const handleCrmImport = async () => {
+    setCrmImportLoading(true);
+    const res = await importCrmContactsToEmail();
+    setCrmImportLoading(false);
+    if (res.success) {
+      toast.success(
+        res.added > 0
+          ? `יובאו ${res.added} אנשי קשר חדשים מ-CRM (${res.total} סה״כ)`
+          : `כל ${res.total} אנשי הקשר מ-CRM כבר ברשימה`
+      );
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [tagAddOpen, setTagAddOpen] = useState(false);
   const [tagRemoveOpen, setTagRemoveOpen] = useState(false);
@@ -268,6 +288,17 @@ export default function ContactsTab({ initialContacts }: Props) {
                 {gmailImportLoading ? "מייבא..." : "ייבוא מ-Gmail"}
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleCrmImport()}
+              disabled={crmImportLoading}
+              className="rounded-xl"
+              title="ייבוא אנשי קשר מ-CRM (כל מי שיש לו אימייל)"
+            >
+              <UsersIcon className="size-4 ml-1" />
+              {crmImportLoading ? "מייבא..." : "ייבוא מ-CRM"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
