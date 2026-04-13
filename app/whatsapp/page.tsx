@@ -53,20 +53,13 @@ export default async function WhatsAppPage({ searchParams }: Props) {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">שידור וואטסאפ</h1>
-            <p className="mt-1 text-muted-foreground text-[15px] max-w-xl">
-              פילוח לפי תגיות על נמענים בקהל או לפי קבוצות. תגיות אימייל ותגיות וואטסאפ נשמרות בנפרד.
+            <p className="mt-1 text-muted-foreground text-[15px]">
+              שליחת הודעות לנמענים ולקבוצות
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
             <Link href="/audience">
-              <Button variant="outline" className="rounded-xl">
-                ניהול קהל ותגיות
-              </Button>
-            </Link>
-            <Link href="/settings">
-              <Button variant="outline" className="rounded-xl">
-                הגדרות Green API ותגיות מוצעות
-              </Button>
+              <Button variant="outline" className="rounded-xl">ניהול קהל</Button>
             </Link>
           </div>
         </div>

@@ -383,13 +383,6 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
         </TabsList>
 
         <TabsContent value="compose">
-        <p className="text-xs text-muted-foreground mb-4">
-          לפני שליחה תתבקש לאשר בשני שלבים (כולל הקלדת מספר נמענים). ניהול תגיות והפרדת רשימות:{" "}
-          <Link href="/email" className="text-sky-600 underline font-medium">
-            אנשי קשר
-          </Link>
-          .
-        </p>
         {contactsError && (
           <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             שגיאה בטעינת אנשי קשר: {contactsError}
@@ -633,8 +626,7 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
                 תגיות מוצעות לקמפיין אימייל
               </CardTitle>
               <CardDescription>
-                רשימה זו שמורה נפרדת מתגיות קהל הוואטסאפ (Green API). היא משמשת רק כהצעות וניהול
-                פילוח ל־<code className="text-xs bg-muted px-1 rounded">email_contacts.tags</code>.
+                תגיות לפילוח קמפיינים — ניהול ושמירה ללא יציאה ממסך זה
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

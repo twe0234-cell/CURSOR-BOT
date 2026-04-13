@@ -24,6 +24,7 @@ import {
   fetchEmailContacts,
   importEmailContacts,
   importGmailContactsForEmail,
+  getGmailStatus,
   deleteEmailContact,
   bulkDeleteEmailContacts,
   bulkAddTagsToEmailContacts,
@@ -32,6 +33,8 @@ import {
 } from "./actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon, TagIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect } from "react";
 
 type Props = {
   initialContacts: EmailContact[];
@@ -45,6 +48,13 @@ export default function ContactsTab({ initialContacts }: Props) {
   const [importText, setImportText] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [gmailImportLoading, setGmailImportLoading] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getGmailStatus().then((r) => {
+      if (r.success) setGmailConnected(r.connected);
+    });
+  }, []);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [tagAddOpen, setTagAddOpen] = useState(false);
   const [tagRemoveOpen, setTagRemoveOpen] = useState(false);
@@ -238,16 +248,26 @@ export default function ContactsTab({ initialContacts }: Props) {
               onImport={handleCsvImport}
               filename="email-contacts"
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGmailImport}
-              disabled={gmailImportLoading}
-              className="rounded-xl"
-            >
-              <DownloadIcon className="size-4 ml-1" />
-              ייבוא מ-Gmail
-            </Button>
+            {gmailConnected === false ? (
+              <Link href="/settings">
+                <Button variant="outline" size="sm" className="rounded-xl text-muted-foreground" title="Gmail לא מחובר — לחץ לחיבור בהגדרות">
+                  <DownloadIcon className="size-4 ml-1" />
+                  ייבוא מ-Gmail
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGmailImport}
+                disabled={gmailImportLoading || gmailConnected === null}
+                className="rounded-xl"
+                title={gmailConnected === null ? "בודק חיבור..." : "ייבוא אנשי קשר מ-Gmail"}
+              >
+                <DownloadIcon className="size-4 ml-1" />
+                {gmailImportLoading ? "מייבא..." : "ייבוא מ-Gmail"}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -384,9 +404,15 @@ export default function ContactsTab({ initialContacts }: Props) {
                 ייבא מ-Gmail או הדבק רשימת אימיילים
               </p>
               <div className="flex gap-2">
-                <Button onClick={handleGmailImport} variant="outline" disabled={gmailImportLoading} className="rounded-xl">
-                  ייבוא מ-Gmail
-                </Button>
+                {gmailConnected === false ? (
+                  <Link href="/settings">
+                    <Button variant="outline" className="rounded-xl">חבר Gmail בהגדרות</Button>
+                  </Link>
+                ) : (
+                  <Button onClick={handleGmailImport} variant="outline" disabled={gmailImportLoading || gmailConnected === null} className="rounded-xl">
+                    {gmailImportLoading ? "מייבא..." : "ייבוא מ-Gmail"}
+                  </Button>
+                )}
                 <Button onClick={() => setImportOpen(true)}>ייבוא ידני</Button>
               </div>
             </div>

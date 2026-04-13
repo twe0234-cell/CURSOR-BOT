@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, Image as ImageIcon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Image as ImageIcon, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { MarketTorahBookRow } from "../actions";
 import type { MarketStage } from "../stages";
 import { updateMarketStage } from "../actions";
+import { buildMarketTorahShareText, whatsappPrefillPath } from "@/lib/market/shareOfferText";
 
 // ─── Stage config ───────────────────────────────────────────────────────────
 
@@ -107,11 +108,21 @@ function KanbanCard({ row, onMove, isPending }: CardProps) {
         )}
       </div>
 
-      {/* Days badge + move buttons */}
+      {/* WA share + Days badge + move buttons */}
       <div className="flex items-center justify-between mt-1">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${days > 14 ? "bg-red-50 text-red-400" : "bg-slate-100 text-slate-400"}`}>
-          {days === 0 ? "היום" : `לפני ${days} ימים`}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${days > 14 ? "bg-red-50 text-red-400" : "bg-slate-100 text-slate-400"}`}>
+            {days === 0 ? "היום" : `לפני ${days} ימים`}
+          </span>
+          <Link
+            href={whatsappPrefillPath(buildMarketTorahShareText(row))}
+            prefetch={false}
+            title="שיתוף לוואטסאפ"
+            className="p-0.5 rounded hover:bg-emerald-50 transition-colors"
+          >
+            <MessageCircle size={13} className="text-emerald-500" />
+          </Link>
+        </div>
         <div className="flex gap-1">
           <button
             disabled={!canGoBack || isPending}

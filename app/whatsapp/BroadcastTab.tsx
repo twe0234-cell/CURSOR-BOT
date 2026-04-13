@@ -392,29 +392,10 @@ export default function BroadcastTab({
               <CardTitle className="text-base font-semibold text-slate-700">בחירת קהל יעד</CardTitle>
             </div>
             <CardDescription>
-              תגיות מגיעות מרשימת התגיות בהגדרות ומתגיות שמשויכות לנמענים ב־
-              <Link href="/audience" className="text-sky-600 underline font-medium mx-0.5">
-                ניהול קהל
-              </Link>
-              . קבוצות הן רשומות עם <code className="text-xs bg-muted px-1 rounded">@g.us</code>.
+              בחר תגיות לפילוח קהל היעד או קבוצות וואטסאפ ספציפיות
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2 text-xs text-slate-700 leading-relaxed">
-              <strong className="text-slate-800">מקורות אמת:</strong> תגיות <strong>אימייל</strong> (קמפיינים) נשמרות
-              ב־<code className="bg-white/80 px-1 rounded">email_contacts</code> — לא מעורבבות כאן. כאן רק קהל
-              וואטסאפ.
-            </div>
-            <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-sky-400 shrink-0" />
-                ברשימת תגיות מוצעות (הגדרות)
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-amber-400 shrink-0" />
-                רק על נמענים (לא בהגדרות)
-              </span>
-            </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">תגיות לפילוח</label>
               {(allTags ?? []).length === 0 ? null : (
@@ -469,15 +450,10 @@ export default function BroadcastTab({
             )}
             {(allTags.length === 0 && groups.length === 0) && (
               <p className="text-sm text-muted-foreground">
-                אין עדיין תגיות או קבוצות — הוסף תגיות מוצעות ב־
-                <Link href="/settings" className="text-sky-600 underline mx-1">
-                  הגדרות
-                </Link>
-                ושייך תגיות לנמענים ב־
-                <Link href="/audience" className="text-sky-600 underline mr-1">
-                  ניהול קהל
-                </Link>
-                , או ייבא קבוצות בטאב &quot;ניהול קבוצות&quot;.
+                אין עדיין תגיות או קבוצות —{" "}
+                <Link href="/audience" className="text-sky-600 underline">ניהול קהל</Link>
+                {" "}|{" "}
+                <Link href="/settings" className="text-sky-600 underline">הגדרות</Link>
               </p>
             )}
             <Button
