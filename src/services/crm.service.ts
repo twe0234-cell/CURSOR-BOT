@@ -1357,6 +1357,8 @@ export type ContactDetailPageData = {
     pricing_notes: string | null;
     writing_constraints: string | null;
     past_writings: string | null;
+    community: string | null;
+    sample_image_url: string | null;
   } | null;
   debtToContact: number;
   debtFromContact: number;
