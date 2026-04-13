@@ -1,5 +1,6 @@
 package com.btbridge
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.util.Log
@@ -9,265 +10,347 @@ import java.io.OutputStream
 import java.util.UUID
 
 /**
- * Direct OBEX PBAP client — connects via RFCOMM to the Phone Book Access Profile
- * server on the remote device and fetches the full phonebook as vCard data.
+ * OBEX PBAP client over Bluetooth RFCOMM.
  *
- * Protocol: OBEX over RFCOMM
- *   1. CONNECT  (with Target = PBAP UUID)
- *   2. SETPATH  "telecom"
- *   3. SETPATH  "pb"
- *   4. GET      "pb.vcf" / "x-bt/phonebook"
- *   5. DISCONNECT
+ * Protocol flow:
+ *  1. CONNECT  (Target = PBAP UUID, capture Connection-ID from response)
+ *  2. SETPATH  "telecom"
+ *  3. SETPATH  "pb"
+ *  4. GET      pb.vcf  (with Connection-ID + APP_PARAMETERS: MaxListCount, Format)
+ *  5. Accumulate CONTINUE responses → full vCard payload
+ *  6. DISCONNECT
  */
-class OBEXPbapClient(private val device: BluetoothDevice) {
+@SuppressLint("MissingPermission")
+class OBEXPbapClient(
+    private val device: BluetoothDevice,
+    private val onProgress: ((String) -> Unit)? = null
+) {
 
     companion object {
-        // PBAP PSE (Phone Book Server Equipment) UUID
+        /** PBAP PSE (Phone Book Server Equipment) service record UUID */
         val PBAP_PSE_UUID: UUID = UUID.fromString("0000112F-0000-1000-8000-00805F9B34FB")
 
-        // OBEX PBAP target UUID in binary
-        val PBAP_TARGET_UUID = byteArrayOf(
-            0x79.toByte(), 0x61.toByte(), 0x35.toByte(), 0xF0.toByte(),
-            0xF0.toByte(), 0xC5.toByte(), 0x11.toByte(), 0xD8.toByte(),
-            0x09.toByte(), 0x66.toByte(), 0x08.toByte(), 0x00.toByte(),
-            0x20.toByte(), 0x0C.toByte(), 0x9A.toByte(), 0x66.toByte()
+        /** OBEX PBAP target UUID (binary) */
+        private val PBAP_TARGET = byteArrayOf(
+            0x79, 0x61, 0x35, 0xF0.toByte(),
+            0xF0.toByte(), 0xC5.toByte(), 0x11, 0xD8.toByte(),
+            0x09, 0x66, 0x08, 0x00,
+            0x20, 0x0C, 0x9A.toByte(), 0x66
         )
 
-        // OBEX opcodes
+        // ── OBEX opcodes ──────────────────────────────────────────────────────
         private const val OP_CONNECT    = 0x80
         private const val OP_DISCONNECT = 0x81
         private const val OP_GET_FINAL  = 0x83
         private const val OP_SETPATH   = 0x85
 
-        // OBEX response codes
+        // ── OBEX response codes ───────────────────────────────────────────────
         private const val RSP_OK       = 0xA0
         private const val RSP_CONTINUE = 0x90
 
-        // OBEX header IDs
-        private const val HDR_NAME      = 0x01  // Unicode
-        private const val HDR_TYPE      = 0x42  // Byte sequence (ASCII + null)
-        private const val HDR_TARGET    = 0x46  // Byte sequence
-        private const val HDR_BODY      = 0x48  // Byte sequence
-        private const val HDR_END_BODY  = 0x49  // Byte sequence
+        // ── OBEX header IDs ───────────────────────────────────────────────────
+        // High 2 bits: 00/01 = variable length (unicode/byte-seq), 10 = 1-byte, 11 = 4-byte
+        private const val HDR_NAME       = 0x01  // 00 → unicode, variable
+        private const val HDR_TYPE       = 0x42  // 01 → byte seq, variable
+        private const val HDR_TARGET     = 0x46  // 01 → byte seq, variable
+        private const val HDR_APP_PARAMS = 0x4C  // 01 → byte seq, variable
+        private const val HDR_BODY       = 0x48  // 01 → byte seq, variable
+        private const val HDR_END_BODY   = 0x49  // 01 → byte seq, variable
+        private const val HDR_CONN_ID    = 0xCB  // 11 → 4-byte int, fixed 5 bytes total
 
-        private const val MAX_PACKET = 0x2000  // 8192 bytes
+        // ── Limits ────────────────────────────────────────────────────────────
+        private const val MAX_PACKET_SIZE   = 0x2000  // 8192 bytes
+        private const val SOCKET_TIMEOUT_MS = 20_000  // 20 s read timeout
+        private const val MAX_CONTINUATIONS = 2000    // guard against infinite loops
+
         private const val TAG = "OBEXPbap"
     }
 
-    /** Fetch all phonebook entries as a list of parsed contacts. */
+    /**
+     * Connection-ID sent by the server in the CONNECT response.
+     * Must be included in every subsequent request header.
+     */
+    private var connectionId = -1
+
+    // ─── Public API ───────────────────────────────────────────────────────────
+
+    /**
+     * Establish RFCOMM + OBEX session, fetch full phonebook, parse vCards.
+     * Returns empty list on any failure (errors sent via onProgress).
+     */
     fun fetchContacts(): List<VCardParser.Contact> {
         var socket: BluetoothSocket? = null
         return try {
-            socket = device.createRfcommSocketToServiceRecord(PBAP_PSE_UUID)
+            socket = openSocket()
             socket.connect()
-            Log.i(TAG, "RFCOMM connected to ${device.name}")
+            socket.soTimeout = SOCKET_TIMEOUT_MS
+            Log.i(TAG, "RFCOMM connected to ${device.name ?: device.address}")
+            onProgress?.invoke("מחובר — מנהל handshake OBEX…")
 
-            val input = socket.inputStream
-            val output = socket.outputStream
+            val ins = socket.inputStream
+            val out = socket.outputStream
 
-            if (!sendConnect(input, output)) {
-                Log.e(TAG, "OBEX CONNECT failed")
+            if (!obexConnect(ins, out)) return emptyList()
+            onProgress?.invoke("OBEX מאושר — מנווט לספר טלפונים…")
+
+            if (!setPath(ins, out, "telecom")) {
+                onProgress?.invoke("שגיאה: לא נמצאה ספרייה 'telecom'")
+                return emptyList()
+            }
+            if (!setPath(ins, out, "pb")) {
+                onProgress?.invoke("שגיאה: לא נמצאה ספרייה 'pb'")
                 return emptyList()
             }
 
-            if (!sendSetPath(input, output, "telecom")) {
-                Log.e(TAG, "SETPATH telecom failed")
-                return emptyList()
-            }
+            onProgress?.invoke("מוריד אנשי קשר…")
+            val vcardData = getPhonebook(ins, out)
+            obexDisconnect(out)
 
-            if (!sendSetPath(input, output, "pb")) {
-                Log.e(TAG, "SETPATH pb failed")
-                return emptyList()
-            }
-
-            val vcardData = fetchPhonebook(input, output)
             if (vcardData.isBlank()) {
-                Log.w(TAG, "Empty phonebook response")
+                onProgress?.invoke("הטלפון החזיר ספר טלפונים ריק")
                 return emptyList()
             }
 
-            sendDisconnect(output)
-            Log.i(TAG, "Fetched ${vcardData.length} bytes of vCard data")
-            VCardParser.parse(vcardData)
+            Log.i(TAG, "vCard payload: ${vcardData.length} chars")
+            val contacts = VCardParser.parse(vcardData)
+            onProgress?.invoke("נמצאו ${contacts.size} אנשי קשר")
+            contacts
 
         } catch (e: IOException) {
-            Log.e(TAG, "Connection error: ${e.message}")
+            val msg = "שגיאת חיבור BT: ${e.message}"
+            Log.e(TAG, msg, e)
+            onProgress?.invoke(msg)
+            emptyList()
+        } catch (e: SecurityException) {
+            val msg = "חסרת הרשאה: BLUETOOTH_CONNECT"
+            Log.e(TAG, msg)
+            onProgress?.invoke(msg)
             emptyList()
         } finally {
-            try { socket?.close() } catch (_: Exception) {}
+            runCatching { socket?.close() }
         }
     }
 
-    // ─── OBEX CONNECT ────────────────────────────────────────────────────────
+    // ─── RFCOMM socket ────────────────────────────────────────────────────────
 
-    private fun sendConnect(input: InputStream, output: OutputStream): Boolean {
-        // Headers: Target = PBAP UUID
-        val targetHeader = buildByteSequenceHeader(HDR_TARGET, PBAP_TARGET_UUID)
+    private fun openSocket(): BluetoothSocket =
+        runCatching { device.createRfcommSocketToServiceRecord(PBAP_PSE_UUID) }
+            .getOrElse {
+                Log.w(TAG, "Secure RFCOMM failed, trying insecure: ${it.message}")
+                device.createInsecureRfcommSocketToServiceRecord(PBAP_PSE_UUID)
+            }
 
-        // Connect packet body: OBEX version (0x10), flags (0x00), max packet size
+    // ─── OBEX CONNECT ─────────────────────────────────────────────────────────
+
+    private fun obexConnect(ins: InputStream, out: OutputStream): Boolean {
+        val targetHdr = byteSeqHeader(HDR_TARGET, PBAP_TARGET)
+
+        // CONNECT body: [OBEX version][flags][max packet MSB][max packet LSB][headers…]
         val body = byteArrayOf(
-            0x10.toByte(), 0x00.toByte(),
-            ((MAX_PACKET shr 8) and 0xFF).toByte(),
-            (MAX_PACKET and 0xFF).toByte()
-        ) + targetHeader
+            0x10, 0x00,
+            (MAX_PACKET_SIZE shr 8).toByte(), MAX_PACKET_SIZE.toByte()
+        ) + targetHdr
 
-        val totalLen = 3 + body.size
-        val packet = ByteArray(totalLen)
-        packet[0] = OP_CONNECT.toByte()
-        packet[1] = ((totalLen shr 8) and 0xFF).toByte()
-        packet[2] = (totalLen and 0xFF).toByte()
-        body.copyInto(packet, 3)
+        writePacket(out, OP_CONNECT, body)
 
-        output.write(packet)
-        output.flush()
-
-        val response = readPacket(input) ?: return false
-        return (response[0].toInt() and 0xFF) == RSP_OK
+        val rsp = readPacket(ins) ?: return false
+        val code = rsp[0].toInt() and 0xFF
+        if (code != RSP_OK) {
+            Log.e(TAG, "CONNECT rejected: 0x${code.toString(16)}")
+            onProgress?.invoke("הטלפון דחה את חיבור OBEX (0x${code.toString(16)})")
+            return false
+        }
+        // Extract Connection-ID from response headers (start at byte 7)
+        connectionId = extractConnectionId(rsp, startOffset = 7)
+        Log.d(TAG, "OBEX connected, connectionId=$connectionId")
+        return true
     }
 
     // ─── OBEX SETPATH ─────────────────────────────────────────────────────────
 
-    private fun sendSetPath(input: InputStream, output: OutputStream, folder: String): Boolean {
-        val nameHeader = buildUnicodeHeader(HDR_NAME, folder)
+    private fun setPath(ins: InputStream, out: OutputStream, folder: String): Boolean {
+        // SETPATH body: [flags=0x00 (descend, create if needed)][constants=0x00][headers…]
+        val body = byteArrayOf(0x00, 0x00) + connIdHeader() + unicodeHeader(HDR_NAME, folder)
+        writePacket(out, OP_SETPATH, body)
 
-        // SETPATH body: flags (0x02 = don't create), constants (0x00)
-        val body = byteArrayOf(0x02, 0x00) + nameHeader
-
-        val totalLen = 3 + body.size
-        val packet = ByteArray(totalLen)
-        packet[0] = OP_SETPATH.toByte()
-        packet[1] = ((totalLen shr 8) and 0xFF).toByte()
-        packet[2] = (totalLen and 0xFF).toByte()
-        body.copyInto(packet, 3)
-
-        output.write(packet)
-        output.flush()
-
-        val response = readPacket(input) ?: return false
-        val rsp = response[0].toInt() and 0xFF
-        return rsp == RSP_OK
+        val rsp = readPacket(ins) ?: return false
+        return ((rsp[0].toInt() and 0xFF) == RSP_OK).also {
+            if (!it) Log.w(TAG, "SETPATH '$folder' failed: 0x${(rsp[0].toInt() and 0xFF).toString(16)}")
+        }
     }
 
-    // ─── OBEX GET (phonebook) ─────────────────────────────────────────────────
+    // ─── OBEX GET phonebook ───────────────────────────────────────────────────
 
-    private fun fetchPhonebook(input: InputStream, output: OutputStream): String {
-        val nameHeader  = buildUnicodeHeader(HDR_NAME, "pb.vcf")
-        val typeBytes   = "x-bt/phonebook\u0000".toByteArray(Charsets.US_ASCII)
-        val typeHeader  = buildByteSequenceHeader(HDR_TYPE, typeBytes)
+    private fun getPhonebook(ins: InputStream, out: OutputStream): String {
+        val headers = connIdHeader() +
+                unicodeHeader(HDR_NAME, "pb.vcf") +
+                byteSeqHeader(HDR_TYPE, "x-bt/phonebook\u0000".toByteArray(Charsets.US_ASCII)) +
+                appParamsHeader()
 
-        val headers = nameHeader + typeHeader
-        val totalLen = 3 + headers.size
-        val packet = ByteArray(totalLen)
-        packet[0] = OP_GET_FINAL.toByte()
-        packet[1] = ((totalLen shr 8) and 0xFF).toByte()
-        packet[2] = (totalLen and 0xFF).toByte()
-        headers.copyInto(packet, 3)
+        writePacket(out, OP_GET_FINAL, headers)
 
-        output.write(packet)
-        output.flush()
-
-        // Read chunks until RSP_OK (may come as multiple RSP_CONTINUE)
         val sb = StringBuilder()
-        while (true) {
-            val response = readPacket(input) ?: break
-            val code = response[0].toInt() and 0xFF
-            extractBody(response)?.let { sb.append(String(it, Charsets.UTF_8)) }
+        var iterations = 0
+
+        while (iterations++ < MAX_CONTINUATIONS) {
+            val rsp = readPacket(ins) ?: break
+            val code = rsp[0].toInt() and 0xFF
+
+            extractBody(rsp)?.let { sb.append(it.toString(Charsets.UTF_8)) }
 
             when (code) {
-                RSP_OK -> break
-                RSP_CONTINUE -> {
-                    // Send empty GET to continue
-                    val cont = byteArrayOf(
-                        OP_GET_FINAL.toByte(), 0x00, 0x03
-                    )
-                    output.write(cont)
-                    output.flush()
-                }
-                else -> {
-                    Log.w(TAG, "Unexpected response code: 0x${code.toString(16)}")
+                RSP_OK       -> break
+                RSP_CONTINUE -> writePacket(out, OP_GET_FINAL, connIdHeader())
+                else         -> {
+                    Log.w(TAG, "Unexpected GET response: 0x${code.toString(16)}")
                     break
                 }
             }
         }
+
+        if (iterations >= MAX_CONTINUATIONS) Log.w(TAG, "Max CONTINUE iterations reached")
         return sb.toString()
     }
 
-    private fun sendDisconnect(output: OutputStream) {
-        try {
-            output.write(byteArrayOf(OP_DISCONNECT.toByte(), 0x00, 0x03))
-            output.flush()
-        } catch (_: Exception) {}
+    private fun obexDisconnect(out: OutputStream) {
+        runCatching { writePacket(out, OP_DISCONNECT, connIdHeader()) }
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Packet I/O ───────────────────────────────────────────────────────────
+
+    /** Write: [opcode 1B][total_length 2B][body…] */
+    private fun writePacket(out: OutputStream, opcode: Int, body: ByteArray) {
+        val total = 3 + body.size
+        val pkt = ByteArray(total)
+        pkt[0] = opcode.toByte()
+        pkt[1] = (total shr 8).toByte()
+        pkt[2] = total.toByte()
+        body.copyInto(pkt, 3)
+        out.write(pkt)
+        out.flush()
+    }
+
+    /** Read one complete OBEX packet (opcode + 2-byte length prefix). */
+    private fun readPacket(ins: InputStream): ByteArray? {
+        val hdr = readFully(ins, 3) ?: return null
+        val total = ((hdr[1].toInt() and 0xFF) shl 8) or (hdr[2].toInt() and 0xFF)
+        val bodyLen = (total - 3).coerceAtLeast(0)
+        val body = readFully(ins, bodyLen) ?: return null
+        return hdr + body
+    }
+
+    private fun readFully(ins: InputStream, count: Int): ByteArray? {
+        if (count <= 0) return ByteArray(0)
+        val buf = ByteArray(count)
+        var off = 0
+        while (off < count) {
+            val n = ins.read(buf, off, count - off)
+            if (n < 0) { Log.w(TAG, "Stream ended early at $off/$count"); return null }
+            off += n
+        }
+        return buf
+    }
+
+    // ─── Header parsing ───────────────────────────────────────────────────────
 
     /**
-     * Read one complete OBEX packet.
-     * First 3 bytes: opcode/response code + 2-byte total length.
+     * Scan headers starting at [startOffset] looking for HDR_CONN_ID (0xCB).
+     * OBEX header encoding determined by header ID high 2 bits:
+     *   00/01 → variable length (3-byte prefix: ID + 2-byte length)
+     *   10    → 1-byte value  (2 bytes total: ID + value)
+     *   11    → 4-byte value  (5 bytes total: ID + 4-byte value)
      */
-    private fun readPacket(input: InputStream): ByteArray? {
-        return try {
-            val header = ByteArray(3)
-            var read = 0
-            while (read < 3) {
-                val n = input.read(header, read, 3 - read)
-                if (n < 0) return null
-                read += n
-            }
-            val totalLen = ((header[1].toInt() and 0xFF) shl 8) or (header[2].toInt() and 0xFF)
-            val body = ByteArray(totalLen - 3)
-            var bodyRead = 0
-            while (bodyRead < body.size) {
-                val n = input.read(body, bodyRead, body.size - bodyRead)
-                if (n < 0) break
-                bodyRead += n
-            }
-            header + body
-        } catch (e: IOException) {
-            Log.e(TAG, "readPacket error: ${e.message}")
-            null
-        }
-    }
-
-    /** Extract BODY or END-OF-BODY data from a response packet (bytes after first 3). */
-    private fun extractBody(packet: ByteArray): ByteArray? {
-        var i = 3
-        while (i < packet.size) {
-            val headerId = packet[i].toInt() and 0xFF
-            if (i + 2 >= packet.size) break
-            val hLen = ((packet[i + 1].toInt() and 0xFF) shl 8) or (packet[i + 2].toInt() and 0xFF)
-            if (headerId == HDR_BODY || headerId == HDR_END_BODY) {
-                val dataStart = i + 3
-                val dataLen = hLen - 3
-                if (dataStart + dataLen <= packet.size) {
-                    return packet.copyOfRange(dataStart, dataStart + dataLen)
+    private fun extractConnectionId(pkt: ByteArray, startOffset: Int): Int {
+        var i = startOffset
+        while (i < pkt.size) {
+            val hId = pkt[i].toInt() and 0xFF
+            when {
+                hId == HDR_CONN_ID -> {
+                    if (i + 4 >= pkt.size) return -1
+                    return ((pkt[i+1].toInt() and 0xFF) shl 24) or
+                           ((pkt[i+2].toInt() and 0xFF) shl 16) or
+                           ((pkt[i+3].toInt() and 0xFF) shl 8)  or
+                            (pkt[i+4].toInt() and 0xFF)
+                }
+                (hId ushr 6) == 0b11 -> i += 5  // 4-byte int header
+                (hId ushr 6) == 0b10 -> i += 2  // 1-byte int header
+                else -> {                         // variable-length header
+                    if (i + 2 >= pkt.size) break
+                    val len = ((pkt[i+1].toInt() and 0xFF) shl 8) or (pkt[i+2].toInt() and 0xFF)
+                    if (len < 3) break
+                    i += len
                 }
             }
-            i += hLen
+        }
+        return -1
+    }
+
+    /** Extract BODY / END-OF-BODY data from response packet. */
+    private fun extractBody(pkt: ByteArray): ByteArray? {
+        var i = 3  // skip opcode + length
+        while (i + 2 < pkt.size) {
+            val hId = pkt[i].toInt() and 0xFF
+            when {
+                hId == HDR_BODY || hId == HDR_END_BODY -> {
+                    val hLen = ((pkt[i+1].toInt() and 0xFF) shl 8) or (pkt[i+2].toInt() and 0xFF)
+                    val dataLen = hLen - 3
+                    if (dataLen > 0 && i + hLen <= pkt.size)
+                        return pkt.copyOfRange(i + 3, i + hLen)
+                    i += hLen.coerceAtLeast(3)
+                }
+                (hId ushr 6) == 0b11 -> i += 5
+                (hId ushr 6) == 0b10 -> i += 2
+                else -> {
+                    val hLen = ((pkt[i+1].toInt() and 0xFF) shl 8) or (pkt[i+2].toInt() and 0xFF)
+                    if (hLen < 3) break
+                    i += hLen
+                }
+            }
         }
         return null
     }
 
-    /** Build a Unicode (UTF-16BE + null terminator) header. */
-    private fun buildUnicodeHeader(headerId: Int, text: String): ByteArray {
-        val encoded = text.toByteArray(Charsets.UTF_16BE) + byteArrayOf(0x00, 0x00)
-        val len = 3 + encoded.size
-        val header = ByteArray(len)
-        header[0] = headerId.toByte()
-        header[1] = ((len shr 8) and 0xFF).toByte()
-        header[2] = (len and 0xFF).toByte()
-        encoded.copyInto(header, 3)
-        return header
+    // ─── Header builders ─────────────────────────────────────────────────────
+
+    /** Connection-ID header (5 bytes: 0xCB + 4-byte int) or empty if not yet established. */
+    private fun connIdHeader(): ByteArray {
+        if (connectionId < 0) return ByteArray(0)
+        return byteArrayOf(
+            HDR_CONN_ID.toByte(),
+            (connectionId ushr 24).toByte(),
+            (connectionId ushr 16).toByte(),
+            (connectionId ushr 8).toByte(),
+            connectionId.toByte()
+        )
     }
 
-    /** Build a byte-sequence header. */
-    private fun buildByteSequenceHeader(headerId: Int, data: ByteArray): ByteArray {
+    /**
+     * APP_PARAMETERS TLV payload:
+     *   Tag 0x04 (MaxListCount)  = 0xFFFF  → return all entries
+     *   Tag 0x07 (Format)        = 0x00    → vCard 2.1
+     */
+    private fun appParamsHeader(): ByteArray {
+        val tlv = byteArrayOf(
+            0x04, 0x02, 0xFF.toByte(), 0xFF.toByte(),  // MaxListCount = 65535
+            0x07, 0x01, 0x00                            // Format = vCard 2.1
+        )
+        return byteSeqHeader(HDR_APP_PARAMS, tlv)
+    }
+
+    /** Variable-length byte-sequence header: [ID][len MSB][len LSB][data…] */
+    private fun byteSeqHeader(id: Int, data: ByteArray): ByteArray {
         val len = 3 + data.size
-        val header = ByteArray(len)
-        header[0] = headerId.toByte()
-        header[1] = ((len shr 8) and 0xFF).toByte()
-        header[2] = (len and 0xFF).toByte()
-        data.copyInto(header, 3)
-        return header
+        val h = ByteArray(len)
+        h[0] = id.toByte()
+        h[1] = (len shr 8).toByte()
+        h[2] = len.toByte()
+        data.copyInto(h, 3)
+        return h
+    }
+
+    /** Unicode (UTF-16BE + null terminator) text header */
+    private fun unicodeHeader(id: Int, text: String): ByteArray {
+        val utf16 = text.toByteArray(Charsets.UTF_16BE) + byteArrayOf(0, 0)
+        return byteSeqHeader(id, utf16)
     }
 }

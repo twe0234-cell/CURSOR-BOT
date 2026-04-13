@@ -9,54 +9,84 @@ import android.provider.ContactsContract
 import android.util.Log
 
 /**
- * Writes contacts to Android's ContactsContract under a dedicated account
- * ("טלפון כשר") so Google Assistant / Gemini can find and dial them.
+ * Writes vCard contacts to Android's ContactsContract under a dedicated
+ * account so Google Assistant / Gemini can find and dial them.
  *
- * Strategy:
- *  1. Ensure the account exists in AccountManager.
- *  2. Delete all existing raw contacts for this account (full refresh).
- *  3. Batch-insert the new contacts.
+ * Critical: All URI operations include CALLER_IS_SYNCADAPTER=true so the
+ * system allows a third-party app to write / delete contacts without requiring
+ * a system-level permission.
  */
 object ContactsWriter {
 
     const val ACCOUNT_TYPE = "com.btbridge.kosher"
     const val ACCOUNT_NAME = "טלפון כשר (BT)"
 
-    private val TAG = "ContactsWriter"
+    private const val TAG = "ContactsWriter"
 
+    // ─── URI helpers (CALLER_IS_SYNCADAPTER required) ─────────────────────────
+
+    private fun rawContactsUri(account: Account) =
+        ContactsContract.RawContacts.CONTENT_URI.buildUpon()
+            .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_NAME, account.name)
+            .appendQueryParameter(ContactsContract.RawContacts.ACCOUNT_TYPE, account.type)
+            .build()
+
+    private val dataUri =
+        ContactsContract.Data.CONTENT_URI.buildUpon()
+            .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+            .build()
+
+    private val deleteUri =
+        ContactsContract.RawContacts.CONTENT_URI.buildUpon()
+            .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+            .build()
+
+    // ─── Public API ───────────────────────────────────────────────────────────
+
+    /**
+     * Full-refresh sync:
+     *  1. Ensure account exists in AccountManager
+     *  2. Delete all existing contacts for this account
+     *  3. Batch-insert new contacts
+     *
+     * Returns number of contacts written.
+     */
     fun writeContacts(context: Context, contacts: List<VCardParser.Contact>): Int {
+        val account = Account(ACCOUNT_NAME, ACCOUNT_TYPE)
+        ensureAccount(context, account)
+
+        val resolver = context.contentResolver
+        deleteAll(resolver)
+
         if (contacts.isEmpty()) {
             Log.w(TAG, "No contacts to write")
             return 0
         }
 
-        ensureAccount(context)
-        val account = Account(ACCOUNT_NAME, ACCOUNT_TYPE)
-        val resolver = context.contentResolver
-
-        // Step 1: Delete all existing contacts for this account
-        deleteAllForAccount(resolver, account)
-
-        // Step 2: Batch insert
-        val ops = ArrayList<ContentProviderOperation>()
         var written = 0
+        val ops = ArrayList<ContentProviderOperation>()
 
         for (contact in contacts) {
-            if (contact.displayName.isBlank() || contact.phones.isEmpty()) continue
+            val name = contact.displayName.trim()
+            // Filter contacts with no name or no valid phone numbers after cleaning
+            val phones = contact.phones.map { cleanPhone(it) }.filter { it.isNotBlank() }
+            if (name.isBlank() || phones.isEmpty()) continue
 
             val rawContactIdx = ops.size
 
-            // Insert RawContact
+            // 1. RawContact row
             ops.add(
-                ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                ContentProviderOperation.newInsert(rawContactsUri(account))
                     .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, ACCOUNT_TYPE)
                     .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, ACCOUNT_NAME)
+                    .withValue(ContactsContract.RawContacts.DIRTY, 0)
                     .build()
             )
 
-            // Insert display name
+            // 2. StructuredName
             ops.add(
-                ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                ContentProviderOperation.newInsert(dataUri)
                     .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIdx)
                     .withValue(
                         ContactsContract.Data.MIMETYPE,
@@ -64,15 +94,15 @@ object ContactsWriter {
                     )
                     .withValue(
                         ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME,
-                        contact.displayName
+                        name
                     )
                     .build()
             )
 
-            // Insert phone numbers
-            for (phone in contact.phones) {
+            // 3. Phone numbers
+            phones.forEachIndexed { idx, phone ->
                 ops.add(
-                    ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    ContentProviderOperation.newInsert(dataUri)
                         .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIdx)
                         .withValue(
                             ContactsContract.Data.MIMETYPE,
@@ -83,67 +113,73 @@ object ContactsWriter {
                             ContactsContract.CommonDataKinds.Phone.TYPE,
                             ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
                         )
+                        .withValue(
+                            ContactsContract.Data.IS_PRIMARY,
+                            if (idx == 0) 1 else 0
+                        )
                         .build()
                 )
             }
 
             written++
 
-            // Apply in batches of 100 to avoid TransactionTooLargeException
+            // Apply in batches of 100 contacts (300 ops max) to avoid TransactionTooLargeException
             if (ops.size >= 300) {
                 applyBatch(resolver, ops)
                 ops.clear()
             }
         }
 
-        if (ops.isNotEmpty()) {
-            applyBatch(resolver, ops)
-        }
+        if (ops.isNotEmpty()) applyBatch(resolver, ops)
 
-        Log.i(TAG, "Wrote $written contacts for account '$ACCOUNT_NAME'")
+        Log.i(TAG, "Wrote $written contacts to '$ACCOUNT_NAME'")
         return written
     }
 
-    fun countContacts(context: Context): Int {
-        val cursor = context.contentResolver.query(
+    /** Returns number of contacts currently synced under our account. */
+    fun countContacts(context: Context): Int =
+        context.contentResolver.query(
             ContactsContract.RawContacts.CONTENT_URI,
             arrayOf(ContactsContract.RawContacts._ID),
-            "${ContactsContract.RawContacts.ACCOUNT_TYPE} = ? AND ${ContactsContract.RawContacts.ACCOUNT_NAME} = ?",
+            "${ContactsContract.RawContacts.ACCOUNT_TYPE} = ? AND " +
+                    "${ContactsContract.RawContacts.ACCOUNT_NAME} = ?",
             arrayOf(ACCOUNT_TYPE, ACCOUNT_NAME),
             null
-        ) ?: return 0
-        val count = cursor.count
-        cursor.close()
-        return count
-    }
+        )?.use { it.count } ?: 0
 
-    private fun ensureAccount(context: Context) {
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private fun ensureAccount(context: Context, account: Account) {
         val am = AccountManager.get(context)
-        val account = Account(ACCOUNT_NAME, ACCOUNT_TYPE)
-        val existing = am.getAccountsByType(ACCOUNT_TYPE)
-        if (existing.none { it.name == ACCOUNT_NAME }) {
+        if (am.getAccountsByType(ACCOUNT_TYPE).none { it.name == account.name }) {
             am.addAccountExplicitly(account, null, null)
             Log.i(TAG, "Created account '$ACCOUNT_NAME'")
         }
     }
 
-    private fun deleteAllForAccount(resolver: ContentResolver, account: Account) {
+    private fun deleteAll(resolver: ContentResolver) {
         val deleted = resolver.delete(
-            ContactsContract.RawContacts.CONTENT_URI,
-            "${ContactsContract.RawContacts.ACCOUNT_TYPE} = ? AND ${ContactsContract.RawContacts.ACCOUNT_NAME} = ?",
-            arrayOf(account.type, account.name)
+            deleteUri,
+            "${ContactsContract.RawContacts.ACCOUNT_TYPE} = ? AND " +
+                    "${ContactsContract.RawContacts.ACCOUNT_NAME} = ?",
+            arrayOf(ACCOUNT_TYPE, ACCOUNT_NAME)
         )
-        Log.i(TAG, "Deleted $deleted existing contacts for '${account.name}'")
+        Log.i(TAG, "Deleted $deleted stale contacts")
     }
 
-    private fun applyBatch(
-        resolver: ContentResolver,
-        ops: ArrayList<ContentProviderOperation>
-    ) {
+    private fun applyBatch(resolver: ContentResolver, ops: ArrayList<ContentProviderOperation>) {
         try {
             resolver.applyBatch(ContactsContract.AUTHORITY, ops)
         } catch (e: Exception) {
-            Log.e(TAG, "applyBatch error: ${e.message}")
+            Log.e(TAG, "applyBatch failed: ${e.message}")
         }
+    }
+
+    /** Strip non-digit chars, preserve leading '+'. */
+    private fun cleanPhone(raw: String): String {
+        val s = raw.trim()
+        val plus = if (s.startsWith("+")) "+" else ""
+        val digits = s.filter { it.isDigit() }
+        return if (digits.isEmpty()) "" else "$plus$digits"
     }
 }

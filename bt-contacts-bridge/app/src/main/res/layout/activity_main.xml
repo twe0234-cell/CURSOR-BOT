@@ -5,41 +5,39 @@
     android:layout_height="match_parent"
     android:layoutDirection="rtl"
     android:background="@color/bg_dark"
-    android:padding="16dp">
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:gravity="center_horizontal">
+        android:padding="16dp">
 
-        <!-- Title -->
+        <!-- ── Header ─────────────────────────────────────────────────────── -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/app_title"
+            android:text="גשר אנשי קשר BT"
             android:textSize="22sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginTop="20dp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/app_subtitle"
+            android:text="מסנכרן טלפון כשר → Google Gemini"
             android:textSize="13sp"
             android:textColor="@color/text_secondary"
-            android:layout_marginBottom="28dp" />
+            android:layout_marginBottom="20dp" />
 
-        <!-- Status card -->
+        <!-- ── Stats card ──────────────────────────────────────────────────── -->
         <androidx.cardview.widget.CardView
-            xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
             android:layout_marginBottom="16dp">
 
             <LinearLayout
@@ -49,80 +47,74 @@
                 android:padding="16dp">
 
                 <TextView
-                    android:id="@+id/tvBtStatus"
+                    android:id="@+id/tvTotalContacts"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/bt_checking"
-                    android:textSize="15sp"
-                    android:textColor="@color/text_primary"
-                    android:drawablePadding="8dp"
-                    android:layout_marginBottom="12dp" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider" />
-
-                <TextView
-                    android:id="@+id/tvContactCount"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/no_contacts_yet"
-                    android:textSize="15sp"
-                    android:textColor="@color/text_primary"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="4dp" />
+                    android:text="אנשי קשר מסונכרנים: —"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
 
                 <TextView
                     android:id="@+id/tvLastSync"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/no_sync_yet"
+                    android:text="טרם בוצע סנכרון"
                     android:textSize="12sp"
-                    android:textColor="@color/text_secondary" />
-
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="4dp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Sync button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSync"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/sync_now"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            app:backgroundTint="@color/accent_blue"
-            android:layout_marginBottom="12dp" />
-
-        <!-- Progress bar -->
-        <ProgressBar
-            android:id="@+id/progressBar"
+        <!-- ── Paired devices section ─────────────────────────────────────── -->
+        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:text="מכשירים מזווגים (Bluetooth)"
+            android:textSize="13sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Device cards inserted here dynamically -->
+        <LinearLayout
+            android:id="@+id/llDeviceContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ── Import VCF button ───────────────────────────────────────────── -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnImportVcf"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="ייבא מקובץ VCF (חלופה)"
+            android:textSize="14sp"
+            app:strokeColor="@color/accent_blue"
+            android:textColor="@color/accent_blue"
+            android:layout_marginBottom="8dp" />
+
+        <ProgressBar
+            android:id="@+id/progressImport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
             android:indeterminate="true"
             android:visibility="gone"
             android:layout_marginBottom="8dp" />
 
-        <!-- Status message -->
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textAlignment="center"
-            android:visibility="gone"
-            android:layout_marginBottom="20dp" />
-
-        <!-- Auto-sync toggle -->
+        <!-- ── Auto-sync toggle ───────────────────────────────────────────── -->
         <androidx.cardview.widget.CardView
-            xmlns:card_view="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            card_view:cardBackgroundColor="@color/card_bg"
-            card_view:cardCornerRadius="12dp"
-            card_view:cardElevation="4dp"
-            android:layout_marginBottom="24dp">
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="20dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -131,13 +123,26 @@
                 android:gravity="center_vertical"
                 android:padding="16dp">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="@string/auto_sync_label"
-                    android:textSize="15sp"
-                    android:textColor="@color/text_primary" />
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="סנכרון אוטומטי"
+                        android:textSize="15sp"
+                        android:textColor="@color/text_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="מסנכרן ברגע שהטלפון מתחבר"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchAutoSync"
@@ -147,15 +152,14 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Info box -->
+        <!-- ── How-to info ────────────────────────────────────────────────── -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/info_text"
+            android:text="לאחר סנכרון, אמור ל-Google Gemini: &#34;חייג לדוד&#34;"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
             android:textAlignment="center"
-            android:lineSpacingExtra="4dp"
             android:layout_marginBottom="32dp" />
 
     </LinearLayout>

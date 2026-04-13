@@ -1,7 +1,7 @@
 package com.btbridge
 
 import android.Manifest
-import android.bluetooth.BluetoothAdapter
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
@@ -9,25 +9,48 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.btbridge.databinding.ActivityMainBinding
+import com.btbridge.databinding.ItemDeviceBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val TAG = "MainActivity"
 
-    private val requiredPermissions = buildList {
+    // ─── File picker for manual VCF import ────────────────────────────────────
+    private val pickVcf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { importVcfFromUri(it) }
+    }
+
+    // ─── Sync result receiver (package-restricted) ────────────────────────────
+    private val syncReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val count   = intent.getIntExtra(ContactSyncService.EXTRA_COUNT, 0)
+            val error   = intent.getStringExtra(ContactSyncService.EXTRA_ERROR)
+            val address = intent.getStringExtra(ContactSyncService.EXTRA_DEVICE_ADDRESS) ?: ""
+            onSyncResult(count, error, address)
+        }
+    }
+
+    // ─── Permissions ──────────────────────────────────────────────────────────
+    private val neededPermissions = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             add(Manifest.permission.BLUETOOTH_CONNECT)
             add(Manifest.permission.BLUETOOTH_SCAN)
@@ -40,55 +63,41 @@ class MainActivity : AppCompatActivity() {
         add(Manifest.permission.GET_ACCOUNTS)
     }
 
-    // Receive sync results from ContactSyncService
-    private val syncReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val count = intent.getIntExtra(ContactSyncService.EXTRA_COUNT, 0)
-            val error = intent.getStringExtra(ContactSyncService.EXTRA_ERROR)
-            runOnUiThread {
-                binding.progressBar.visibility = View.GONE
-                binding.btnSync.isEnabled = true
-                if (error != null) {
-                    showStatus(error, isError = true)
-                } else {
-                    showStatus("סונכרנו $count אנשי קשר בהצלחה", isError = false)
-                    refreshContactCount()
-                }
-            }
-        }
-    }
+    // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnSync.setOnClickListener { onSyncClicked() }
+        binding.switchAutoSync.isChecked =
+            getSharedPreferences("prefs", Context.MODE_PRIVATE).getBoolean(BtReceiver.PREF_AUTO_SYNC, true)
+
         binding.switchAutoSync.setOnCheckedChangeListener { _, checked ->
             getSharedPreferences("prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean(BtReceiver.PREF_AUTO_SYNC, checked).apply()
-            Toast.makeText(
-                this,
-                if (checked) "סנכרון אוטומטי מופעל" else "סנכרון אוטומטי כבוי",
-                Toast.LENGTH_SHORT
-            ).show()
+            toast(if (checked) "סנכרון אוטומטי מופעל" else "סנכרון אוטומטי כבוי")
         }
 
-        checkPermissions()
-        loadPrefs()
-        refreshContactCount()
-        refreshBtStatus()
+        binding.btnImportVcf.setOnClickListener {
+            pickVcf.launch("*/*")   // wide filter — some devices don't register text/x-vcard
+        }
+
+        requestMissingPermissions()
     }
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(
-            syncReceiver,
-            IntentFilter(ContactSyncService.ACTION_SYNC_DONE),
-            RECEIVER_NOT_EXPORTED
-        )
-        refreshBtStatus()
-        refreshContactCount()
+
+        // Register receiver — package-restricted, no export
+        val filter = IntentFilter(ContactSyncService.ACTION_SYNC_DONE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(syncReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(syncReceiver, filter)
+        }
+
+        refreshAll()
     }
 
     override fun onPause() {
@@ -96,120 +105,177 @@ class MainActivity : AppCompatActivity() {
         unregisterReceiver(syncReceiver)
     }
 
-    // ─── Sync button ──────────────────────────────────────────────────────────
+    // ─── UI refresh ───────────────────────────────────────────────────────────
 
-    private fun onSyncClicked() {
-        if (!hasAllPermissions()) {
-            checkPermissions()
-            return
-        }
-
-        val device = getConnectedDevice()
-        if (device == null) {
-            showStatus("לא נמצא מכשיר Bluetooth מחובר. חבר את הטלפון הכשר.", isError = true)
-            return
-        }
-
-        binding.progressBar.visibility = View.VISIBLE
-        binding.btnSync.isEnabled = false
-        showStatus("מסנכרן מ-${device.name ?: device.address}…", isError = false)
-        ContactSyncService.startSync(this, device)
+    private fun refreshAll() {
+        refreshStatsCard()
+        refreshDeviceList()
     }
 
-    // ─── UI helpers ──────────────────────────────────────────────────────────
-
-    private fun refreshBtStatus() {
-        val device = getConnectedDevice()
-        binding.tvBtStatus.text = if (device != null) {
-            "Bluetooth: מחובר — ${device.name ?: device.address}"
-        } else {
-            "Bluetooth: לא מחובר"
-        }
-    }
-
-    private fun refreshContactCount() {
+    private fun refreshStatsCard() {
         val count = ContactsWriter.countContacts(this)
         val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
         val lastSync = prefs.getLong("last_sync", 0L)
-        val lastDevice = prefs.getString("last_device", "") ?: ""
+        val deviceName = prefs.getString("sync_device_name", "") ?: ""
 
-        binding.tvContactCount.text = "אנשי קשר מסונכרנים: $count"
+        binding.tvTotalContacts.text = "אנשי קשר מסונכרנים: $count"
         binding.tvLastSync.text = if (lastSync > 0L) {
             val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-            "סנכרון אחרון: ${fmt.format(Date(lastSync))} מ-$lastDevice"
+            "סנכרון אחרון: ${fmt.format(Date(lastSync))}  •  $deviceName"
         } else {
             "טרם בוצע סנכרון"
         }
     }
 
-    private fun showStatus(msg: String, isError: Boolean) {
-        binding.tvStatus.text = msg
-        binding.tvStatus.setTextColor(
-            ContextCompat.getColor(
-                this,
-                if (isError) android.R.color.holo_red_light else android.R.color.holo_green_dark
-            )
-        )
-        binding.tvStatus.visibility = View.VISIBLE
-    }
+    // ─── Device list ─────────────────────────────────────────────────────────
 
-    private fun loadPrefs() {
-        val autoSync = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-            .getBoolean(BtReceiver.PREF_AUTO_SYNC, true)
-        binding.switchAutoSync.isChecked = autoSync
-    }
+    private fun refreshDeviceList() {
+        binding.llDeviceContainer.removeAllViews()
 
-    // ─── Bluetooth ───────────────────────────────────────────────────────────
-
-    private fun getConnectedDevice(): BluetoothDevice? {
-        if (!hasAllPermissions()) return null
-        val bm = getSystemService(BluetoothManager::class.java) ?: return null
-        val adapter = bm.adapter ?: return null
-        return try {
-            adapter.bondedDevices?.firstOrNull { device ->
-                // Pick first bonded device that looks like a phone (class: 0x200)
-                // Or simply return first bonded device if only one is connected
-                val deviceClass = device.bluetoothClass?.deviceClass ?: 0
-                deviceClass == 0x0200 || deviceClass == 0x020C
-            } ?: adapter.bondedDevices?.firstOrNull()
-        } catch (e: SecurityException) {
-            Log.e(TAG, "BT permission denied: ${e.message}")
-            null
+        if (!hasAllPermissions()) {
+            addInfoRow("יש לאשר הרשאות BT ואנשי קשר")
+            return
         }
+
+        val devices = getBondedDevices()
+        if (devices.isEmpty()) {
+            addInfoRow("לא נמצאו מכשירים מזווגים. זווג את הטלפון הכשר ב-Bluetooth.")
+            return
+        }
+
+        devices.forEach { device -> addDeviceCard(device) }
+    }
+
+    /** Inflate item_device.xml, wire up the Sync button, add to container. */
+    private fun addDeviceCard(device: BluetoothDevice) {
+        val cardBinding = ItemDeviceBinding.inflate(
+            LayoutInflater.from(this),
+            binding.llDeviceContainer,
+            true
+        )
+
+        val prefs     = getSharedPreferences("prefs", Context.MODE_PRIVATE)
+        val lastCount = prefs.getInt("count_${device.address}", -1)
+        val lastTime  = prefs.getLong("sync_time_${device.address}", 0L)
+        val lastError = prefs.getString("last_error_${device.address}", null)
+
+        cardBinding.tvDeviceName.text = device.name ?: "מכשיר לא ידוע"
+        cardBinding.tvDeviceMac.text  = device.address
+
+        cardBinding.tvDeviceLastSync.text = when {
+            lastError != null -> "שגיאה אחרונה: $lastError"
+            lastTime > 0L -> {
+                val fmt = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+                "סונכרן: ${fmt.format(Date(lastTime))}  •  $lastCount אנשי קשר"
+            }
+            else -> "טרם סונכרן"
+        }
+
+        cardBinding.btnSyncDevice.setOnClickListener {
+            cardBinding.progressDevice.visibility = View.VISIBLE
+            cardBinding.btnSyncDevice.isEnabled   = false
+            cardBinding.tvDeviceLastSync.text     = "מסנכרן…"
+            ContactSyncService.startSync(this, device)
+        }
+    }
+
+    private fun addInfoRow(msg: String) {
+        val tv = android.widget.TextView(this).apply {
+            text = msg
+            setPadding(8, 24, 8, 24)
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+        }
+        binding.llDeviceContainer.addView(tv)
+    }
+
+    // ─── Sync result callback ─────────────────────────────────────────────────
+
+    private fun onSyncResult(count: Int, error: String?, deviceAddress: String) {
+        // Reset all device cards (we don't track which card maps to which address easily
+        // since we inflate dynamically — safest is to re-render the full list)
+        refreshAll()
+
+        if (error != null) {
+            toast(error)
+        } else {
+            toast("סונכרנו $count אנשי קשר בהצלחה")
+        }
+    }
+
+    // ─── VCF file import ─────────────────────────────────────────────────────
+
+    private fun importVcfFromUri(uri: Uri) {
+        binding.progressImport.visibility = View.VISIBLE
+        binding.btnImportVcf.isEnabled = false
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val content = contentResolver.openInputStream(uri)
+                    ?.bufferedReader(Charsets.UTF_8)
+                    ?.readText()
+                    ?: throw IllegalStateException("לא ניתן לקרוא קובץ")
+
+                val contacts = VCardParser.parse(content)
+                val written  = ContactsWriter.writeContacts(this@MainActivity, contacts)
+
+                withContext(Dispatchers.Main) {
+                    binding.progressImport.visibility = View.GONE
+                    binding.btnImportVcf.isEnabled = true
+                    toast("יובאו $written אנשי קשר מקובץ VCF")
+                    refreshAll()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    binding.progressImport.visibility = View.GONE
+                    binding.btnImportVcf.isEnabled = true
+                    toast("שגיאה בייבוא: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // ─── Bluetooth helpers ────────────────────────────────────────────────────
+
+    private fun getBondedDevices(): List<BluetoothDevice> {
+        if (!hasAllPermissions()) return emptyList()
+        val bm = getSystemService(BluetoothManager::class.java) ?: return emptyList()
+        return bm.adapter?.bondedDevices?.toList() ?: emptyList()
     }
 
     // ─── Permissions ─────────────────────────────────────────────────────────
 
-    private fun hasAllPermissions() = requiredPermissions.all {
+    private fun hasAllPermissions() = neededPermissions.all {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun checkPermissions() {
-        val missing = requiredPermissions.filter {
+    private fun requestMissingPermissions() {
+        val missing = neededPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERM)
         }
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
+        requestCode: Int, permissions: Array<String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 100) {
+        if (requestCode == REQ_PERM) {
             val denied = permissions.zip(grantResults.toList())
                 .filter { it.second != PackageManager.PERMISSION_GRANTED }
-                .map { it.first }
-            if (denied.isNotEmpty()) {
-                showStatus("חסרות הרשאות: ${denied.joinToString()}", isError = true)
-            } else {
-                showStatus("כל ההרשאות אושרו", isError = false)
-                refreshBtStatus()
-                refreshContactCount()
-            }
+            if (denied.isEmpty()) refreshAll()
+            else toast("חסרות הרשאות — הגדרות → הרשאות → גשר אנשי קשר")
         }
+    }
+
+    // ─── Misc ─────────────────────────────────────────────────────────────────
+
+    private fun toast(msg: String) =
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    companion object {
+        private const val REQ_PERM = 100
     }
 }

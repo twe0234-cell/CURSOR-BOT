@@ -9,16 +9,20 @@ android {
 
     defaultConfig {
         applicationId "com.btbridge"
-        minSdk 28          // Android 9+ — required for PBAP_CLIENT profile
+        minSdk 28          // Android 9+ — BluetoothPbapClient + FOREGROUND_SERVICE_CONNECTED_DEVICE
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
         }
     }
 
@@ -41,6 +45,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.cardview:cardview:1.0.0'          // Required for CardView in layouts
     implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
 }
