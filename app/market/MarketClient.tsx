@@ -457,8 +457,7 @@ export default function MarketClient({
           מאגר ספרי תורה
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). אם נבחר סוחר הוא
-          הבעלים; אחרת הבעלים הוא הסופר.
+          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). ניתן לבחור כל איש קשר מהCRM כבעלים.
         </p>
       </div>
 
@@ -503,7 +502,7 @@ export default function MarketClient({
             {/* Dealer */}
             <div className="sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-muted-foreground mb-1">
-                סוחר (CRM) — אם נבחר, הוא הבעלים
+                בעלים (CRM) — אם נבחר, הוא הבעלים
               </p>
               <UnifiedDealerSelect
                 value={form.dealer_id}
@@ -1085,7 +1084,7 @@ export default function MarketClient({
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">סוחר (CRM)</p>
+                <p className="text-xs text-muted-foreground mb-1">בעלים (CRM)</p>
                 <UnifiedDealerSelect
                   value={editForm.dealer_id}
                   onChange={(d) => setEditForm((f) => ({ ...f, dealer_id: d?.id ?? null }))}

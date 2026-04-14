@@ -23,9 +23,7 @@ import {
 import {
   fetchEmailContacts,
   importEmailContacts,
-  importGmailContactsForEmail,
   importCrmContactsToEmail,
-  getGmailStatus,
   deleteEmailContact,
   bulkDeleteEmailContacts,
   bulkAddTagsToEmailContacts,
@@ -33,9 +31,7 @@ import {
   type EmailContact,
 } from "./actions";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon, TagIcon } from "lucide-react";
-import Link from "next/link";
-import { useEffect } from "react";
+import { UsersIcon, Trash2Icon, UploadIcon, TagIcon } from "lucide-react";
 
 type Props = {
   initialContacts: EmailContact[];
@@ -48,15 +44,7 @@ export default function ContactsTab({ initialContacts }: Props) {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importLoading, setImportLoading] = useState(false);
-  const [gmailImportLoading, setGmailImportLoading] = useState(false);
-  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [crmImportLoading, setCrmImportLoading] = useState(false);
-
-  useEffect(() => {
-    getGmailStatus().then((r) => {
-      if (r.success) setGmailConnected(r.connected);
-    });
-  }, []);
 
   const handleCrmImport = async () => {
     setCrmImportLoading(true);
@@ -143,19 +131,6 @@ export default function ContactsTab({ initialContacts }: Props) {
       const updated = await fetchEmailContacts();
       const actualCount = updated.success ? updated.contacts.length - contacts.length : rows.length;
       toast.success(`יובאו ${Math.max(0, actualCount)} אנשי קשר חדשים`);
-      if (updated.success) setContacts(updated.contacts);
-    } else {
-      toast.error(res.error);
-    }
-  };
-
-  const handleGmailImport = async () => {
-    setGmailImportLoading(true);
-    const res = await importGmailContactsForEmail();
-    setGmailImportLoading(false);
-    if (res.success) {
-      toast.success(`יובאו ${res.imported} אנשי קשר מ-Gmail`);
-      const updated = await fetchEmailContacts();
       if (updated.success) setContacts(updated.contacts);
     } else {
       toast.error(res.error);
@@ -262,52 +237,32 @@ export default function ContactsTab({ initialContacts }: Props) {
               <p className="text-sm text-muted-foreground">ניהול אנשי קשר לייבוא וקמפיינים</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <CsvActions
-              data={contacts.map((c) => ({ email: c.email, name: c.name, phone: c.phone, tags: c.tags?.join(",") }))}
-              onImport={handleCsvImport}
-              filename="email-contacts"
-            />
-            {gmailConnected === false ? (
-              <Link href="/settings">
-                <Button variant="outline" size="sm" className="rounded-xl text-muted-foreground" title="Gmail לא מחובר — לחץ לחיבור בהגדרות">
-                  <DownloadIcon className="size-4 ml-1" />
-                  ייבוא מ-Gmail
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGmailImport}
-                disabled={gmailImportLoading || gmailConnected === null}
-                className="rounded-xl"
-                title={gmailConnected === null ? "בודק חיבור..." : "ייבוא אנשי קשר מ-Gmail"}
-              >
-                <DownloadIcon className="size-4 ml-1" />
-                {gmailImportLoading ? "מייבא..." : "ייבוא מ-Gmail"}
-              </Button>
-            )}
+          <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
               size="sm"
               onClick={() => void handleCrmImport()}
               disabled={crmImportLoading}
-              className="rounded-xl"
-              title="ייבוא אנשי קשר מ-CRM (כל מי שיש לו אימייל)"
+              className="rounded-xl gap-1.5"
+              title="סנכרון אנשי קשר מ-CRM (כל מי שיש לו אימייל)"
             >
-              <UsersIcon className="size-4 ml-1" />
-              {crmImportLoading ? "מייבא..." : "ייבוא מ-CRM"}
+              <UsersIcon className="size-4" />
+              {crmImportLoading ? "מסנכרן..." : "סנכרון מ-CRM"}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setImportOpen(true)}
-              className="rounded-xl"
+              className="rounded-xl gap-1.5"
+              title="ייבוא ידני — הדבק אימיילים או העלה CSV"
             >
-              <UploadIcon className="size-4 ml-1" />
-              ייבוא ידני
+              <UploadIcon className="size-4" />
+              ייבוא
             </Button>
+            <CsvActions
+              data={contacts.map((c) => ({ email: c.email, name: c.name, phone: c.phone, tags: c.tags?.join(",") }))}
+              onImport={handleCsvImport}
+              filename="email-contacts"
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -430,21 +385,22 @@ export default function ContactsTab({ initialContacts }: Props) {
           ) : (
             <div className="flex flex-col items-center justify-center py-16 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
               <UsersIcon className="size-12 text-slate-400 mb-4" />
-              <h3 className="text-lg font-semibold text-slate-700 mb-2">אין אנשי קשר</h3>
-              <p className="text-center text-muted-foreground max-w-sm mb-4">
-                ייבא מ-Gmail או הדבק רשימת אימיילים
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">אין אנשי קשר עדיין</h3>
+              <p className="text-center text-muted-foreground max-w-sm mb-6">
+                סנכרן אנשי קשר מה-CRM (כולל כל מי שיש לו אימייל), או ייבא ידנית.
               </p>
-              <div className="flex gap-2">
-                {gmailConnected === false ? (
-                  <Link href="/settings">
-                    <Button variant="outline" className="rounded-xl">חבר Gmail בהגדרות</Button>
-                  </Link>
-                ) : (
-                  <Button onClick={handleGmailImport} variant="outline" disabled={gmailImportLoading || gmailConnected === null} className="rounded-xl">
-                    {gmailImportLoading ? "מייבא..." : "ייבוא מ-Gmail"}
-                  </Button>
-                )}
-                <Button onClick={() => setImportOpen(true)}>ייבוא ידני</Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  onClick={() => void handleCrmImport()}
+                  disabled={crmImportLoading}
+                  className="rounded-xl gap-1.5"
+                >
+                  <UsersIcon className="size-4" />
+                  {crmImportLoading ? "מסנכרן..." : "סנכרון מ-CRM"}
+                </Button>
+                <Button variant="outline" onClick={() => setImportOpen(true)} className="rounded-xl">
+                  ייבוא ידני
+                </Button>
               </div>
             </div>
           )}

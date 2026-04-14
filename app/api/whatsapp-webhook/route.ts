@@ -3,6 +3,7 @@ import {
   extractTextFromGreenIncomingWebhookMessageData,
   extractImageUrlFromMessageData,
   greenApiSetMessageReaction,
+  greenApiSendChatMessage,
   normalizeWhatsAppChatId,
 } from "@/lib/whatsapp/greenApi";
 import { logWarn } from "@/lib/logger";
@@ -19,6 +20,13 @@ export const dynamic = "force-dynamic";
 
 const REACTION_OK = "✅";
 const REACTION_FAIL = "❌";
+
+/**
+ * סמן בלתי נראה בתחילת כל הודעת בוט — מונע לולאה אינסופית.
+ * כאשר הבוט שולח הודעה לקבוצה, היא חוזרת כ-outgoingMessageReceived.
+ * אם הטקסט מתחיל ב-\u200B, הבוט מדלג עליה ואינו מנסה לעבד אותה.
+ */
+const BOT_MESSAGE_MARKER = "\u200B";
 
 const ALLOWED_MARKET_TORAH_SIZES = new Set<string>(STAM_SEFER_TORAH_SIZES);
 
@@ -43,14 +51,37 @@ async function sendReactionSafe(
   }
 }
 
+async function sendTextSafe(
+  instanceId: string,
+  token: string,
+  chatId: string,
+  message: string
+): Promise<void> {
+  try {
+    const r = await greenApiSendChatMessage(instanceId, token, chatId, BOT_MESSAGE_MARKER + message);
+    if (!r.ok) {
+      console.warn("[whatsapp-webhook] sendMessage failed:", r.error);
+    }
+  } catch (e) {
+    console.warn("[whatsapp-webhook] sendMessage error:", e);
+  }
+}
+
 function normalizeWaId(raw: string): string {
   return normalizeWhatsAppChatId(raw).trim().toLowerCase();
+}
+
+function formatPrice(shekels: number): string {
+  return shekels >= 1000
+    ? `${(shekels / 1000).toLocaleString("he-IL")}K ₪`
+    : `${shekels.toLocaleString("he-IL")} ₪`;
 }
 
 /**
  * Green API → סנכרון מאגר ס״ת.
  * מעבדים `incomingMessageReceived` + `outgoingMessageReceived` (כדי לייבא גם הודעות שנשלחו ע"י המשתמש לקבוצה).
- * תגובת אימוג׳י נשלחת גם ל-incoming וגם ל-outgoing.
+ * תגובת אימוג׳י + הודעת טקסט נשלחות אחרי כל עיבוד.
+ * מניעת לולאה: הודעות בוט מתחילות ב-\u200B ומדולגות בעת עיבוד.
  * אימות: `?token=` חייב להתאים ל־WEBHOOK_SECRET; אחרת 401.
  * לאחר אימות — תמיד 200 ל-Green API.
  */
@@ -58,14 +89,12 @@ export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const expected = process.env.WEBHOOK_SECRET ?? "";
   if (!token || token !== expected) {
-    // Log auth failure to help diagnose token mismatch
     console.warn("[whatsapp-webhook] 401 token mismatch — received:", token?.slice(0, 6), "expected_len:", expected.length);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const admin = createAdminClient();
 
-  // Helper: write diagnostic entry to sys_logs (fire-and-forget)
   const dbg = (message: string, metadata?: Record<string, unknown>) => {
     if (!admin) return;
     void admin.from("sys_logs").insert({ level: "DEBUG", module: "whatsapp-webhook", message, metadata: metadata ?? {} });
@@ -94,7 +123,6 @@ export async function POST(req: NextRequest) {
     await dbg("received", { typeWebhook, idMessage: b.idMessage });
 
     if (!isIncoming && !isOutgoing) {
-      // Other webhook types (status, qr, etc.) — silently ignore
       return ok200();
     }
 
@@ -166,9 +194,15 @@ export async function POST(req: NextRequest) {
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
     const imageUrl = extractImageUrlFromMessageData(b.messageData);
 
+    // מניעת לולאה: דלג על הודעות שנשלחו ע"י הבוט עצמו
+    if (text.startsWith(BOT_MESSAGE_MARKER)) {
+      await dbg("skip: bot's own message (loop guard)", { idMessage });
+      return ok200();
+    }
+
     await dbg("processing message", { typeWebhook, idMessage, textLen: text.length, hasImage: !!imageUrl });
 
-    // תמונה בלי כיתוב = ספר תורה ממתין לפרטים (image_pending) — אין צורך בטקסט
+    // תמונה בלי כיתוב = ספר תורה ממתין לפרטים (image_pending)
     if (!text && imageUrl) {
       await dbg("image-only — creating image_pending entry", { idMessage });
       const skuImg = generateSku(marketSkuPrefix);
@@ -185,23 +219,24 @@ export async function POST(req: NextRequest) {
       });
       if (!imgErr || imgErr.code === "23505") {
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `📷 תמונה נשמרה במאגר (${skuImg}) — ממתין לפרטים`);
       } else {
         await dbg("image-only insert error", { code: imgErr.code, message: imgErr.message });
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `❌ שגיאה בשמירת התמונה (${imgErr.code})`);
       }
       return ok200();
     }
 
     if (!text) {
       await dbg("skip: no text and no image");
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
       await dbg("not-actionable", { parsed });
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+      // לא שולחים ❌ על הודעות רגילות שלא בפורמט ס"ת
       return ok200();
     }
 
@@ -219,7 +254,7 @@ export async function POST(req: NextRequest) {
       source_message_id: idMessage,
       sofer_id: null,
       dealer_id: null,
-      external_sofer_name: null,
+      external_sofer_name: parsed.owner_name ?? null,
       script_type: parsed.script_type,
       torah_size: torahSizeDb,
       parchment_type: null,
@@ -227,7 +262,7 @@ export async function POST(req: NextRequest) {
       asking_price: askDb,
       target_brokerage_price: null,
       currency: "ILS",
-      expected_completion_date: null,
+      expected_completion_date: parsed.ready_date ?? null,
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
@@ -238,16 +273,31 @@ export async function POST(req: NextRequest) {
       if (insErr.code === "23505") {
         await dbg("duplicate sku — reacting OK", { idMessage });
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `✅ כבר קיים במאגר`);
       } else {
         await dbg("insert error", { code: insErr.code, message: insErr.message });
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
         await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `❌ שגיאה בשמירה (${insErr.code}) — נסה שוב`);
       }
       return ok200();
     }
 
+    // הצלחה — בנה הודעת אישור מפורטת
+    const parts: string[] = [];
+    if (parsed.script_type) parts.push(parsed.script_type);
+    if (torahSizeDb) parts.push(`${torahSizeDb} עמודות`);
+    if (parsed.owner_name) parts.push(`בעלים: ${parsed.owner_name}`);
+    parts.push(formatPrice(askFull));
+    if (parsed.ready_date) {
+      const dateStr = new Date(parsed.ready_date).toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+      parts.push(`מוכן: ${dateStr}`);
+    }
+    const summary = parts.join(" | ");
+
     await dbg("success — inserted", { sku, idMessage });
     await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    await sendTextSafe(instanceId, greenApiToken, chatId, `✅ נשמר במאגר (${sku})\n${summary}`);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);

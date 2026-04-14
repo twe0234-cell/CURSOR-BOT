@@ -306,7 +306,7 @@ export async function fetchScribes(): Promise<
   }
 }
 
-/** Fetches all contacts of type "Merchant" (dealers) for the authenticated user. */
+/** Fetches ALL CRM contacts for the authenticated user (for dealer/owner selection). */
 export async function fetchDealers(): Promise<
   | { success: true; dealers: { id: string; name: string }[] }
   | { success: false; error: string }
@@ -319,7 +319,6 @@ export async function fetchDealers(): Promise<
       .from("crm_contacts")
       .select("id, name")
       .eq("user_id", user.id)
-      .eq("type", "Merchant")
       .order("name");
 
     if (error) return { success: false, error: handleSupabaseError(error) };

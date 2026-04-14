@@ -42,14 +42,9 @@ export default async function EmailPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/email/import">
-              <Button variant="outline" className="rounded-xl border-border/80 hover:border-primary/25 hover:bg-muted/50">
-                ייבוא מ-Gmail (CRM)
-              </Button>
-            </Link>
             <Link href="/email/campaigns">
               <Button className="rounded-xl">
-                עורך קמפיין ושליחה
+                כתיבה ושליחה
               </Button>
             </Link>
           </div>
