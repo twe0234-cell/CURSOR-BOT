@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -83,6 +83,8 @@ type Props = {
   initialRows: MarketTorahBookRow[];
   /** כשל בשליפה מהשרת — מוצג במקום להעלים שגיאה כרשימה ריקה */
   initialFetchError?: string | null;
+  /** שמות סוגי קלף ממחשבון (sys_calculator_config) — ממוזג עם ערכים מהמאגר */
+  calculatorParchmentNames?: string[];
 };
 
 function displayOwner(row: MarketTorahBookRow): string {
@@ -172,6 +174,7 @@ const emptyForm = () => ({
 export default function MarketClient({
   initialRows,
   initialFetchError = null,
+  calculatorParchmentNames = [],
 }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
@@ -187,9 +190,19 @@ export default function MarketClient({
   const [kanbanMode, setKanbanMode] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
 
-  const parchmentOptions = [...new Set(
-    rows.map((r) => r.parchment_type).filter(Boolean) as string[]
-  )].sort();
+  const parchmentOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of calculatorParchmentNames) {
+      const t = n?.trim();
+      if (t) set.add(t);
+    }
+    for (const r of rows) {
+      const t = r.parchment_type?.trim();
+      if (t) set.add(t);
+    }
+    for (const p of MARKET_PARCHMENT_TYPES) set.add(p);
+    return [...set].sort((a, b) => a.localeCompare(b, "he"));
+  }, [calculatorParchmentNames, rows]);
 
   const filteredRows = rows.filter((row) => {
     if (filterText) {
@@ -540,7 +553,7 @@ export default function MarketClient({
                 className={selectClass}
               >
                 <option value="">— לא צוין —</option>
-                {MARKET_PARCHMENT_TYPES.map((p) => (
+                {parchmentOptions.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
@@ -1113,7 +1126,7 @@ export default function MarketClient({
                   className={selectClass}
                 >
                   <option value="">— לא צוין —</option>
-                  {MARKET_PARCHMENT_TYPES.map((p) => (
+                  {parchmentOptions.map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>

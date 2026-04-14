@@ -30,6 +30,8 @@ import {
   summarizeTorahLedger,
   estimateTorahProjectProfitability,
   sumTorahLedgerPayments,
+  computeTorahProjectNetCashflowFromLedger,
+  type TorahLedgerLine,
 } from "./crm.logic";
 import {
   columnsCountForTorahSheetNumber,
@@ -951,5 +953,28 @@ describe("summarizeTorahLedger / estimateTorahProjectProfitability", () => {
       ledgerLines: [{ transaction_type: "fix_deduction", amount: 500 }],
     });
     expect(p).toBe(1000 - 0);
+  });
+});
+
+describe("computeTorahProjectNetCashflowFromLedger", () => {
+  it("nets all inflows and outflows from ledger lines (fix is full outflow)", () => {
+    const r = computeTorahProjectNetCashflowFromLedger([
+      { transaction_type: "client_payment", amount: 50000 },
+      { transaction_type: "scribe_payment", amount: 10000 },
+      { transaction_type: "other_expense", amount: 10000 },
+      { transaction_type: "qa_expense", amount: 500 },
+      { transaction_type: "fix_deduction", amount: 200 },
+    ]);
+    expect(r.totalCashIn).toBe(50000);
+    expect(r.totalCashOut).toBe(10000 + 10000 + 500 + 200);
+    expect(r.netCashPosition).toBe(50000 - 20700);
+  });
+
+  it("ignores unknown transaction types", () => {
+    const r = computeTorahProjectNetCashflowFromLedger([
+      { transaction_type: "client_payment", amount: 100 },
+      { transaction_type: "not_a_ledger_type", amount: 999 } as TorahLedgerLine,
+    ]);
+    expect(r.netCashPosition).toBe(100);
   });
 });

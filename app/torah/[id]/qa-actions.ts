@@ -157,7 +157,9 @@ export async function fetchQaBatches(
     // Fetch batches
     const { data: batches, error: bErr } = await supabase
       .from("torah_qa_batches")
-      .select("id, project_id, magiah_id, status, sent_date, returned_date, notes, created_at")
+      .select(
+        "id, project_id, magiah_id, qa_kind, cost_amount, report_url, vendor_label, status, sent_date, returned_date, notes, created_at"
+      )
       .eq("project_id", projectId)
       .order("sent_date", { ascending: false });
 
@@ -165,7 +167,11 @@ export async function fetchQaBatches(
     if (!batches || batches.length === 0) return { success: true, batches: [] };
 
     // Get magiah names
-    const magiahIds = [...new Set(batches.map((b) => b.magiah_id as string))];
+    const magiahIds = [
+      ...new Set(
+        batches.map((b) => b.magiah_id as string | null).filter((id): id is string => Boolean(id))
+      ),
+    ];
     const { data: contacts } = await supabase
       .from("crm_contacts")
       .select("id, name")
@@ -204,13 +210,17 @@ export async function fetchQaBatches(
     const result: QaBatchRow[] = batches.map((b) => ({
       id: b.id as string,
       project_id: b.project_id as string,
-      magiah_id: b.magiah_id as string,
+      magiah_id: (b.magiah_id as string | null) ?? null,
+      qa_kind: (b.qa_kind as "gavra" | "computer" | "repair" | "other" | null) ?? null,
+      cost_amount: Number((b as { cost_amount?: unknown }).cost_amount ?? 0) || 0,
+      report_url: ((b as { report_url?: string | null }).report_url as string | null) ?? null,
+      vendor_label: ((b as { vendor_label?: string | null }).vendor_label as string | null) ?? null,
       status: (b.status as "sent" | "returned"),
       sent_date: b.sent_date as string,
       returned_date: (b.returned_date as string | null) ?? null,
       notes: (b.notes as string | null) ?? null,
       created_at: b.created_at as string,
-      magiah_name: nameMap.get(b.magiah_id as string) ?? null,
+      magiah_name: b.magiah_id ? nameMap.get(b.magiah_id as string) ?? null : null,
       sheet_count: (batchSheetNumbers.get(b.id as string) ?? []).length,
       sheet_numbers: batchSheetNumbers.get(b.id as string) ?? [],
     }));

@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { AddScribeModal, type NewScribe } from "@/components/inventory/AddScribeModal";
 import { fetchScribes } from "@/app/crm/actions";
 import { ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Scribe = { id: string; name: string };
+
+/** z-index above Dialog overlay/content (z-50) */
+const LISTBOX_Z = 100;
 
 export type UnifiedScribeSelectProps = {
   value: string | null;
@@ -15,9 +19,17 @@ export type UnifiedScribeSelectProps = {
   className?: string;
 };
 
+type ListCoords = {
+  top: number;
+  left: number;
+  width: number;
+  maxH: number;
+};
+
 /**
  * Single CRM-backed combobox for Soferim (`crm_contacts.type = 'Scribe'`).
  * Sticky “add new” at the bottom of the dropdown; opens modal and selects on success.
+ * Listbox is portaled to document.body so it is not clipped inside overflow-y-auto dialogs.
  */
 export function UnifiedScribeSelect({
   value,
@@ -31,6 +43,39 @@ export function UnifiedScribeSelect({
   const [search, setSearch] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<ListCoords | null>(null);
+
+  const updatePosition = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || !open) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 4;
+    const viewportPad = 8;
+    const maxList = 224;
+    const spaceBelow = window.innerHeight - rect.bottom - margin - viewportPad;
+    const spaceAbove = rect.top - margin - viewportPad;
+    const openDown = spaceBelow >= Math.min(maxList, 120) || spaceBelow >= spaceAbove;
+    const maxH = Math.min(maxList, openDown ? spaceBelow : spaceAbove);
+    const top = openDown ? rect.bottom + margin : rect.top - margin - maxH;
+    const left = rect.left;
+    const width = rect.width;
+    setCoords({ top, left, width, maxH: Math.max(80, maxH) });
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePosition();
+    const onScrollOrResize = () => {
+      updatePosition();
+    };
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open, updatePosition]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -71,13 +116,68 @@ export function UnifiedScribeSelect({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
     };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const listbox =
+    open && coords ? (
+      <div
+        ref={popoverRef}
+        id="unified-scribe-listbox"
+        role="listbox"
+        style={{
+          position: "fixed",
+          top: coords.top,
+          left: coords.left,
+          width: coords.width,
+          maxHeight: coords.maxH,
+          zIndex: LISTBOX_Z,
+        }}
+        className="flex flex-col overflow-hidden rounded-lg border border-input bg-background shadow-lg"
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="px-3 py-4 text-center text-sm text-muted-foreground">טוען...</div>
+          ) : filtered.length === 0 ? (
+            <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+              לא נמצאו תוצאות
+            </div>
+          ) : (
+            filtered.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => handleSelect(s)}
+                className={cn(
+                  "w-full px-3 py-2 text-right text-sm hover:bg-muted",
+                  value === s.id && "bg-muted"
+                )}
+              >
+                {s.name}
+              </button>
+            ))
+          )}
+        </div>
+        <div className="sticky bottom-0 border-t border-border bg-background p-1.5 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setAddModalOpen(true);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-primary hover:bg-muted"
+          >
+            ➕ הוסף סופר חדש
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -98,54 +198,25 @@ export function UnifiedScribeSelect({
           placeholder={placeholder}
           className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-muted-foreground"
         />
-        <ChevronDownIcon
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180"
-          )}
-        />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="פתח רשימה"
+          className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }}
+        >
+          <ChevronDownIcon
+            className={cn("size-4 transition-transform", open && "rotate-180")}
+          />
+        </button>
       </div>
 
-      {open && (
-        <div
-          id="unified-scribe-listbox"
-          role="listbox"
-          className="absolute top-full left-0 right-0 z-50 mt-1 flex max-h-56 flex-col overflow-hidden rounded-lg border border-input bg-background shadow-lg"
-        >
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="px-3 py-4 text-center text-sm text-muted-foreground">טוען...</div>
-            ) : filtered.length === 0 ? (
-              <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-                לא נמצאו תוצאות
-              </div>
-            ) : (
-              filtered.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => handleSelect(s)}
-                  className={cn(
-                    "w-full px-3 py-2 text-right text-sm hover:bg-muted",
-                    value === s.id && "bg-muted"
-                  )}
-                >
-                  {s.name}
-                </button>
-              ))
-            )}
-          </div>
-          <div className="sticky bottom-0 border-t border-border bg-background p-1.5 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-            <button
-              type="button"
-              onClick={() => setAddModalOpen(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-primary hover:bg-muted"
-            >
-              ➕ הוסף סופר חדש
-            </button>
-          </div>
-        </div>
-      )}
+      {listbox && typeof document !== "undefined"
+        ? createPortal(listbox, document.body)
+        : null}
 
       <AddScribeModal
         open={addModalOpen}

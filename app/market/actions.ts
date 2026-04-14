@@ -9,7 +9,7 @@ import type { MarketStage } from "./stages";
 
 /** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline (מיגרציה 058) + קישור מכירה (063) */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, sale_id, created_at";
+  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, sale_id, sender_wa_id, created_at";
 
 export type MarketTorahBookRow = {
   id: string;
@@ -34,6 +34,8 @@ export type MarketTorahBookRow = {
   market_stage: MarketStage | null;
   /** FK → erp_sales.id (migration 063) */
   sale_id: string | null;
+  /** מזהה שולח WA (@c.us) — שיוך מה-webhook */
+  sender_wa_id: string | null;
   created_at: string;
   sofer_name: string | null;
   dealer_name: string | null;
@@ -82,6 +84,7 @@ function mapBookRow(
     market_stage: (b.market_stage as MarketStage | null) ?? "new",
     created_at: (b.created_at as string) ?? "",
     sale_id: (b.sale_id as string | null) ?? null,
+    sender_wa_id: (b.sender_wa_id as string | null) ?? null,
   };
 }
 
@@ -226,6 +229,7 @@ export async function createMarketTorahBook(
       last_contact_date: v.last_contact_date || null,
       negotiation_notes: v.negotiation_notes ?? null,
       handwriting_image_url: v.handwriting_image_url ?? null,
+      sender_wa_id: v.sender_wa_id ?? null,
     });
 
     if (error) {
@@ -299,6 +303,7 @@ export async function updateMarketTorahBook(
         last_contact_date: v.last_contact_date || null,
         negotiation_notes: v.negotiation_notes ?? null,
         handwriting_image_url: v.handwriting_image_url ?? null,
+        sender_wa_id: v.sender_wa_id ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

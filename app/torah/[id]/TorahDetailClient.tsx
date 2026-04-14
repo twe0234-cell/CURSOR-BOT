@@ -747,7 +747,22 @@ export default function TorahDetailClient({
                             <span className="text-xs text-muted-foreground font-mono">{b.id.slice(0, 8)}…</span>
                           </div>
                           <p className="text-sm font-medium text-slate-800">
-                            מגיה: {b.magiah_name ?? b.magiah_id.slice(0, 8)}
+                            מגיה:{" "}
+                            {b.magiah_name ??
+                              b.vendor_label ??
+                              (b.magiah_id ? `${b.magiah_id.slice(0, 8)}…` : "—")}
+                            {b.qa_kind != null && (
+                              <span className="text-muted-foreground font-normal">
+                                {" "}
+                                ({b.qa_kind})
+                              </span>
+                            )}
+                            {typeof b.cost_amount === "number" && b.cost_amount > 0 && (
+                              <span className="text-muted-foreground font-normal">
+                                {" "}
+                                · {b.cost_amount.toLocaleString("he-IL")} ₪
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-slate-600">
                             נשלח: {formatDate(b.sent_date)}

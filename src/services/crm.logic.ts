@@ -578,6 +578,41 @@ export function estimateTorahProjectProfitability(input: {
   return client - effectiveScribe - totalQaExpense - totalOtherExpense;
 }
 
+/**
+ * תזרים מזומנים גולמי מהיומן: כל תשלום מלקוח מפחית את כל היציאות (סופר, תיקון, הגהה, אחר).
+ * שונה מהערכת רווחיות — אין כאן ניכוי תיקון מתוך תשלום הסופר.
+ */
+export function computeTorahProjectNetCashflowFromLedger(transactions: TorahLedgerLine[]): {
+  netCashPosition: number;
+  totalCashIn: number;
+  totalCashOut: number;
+} {
+  let totalCashIn = 0;
+  let totalCashOut = 0;
+  for (const t of transactions) {
+    const a = Number(t.amount);
+    if (!Number.isFinite(a) || a < 0) continue;
+    switch (t.transaction_type) {
+      case "client_payment":
+        totalCashIn += a;
+        break;
+      case "scribe_payment":
+      case "fix_deduction":
+      case "qa_expense":
+      case "other_expense":
+        totalCashOut += a;
+        break;
+      default:
+        break;
+    }
+  }
+  return {
+    netCashPosition: totalCashIn - totalCashOut,
+    totalCashIn,
+    totalCashOut,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Torah scribe pace (קליטת יריעות / מעקב קצב)
 // ─────────────────────────────────────────────────────────────────────────────

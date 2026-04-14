@@ -111,8 +111,16 @@ export interface TorahSheet {
 export interface TorahQaBatch {
   id: string;
   project_id: string;
-  /** The מגיה (QA reader / fixer) receiving this batch */
-  magiah_id: string;
+  /** The מגיה (QA reader / fixer) receiving this batch — optional e.g. computer QA without CRM contact */
+  magiah_id: string | null;
+  /** סוג סבב הגהה */
+  qa_kind?: "gavra" | "computer" | "repair" | "other" | null;
+  /** עלות סבב (₪) */
+  cost_amount?: number;
+  /** קישור לדוח/תמונה */
+  report_url?: string | null;
+  /** תיאור חיצוני כשאין מגיה ב-CRM */
+  vendor_label?: string | null;
   status: TorahQaBatchStatus;
   sent_date: string;            // ISO timestamptz
   returned_date: string | null; // ISO timestamptz

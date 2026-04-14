@@ -77,6 +77,7 @@ export default function BroadcastTab({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [logs, setLogs] = useState<BroadcastLog[]>([]);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [logsLoadError, setLogsLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("compose");
   const [scribeCode, setScribeCode] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
@@ -96,7 +97,14 @@ export default function BroadcastTab({
       if (res.success) setNextScribeNum(res.next);
     });
     fetchBroadcastLogs().then((res) => {
-      if (res.success) setLogs(res.logs);
+      if (res.success) {
+        setLogs(res.logs);
+        setLogsLoadError(null);
+      } else {
+        setLogs([]);
+        setLogsLoadError(res.error);
+        toast.error(`לא ניתן לטעון היסטוריית שידורים: ${res.error}`);
+      }
     });
     fetchBroadcastQueueItems().then((res) => {
       if (res.success) setQueueItems(res.items);
@@ -104,8 +112,15 @@ export default function BroadcastTab({
   }, []);
 
   const refreshLogs = () => {
+    setLogsLoadError(null);
     fetchBroadcastLogs().then((res) => {
-      if (res.success) setLogs(res.logs);
+      if (res.success) {
+        setLogs(res.logs);
+        setLogsLoadError(null);
+      } else {
+        setLogsLoadError(res.error);
+        toast.error(`שגיאה ברענון היסטוריה: ${res.error}`);
+      }
     });
     fetchBroadcastQueueItems().then((res) => {
       if (res.success) setQueueItems(res.items);
@@ -315,14 +330,18 @@ export default function BroadcastTab({
       }
 
       setSendProgress(null);
-      await insertBroadcastLog(
+      const logRes = await insertBroadcastLog(
         sent,
         failed,
         errors,
         [...selectedTags],
         finalScribe,
-        internalNotes.trim() || undefined
+        internalNotes.trim() || undefined,
+        messageText
       );
+      if (!logRes.success) {
+        toast.error(`השידור בוצע אך רישום ההיסטוריה נכשל: ${logRes.error}`);
+      }
       toast.success(
         `שידור הושלם! נשלח בהצלחה: ${sent}, נכשלו: ${failed}`,
         { duration: failed > 0 ? 6000 : 4000 }
@@ -614,8 +633,20 @@ export default function BroadcastTab({
             </Button>
           </CardHeader>
           <CardContent>
+            {logsLoadError && (
+              <div
+                role="alert"
+                className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              >
+                <strong>שגיאת טעינה:</strong> {logsLoadError}
+              </div>
+            )}
             {queueItems.length === 0 && logs.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8">אין עדיין שידורים</p>
+              <p className="text-sm text-muted-foreground py-8">
+                {logsLoadError
+                  ? "לא נטענו רשומות. נסה \"רענן\" או בדוק התחברות."
+                  : "אין עדיין שידורים"}
+              </p>
             ) : (
               <div className="space-y-4 max-h-[70vh] overflow-y-auto">
                 {queueItems.map((item) => (

@@ -210,6 +210,7 @@ export async function POST(req: NextRequest) {
         user_id: userId,
         sku: skuImg,
         source_message_id: idMessage,
+        sender_wa_id: senderId || null,
         sofer_id: null, dealer_id: null, external_sofer_name: null,
         script_type: null, torah_size: null, parchment_type: null, influencer_style: null,
         asking_price: null, target_brokerage_price: null, currency: "ILS",
@@ -248,10 +249,50 @@ export async function POST(req: NextRequest) {
         ? parsed.torah_size
         : null;
 
+    // טקסט אחרי תמונה מאותו שולח — ממזגים לרשומת image_pending במקום שורה כפולה
+    if (isIncoming && senderId) {
+      const { data: pending } = await admin
+        .from("market_torah_books")
+        .select("id, handwriting_image_url")
+        .eq("user_id", userId)
+        .eq("sender_wa_id", senderId)
+        .eq("market_stage", "image_pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pending?.id) {
+        const { error: upErr } = await admin
+          .from("market_torah_books")
+          .update({
+            source_message_id: idMessage,
+            script_type: parsed.script_type,
+            torah_size: torahSizeDb,
+            parchment_type: null,
+            influencer_style: null,
+            asking_price: askDb,
+            target_brokerage_price: null,
+            handwriting_image_url: pending.handwriting_image_url ?? imageUrl ?? null,
+            market_stage: "new",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", pending.id)
+          .eq("user_id", userId);
+
+        if (!upErr) {
+          await dbg("merged text into image_pending", { bookId: pending.id, idMessage });
+          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+          return ok200();
+        }
+        await dbg("merge image_pending failed", { code: upErr.code, message: upErr.message });
+      }
+    }
+
     const { error: insErr } = await admin.from("market_torah_books").insert({
       user_id: userId,
       sku,
       source_message_id: idMessage,
+      sender_wa_id: senderId || null,
       sofer_id: null,
       dealer_id: null,
       external_sofer_name: parsed.owner_name ?? null,

@@ -52,4 +52,8 @@ export const marketTorahBookSchema = z.object({
   last_contact_date: optDate,
   negotiation_notes: z.string().max(8000).optional().nullable(),
   handwriting_image_url: z.string().url().optional().nullable(),
+  /** WhatsApp sender @c.us — שיוך הודעות מקבוצה */
+  sender_wa_id: z
+    .union([z.string().max(256), z.literal(""), z.null(), z.undefined()])
+    .transform((v) => (v === "" || v === undefined ? null : v)),
 });

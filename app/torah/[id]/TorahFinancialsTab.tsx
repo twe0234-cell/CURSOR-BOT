@@ -17,6 +17,7 @@ import type { TorahProjectDetailView } from "@/src/lib/types/torah";
 import {
   estimateTorahProjectProfitability,
   summarizeTorahLedger,
+  computeTorahProjectNetCashflowFromLedger,
 } from "@/src/services/crm.logic";
 import {
   TORAH_LEDGER_TRANSACTION_TYPES,
@@ -172,6 +173,11 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
         ledgerLines,
       }),
     [project.amount_paid_by_client, project.amount_paid_to_scribe, ledgerLines]
+  );
+
+  const netCashflow = useMemo(
+    () => computeTorahProjectNetCashflowFromLedger(ledgerLines),
+    [ledgerLines]
   );
 
   const resetTxForm = () => {
@@ -364,6 +370,18 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
             <p className="text-[10px] text-muted-foreground mt-1">
               לקוח פחות סופר (אחרי ניכוי תיקונים) פחות הוצאות הגהה ({formatShekels(totalQaExpense)}) ואחרות (
               {formatShekels(totalOtherExpense)})
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border-teal-100 bg-teal-50/40 sm:col-span-2 lg:col-span-3">
+          <CardContent className="p-4 text-sm">
+            <p className="text-xs text-teal-900/80 mb-1">יתרה תזרימית (סכום מתנועות היומן)</p>
+            <p className="text-xl font-bold tabular-nums text-teal-900">
+              {formatShekels(netCashflow.netCashPosition)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              כניסות (תשלומי לקוח) {formatShekels(netCashflow.totalCashIn)} · יציאות (סופר, תיקונים, הגהה וכו׳){" "}
+              {formatShekels(netCashflow.totalCashOut)}
             </p>
           </CardContent>
         </Card>
