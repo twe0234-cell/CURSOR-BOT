@@ -33,7 +33,7 @@ type CrmContact = { id: string; name: string; email: string | null };
 
 type Props = {
   initialContacts: GmailTriageContact[];
-  onContactsChange: (contacts: GmailTriageContact[]) => void;
+  onContactsChange?: (contacts: GmailTriageContact[]) => void;
 };
 
 function CrmContactCombobox({
@@ -130,8 +130,9 @@ export default function TriageTable({
     const res = await createCrmContactFromTriage(email, state.name, state.type);
     setLoading((p) => ({ ...p, [email]: "" }));
     if (res.success) {
-      setContacts((prev) => prev.filter((c) => c.email !== email));
-      onContactsChange(contacts.filter((c) => c.email !== email));
+      const nextContacts = contacts.filter((c) => c.email !== email);
+      setContacts(nextContacts);
+      onContactsChange?.(nextContacts);
       setCreateState((p) => {
         const next = { ...p };
         delete next[email];
@@ -153,8 +154,9 @@ export default function TriageTable({
     const res = await mergeCrmContactEmail(contactId, email);
     setLoading((p) => ({ ...p, [email]: "" }));
     if (res.success) {
-      setContacts((prev) => prev.filter((c) => c.email !== email));
-      onContactsChange(contacts.filter((c) => c.email !== email));
+      const nextContacts = contacts.filter((c) => c.email !== email);
+      setContacts(nextContacts);
+      onContactsChange?.(nextContacts);
       setMergeState((p) => {
         const next = { ...p };
         delete next[email];
@@ -171,8 +173,9 @@ export default function TriageTable({
     const res = await ignoreEmail(email);
     setLoading((p) => ({ ...p, [email]: "" }));
     if (res.success) {
-      setContacts((prev) => prev.filter((c) => c.email !== email));
-      onContactsChange(contacts.filter((c) => c.email !== email));
+      const nextContacts = contacts.filter((c) => c.email !== email);
+      setContacts(nextContacts);
+      onContactsChange?.(nextContacts);
       toast.success("האימייל הועבר לרשימת התעלמות");
     } else {
       toast.error(res.error);

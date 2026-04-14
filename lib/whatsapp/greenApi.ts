@@ -7,32 +7,40 @@ export function greenApiDispatchSpacingDelayMs(): number {
 
 /**
  * Green API expects chatId like 972501234567@c.us or group...@g.us
+ *
+ * Group IDs are long digit strings (>15 chars, e.g. 120363424204063915).
+ * Phone numbers are 9-15 digits. We distinguish by length.
  */
 export function normalizeWhatsAppChatId(raw: string): string {
   const s = raw.trim();
   if (!s) return s;
+  // Already has a suffix — return as-is
   if (s.includes("@g.us")) return s;
-
-  let phonePart = s;
   if (s.includes("@c.us")) {
-    phonePart = s.split("@c.us")[0] ?? s;
-  } else if (s.includes("@") && !s.includes("@c.us")) {
-    return s;
+    // Re-normalise the phone part only
+    const phonePart = s.split("@c.us")[0] ?? "";
+    const digits = phonePart.replace(/\D/g, "");
+    if (digits.startsWith("0") && digits.length >= 10) {
+      return `972${digits.slice(1)}@c.us`;
+    }
+    return `${digits}@c.us`;
   }
+  // Has some other @ domain — pass through
+  if (s.includes("@")) return s;
 
-  let digits = phonePart.replace(/\D/g, "");
+  const digits = s.replace(/\D/g, "");
   if (!digits) return s;
 
-  if (digits.startsWith("972")) {
-    return `${digits}@c.us`;
-  }
+  // WhatsApp group IDs are > 15 digits (typically 18)
+  if (digits.length > 15) return `${digits}@g.us`;
+
+  // Israeli number without country code
   if (digits.startsWith("0") && digits.length >= 10) {
-    digits = `972${digits.slice(1)}`;
-    return `${digits}@c.us`;
+    return `972${digits.slice(1)}@c.us`;
   }
-  if (digits.length >= 9 && digits.length <= 15) {
-    return `${digits}@c.us`;
-  }
+  // Already has country code or is a short international number
+  if (digits.length >= 9) return `${digits}@c.us`;
+
   return s;
 }
 
@@ -77,7 +85,8 @@ export function interpretGreenApiSendResult(
     }
     return { ok: true };
   } catch {
-    return { ok: true };
+    // Non-JSON body — treat as unknown; log the raw text for debugging
+    return { ok: false, error: `תגובה לא צפויה: ${trimmed.slice(0, 120)}` };
   }
 }
 
@@ -93,6 +102,36 @@ export function fileNameForImageUrl(url: string): string {
 }
 
 const GREEN_API_BASE = "https://api.green-api.com";
+
+// ── Chat list ────────────────────────────────────────────────────────────────
+
+export type GreenApiChat = {
+  id: string;          // e.g. "972501234567@c.us" or "120363...@g.us"
+  name?: string | null;
+  lastMessageTime?: number | null; // Unix timestamp (seconds)
+  type?: string | null;            // "contact" | "group" | etc.
+};
+
+/**
+ * Returns all chats for the instance (sorted by recency).
+ * @see https://green-api.com/en/docs/api/journals/GetChats/
+ */
+export async function greenApiGetChats(
+  instanceId: string,
+  apiToken: string
+): Promise<{ ok: true; chats: GreenApiChat[] } | { ok: false; error: string }> {
+  const url = `${GREEN_API_BASE}/waInstance${instanceId}/getChats/${apiToken}`;
+  try {
+    const res = await fetch(url, { method: "GET" });
+    const body = await res.text();
+    if (!res.ok) return { ok: false, error: extractJsonErrorMessage(body) };
+    const data = JSON.parse(body) as unknown;
+    if (!Array.isArray(data)) return { ok: false, error: "getChats: unexpected response" };
+    return { ok: true, chats: data as GreenApiChat[] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת רשת" };
+  }
+}
 
 /** מבנים מקוננים — Green-API (במיוחד outgoing) לעיתים שמים כיתוב תחת imageMessage וכו׳ */
 export type GreenMediaCaption = { caption?: string | null } | null | undefined;
@@ -193,16 +232,30 @@ export async function greenApiSetMessageReaction(
 }
 
 /**
- * חילוץ URL תמונה מ־messageData (imageMessageData).
- * מחזיר את downloadUrl אם קיים, אחרת null.
+ * חילוץ URL תמונה מ־messageData.
+ * תומך בשני פורמטים של Green API:
+ *   - incoming:  messageData.imageMessageData.downloadUrl
+ *   - outgoing:  messageData.fileMessageData.downloadUrl  (תמונה שנשלחה מהמכשיר)
  */
 export function extractImageUrlFromMessageData(messageData: unknown): string | null {
   if (!messageData || typeof messageData !== "object") return null;
   const md = messageData as Record<string, unknown>;
+
+  // incoming image
   const img = md.imageMessageData as Record<string, unknown> | undefined;
-  if (!img) return null;
-  const url = img.downloadUrl ?? img.jpegThumbnail;
-  return typeof url === "string" && url.trim() ? url.trim() : null;
+  if (img) {
+    const url = img.downloadUrl ?? img.jpegThumbnail;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+
+  // outgoing image / file (fileMessageData)
+  const file = md.fileMessageData as Record<string, unknown> | undefined;
+  if (file) {
+    const url = file.downloadUrl ?? file.jpegThumbnail;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+
+  return null;
 }
 
 const pushTrim = (parts: string[], v: unknown) => {
@@ -210,7 +263,11 @@ const pushTrim = (parts: string[], v: unknown) => {
 };
 
 /**
- * חילוץ טקסט מ־messageData ב־webhook incomingMessageReceived (טקסט / מורחב / כיתוב מדיה).
+ * חילוץ טקסט מ־messageData ב־webhook (incoming ו-outgoing).
+ *
+ * Green API:
+ *   incoming → messageData.textMessageData.textMessage
+ *   outgoing → messageData.textMessage  (ישירות ברמה הראשונה של messageData)
  */
 export function extractTextFromGreenIncomingWebhookMessageData(
   messageData: unknown
@@ -219,6 +276,10 @@ export function extractTextFromGreenIncomingWebhookMessageData(
   const md = messageData as Record<string, unknown>;
   const parts: string[] = [];
 
+  // outgoing format: messageData.textMessage (flat)
+  pushTrim(parts, md.textMessage);
+
+  // incoming format: messageData.textMessageData.textMessage (nested)
   const textMessageData = md.textMessageData as Record<string, unknown> | undefined;
   pushTrim(parts, textMessageData?.textMessage);
 
@@ -231,10 +292,18 @@ export function extractTextFromGreenIncomingWebhookMessageData(
     "imageMessageData",
     "videoMessageData",
     "documentMessageData",
+    "fileMessageData",   // outgoing messages (image/file sent from device)
   ] as const) {
     const block = md[key] as Record<string, unknown> | undefined;
     pushTrim(parts, block?.caption);
   }
 
-  return parts.join("\n").trim();
+  // deduplicate (outgoing and incoming nesting sometimes overlap)
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const p of parts) {
+    if (!seen.has(p)) { seen.add(p); unique.push(p); }
+  }
+
+  return unique.join("\n").trim();
 }

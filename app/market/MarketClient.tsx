@@ -2,13 +2,29 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
-import { ScrollText, Plus, Trash2, ImageIcon, X, PencilIcon, Kanban, ChevronRight } from "lucide-react";
+import {
+  ScrollText,
+  Plus,
+  Trash2,
+  ImageIcon,
+  X,
+  PencilIcon,
+  Kanban,
+  ChevronRight,
+  MessageSquareIcon,
+  MessageCircle,
+  Mail,
+  AlertTriangleIcon,
+} from "lucide-react";
+import MarketContactLog from "./MarketContactLog";
+import { HScrollBar } from "@/components/ui/HScrollBar";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +47,8 @@ import {
   updateMarketTorahBook,
   updateMarketStage,
   deleteMarketTorahBook,
+  linkBookToSale,
+  fetchRecentSalesForLink,
 } from "./actions";
 import {
   MARKET_STAGE_LABELS,
@@ -46,6 +64,11 @@ import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
 import { applyNumericTransform } from "@/lib/numericInput";
 import {
+  buildMarketTorahShareText,
+  mailtoOfferHref,
+  whatsappPrefillPath,
+} from "@/lib/market/shareOfferText";
+import {
   STAM_SEFER_TORAH_SIZES,
   MARKET_PARCHMENT_TYPES,
   STAM_SCRIPT_TYPES,
@@ -58,6 +81,8 @@ function todayISODate(): string {
 
 type Props = {
   initialRows: MarketTorahBookRow[];
+  /** כשל בשליפה מהשרת — מוצג במקום להעלים שגיאה כרשימה ריקה */
+  initialFetchError?: string | null;
 };
 
 function displayOwner(row: MarketTorahBookRow): string {
@@ -89,6 +114,43 @@ function SkuBadge({ sku }: { sku: string | null }) {
   );
 }
 
+function MarketRowShareLinks({ row }: { row: MarketTorahBookRow }) {
+  const body = buildMarketTorahShareText(row);
+  const subject =
+    row.sku != null && String(row.sku).trim()
+      ? `ספר תורה — ${row.sku}`
+      : "ספר תורה מהמאגר";
+  const mailHref = mailtoOfferHref(subject, body);
+  const iconBtn = "shrink-0";
+  return (
+    <>
+      <Link
+        href={whatsappPrefillPath(body)}
+        prefetch={false}
+        title="שיתוף לוואטסאפ"
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon" }),
+          "text-emerald-600 hover:bg-emerald-50",
+          iconBtn
+        )}
+      >
+        <MessageCircle className="size-4" />
+      </Link>
+      <a
+        href={mailHref}
+        title="פתיחת הודעה במייל"
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon" }),
+          "text-slate-600 hover:bg-slate-100",
+          iconBtn
+        )}
+      >
+        <Mail className="size-4" />
+      </a>
+    </>
+  );
+}
+
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
@@ -107,7 +169,10 @@ const emptyForm = () => ({
   negotiation_notes: "",
 });
 
-export default function MarketClient({ initialRows }: Props) {
+export default function MarketClient({
+  initialRows,
+  initialFetchError = null,
+}: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   useEffect(() => {
@@ -129,8 +194,10 @@ export default function MarketClient({ initialRows }: Props) {
   const filteredRows = rows.filter((row) => {
     if (filterText) {
       const q = filterText.toLowerCase();
-      const hit = [row.sofer_name, row.dealer_name, row.external_sofer_name, row.script_type]
-        .some((v) => v?.toLowerCase().includes(q));
+      const hit = [
+        row.sofer_name, row.dealer_name, row.external_sofer_name,
+        row.script_type, row.sku, row.notes, row.negotiation_notes, row.torah_size,
+      ].some((v) => v?.toLowerCase().includes(q));
       if (!hit) return false;
     }
     if (filterParchment && row.parchment_type !== filterParchment) return false;
@@ -140,6 +207,11 @@ export default function MarketClient({ initialRows }: Props) {
   // ─────────────────────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(false);
+  // ── Sale link picker ─────────────────────────────────────────────────────
+  const [linkBookId, setLinkBookId] = useState<string | null>(null);
+  const [linkSales, setLinkSales] = useState<{ id: string; label: string }[]>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkSelectedSaleId, setLinkSelectedSaleId] = useState("");
   const [form, setForm] = useState(emptyForm());
 
   // Edit mode state
@@ -289,6 +361,27 @@ export default function MarketClient({ initialRows }: Props) {
     }
   }
 
+  async function openLinkSale(bookId: string) {
+    setLinkBookId(bookId);
+    setLinkSelectedSaleId("");
+    setLinkLoading(true);
+    const res = await fetchRecentSalesForLink();
+    setLinkLoading(false);
+    if (res.success) setLinkSales(res.sales);
+    else toast.error(res.error);
+  }
+
+  async function handleLinkSale() {
+    if (!linkBookId) return;
+    setLinkLoading(true);
+    const res = await linkBookToSale(linkBookId, linkSelectedSaleId || null);
+    setLinkLoading(false);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success(linkSelectedSaleId ? "הספר קושר למכירה ✓" : "הקישור הוסר");
+    setRows((prev) => prev.map((r) => r.id === linkBookId ? { ...r, sale_id: linkSelectedSaleId || null } : r));
+    setLinkBookId(null);
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("להסיר את הרשומה מהמאגר?")) return;
     const res = await deleteMarketTorahBook(id);
@@ -364,10 +457,25 @@ export default function MarketClient({ initialRows }: Props) {
           מאגר ספרי תורה
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). אם נבחר סוחר הוא
-          הבעלים; אחרת הבעלים הוא הסופר.
+          מעקב תיווך — מחירים בטופס באלפי שקלים (אל״ש). ניתן לבחור כל איש קשר מהCRM כבעלים.
         </p>
       </div>
+
+      {initialFetchError ? (
+        <div
+          className="mb-6 flex gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          <AlertTriangleIcon className="size-5 shrink-0" />
+          <div>
+            <p className="font-medium">לא ניתן לטעון את המאגר</p>
+            <p className="mt-1 opacity-90">{initialFetchError}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              הרשימה למטה עשויה להיות ריקה בגלל שגיאה — לא בהכרח בגלל שאין נתונים.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <Card className="mb-8 rounded-2xl border border-border bg-card shadow-sm">
         <CardContent className="pt-6">
@@ -394,7 +502,7 @@ export default function MarketClient({ initialRows }: Props) {
             {/* Dealer */}
             <div className="sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-muted-foreground mb-1">
-                סוחר (CRM) — אם נבחר, הוא הבעלים
+                בעלים (CRM) — אם נבחר, הוא הבעלים
               </p>
               <UnifiedDealerSelect
                 value={form.dealer_id}
@@ -691,9 +799,8 @@ export default function MarketClient({ initialRows }: Props) {
 
       {kanbanMode ? (
         /* ── Kanban Board ────────────────────────────────────────────── */
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-3 min-w-max">
-            {MARKET_STAGE_ORDER.map((stage) => {
+        <HScrollBar contentClassName="flex gap-3 flex-nowrap items-start pb-4">
+          {MARKET_STAGE_ORDER.map((stage) => {
               const stageRows = filteredRows.filter(
                 (r) => (r.market_stage ?? "new") === stage
               );
@@ -739,6 +846,9 @@ export default function MarketClient({ initialRows }: Props) {
                       {row.asking_price != null && (
                         <div className="text-xs font-bold text-primary">{formatK(row.asking_price)}</div>
                       )}
+                      <div className="flex gap-0.5 pt-0.5 items-center justify-center [&_a]:h-7 [&_a]:w-7 [&_a]:min-h-7 [&_svg]:size-3.5">
+                        <MarketRowShareLinks row={row} />
+                      </div>
                       <div className="flex gap-1 pt-0.5">
                         <Button
                           variant="outline"
@@ -761,6 +871,21 @@ export default function MarketClient({ initialRows }: Props) {
                           </Button>
                         )}
                       </div>
+                      {stage === "deal_closed" && (
+                        <Button
+                          variant={row.sale_id ? "default" : "outline"}
+                          size="sm"
+                          className={cn(
+                            "h-6 text-xs w-full mt-0.5",
+                            row.sale_id
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                          )}
+                          onClick={() => openLinkSale(row.id)}
+                        >
+                          {row.sale_id ? "✓ מקושר למכירה" : "⊕ קשר למכירה"}
+                        </Button>
+                      )}
                     </div>
                   ))}
                   {stageRows.length === 0 && (
@@ -768,9 +893,8 @@ export default function MarketClient({ initialRows }: Props) {
                   )}
                 </div>
               );
-            })}
-          </div>
-        </div>
+          })}
+        </HScrollBar>
       ) : viewMode === "grid" ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredRows.map((row, i) => (
@@ -805,7 +929,8 @@ export default function MarketClient({ initialRows }: Props) {
                   {row.potential_profit != null && (
                     <p className="text-xs text-emerald-600">רווח: {formatK(row.potential_profit)}</p>
                   )}
-                  <div className="flex gap-1 pt-1">
+                  <div className="flex gap-1 pt-1 items-center">
+                    <MarketRowShareLinks row={row} />
                     <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => setEditRow(row)}>
                       <PencilIcon className="size-3 ml-1" />ערוך
                     </Button>
@@ -907,7 +1032,8 @@ export default function MarketClient({ initialRows }: Props) {
                         {formatK(row.potential_profit)}
                       </TableCell>
                       <TableCell className="py-3 px-4">
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-0.5 max-w-[9rem] justify-end">
+                          <MarketRowShareLinks row={row} />
                           <Button
                             type="button"
                             variant="ghost"
@@ -958,7 +1084,7 @@ export default function MarketClient({ initialRows }: Props) {
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">סוחר (CRM)</p>
+                <p className="text-xs text-muted-foreground mb-1">בעלים (CRM)</p>
                 <UnifiedDealerSelect
                   value={editForm.dealer_id}
                   onChange={(d) => setEditForm((f) => ({ ...f, dealer_id: d?.id ?? null }))}
@@ -1087,12 +1213,19 @@ export default function MarketClient({ initialRows }: Props) {
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-1">יומן משא ומתן</p>
+                <p className="text-xs text-muted-foreground mb-1">הערות משא ומתן (שדה חופשי)</p>
                 <Textarea
                   value={editForm.negotiation_notes}
                   onChange={(e) => setEditForm((f) => ({ ...f, negotiation_notes: e.target.value }))}
-                  rows={3}
+                  rows={2}
                 />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3 border-t pt-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-1">
+                  <MessageSquareIcon className="size-4 text-sky-600" />
+                  יומן מגעים (עם תאריך)
+                </div>
+                <MarketContactLog bookId={editRow!.id} />
               </div>
               <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
                 <Button
@@ -1111,6 +1244,38 @@ export default function MarketClient({ initialRows }: Props) {
                 </Button>
               </div>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Link to Sale Dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!linkBookId} onOpenChange={(o) => !o && setLinkBookId(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>קשר ספר תורה למכירה</DialogTitle>
+          </DialogHeader>
+          {linkLoading ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">טוען מכירות...</p>
+          ) : (
+            <div className="space-y-3 mt-2">
+              <p className="text-sm text-muted-foreground">בחר מכירה קיימת לקישור, או השאר ריק להסרת קישור.</p>
+              <select
+                value={linkSelectedSaleId}
+                onChange={(e) => setLinkSelectedSaleId(e.target.value)}
+                className="w-full rounded-xl border border-border px-3 py-2 text-sm bg-background"
+              >
+                <option value="">— ללא קישור —</option>
+                {linkSales.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" onClick={() => setLinkBookId(null)}>ביטול</Button>
+                <Button onClick={handleLinkSale} disabled={linkLoading}>
+                  {linkSelectedSaleId ? "קשר" : "הסר קישור"}
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

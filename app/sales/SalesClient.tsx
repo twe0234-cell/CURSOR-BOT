@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import {
   fetchSales,
   createSale,
@@ -45,7 +46,8 @@ import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon } from "lucide-react";
+import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon } from "lucide-react";
+import { buildPaymentRequestText, buildCalendarEventUrl, mailtoPaymentHref } from "@/lib/sales/paymentRequest";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -82,15 +84,10 @@ export default function SalesClient() {
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
   const [editSale, setEditSale] = useState<SaleRecord | null>(null);
-  const [editBuyerId, setEditBuyerId] = useState("");
-  const [editSellerId, setEditSellerId] = useState("");
   const [editSaleDate, setEditSaleDate] = useState("");
-  const [editTotalPrice, setEditTotalPrice] = useState("");
   const [editSalePrice, setEditSalePrice] = useState("");
   const [editQuantity, setEditQuantity] = useState("1");
-  const [editStatus, setEditStatus] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  const [editItemDescription, setEditItemDescription] = useState("");
 
   const loadData = () => {
     fetchSales().then((r) => r.success && setSales(r.sales));
@@ -124,21 +121,11 @@ export default function SalesClient() {
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!editSale) return;
-    setEditBuyerId(editSale.buyer_id ?? "");
-    setEditSellerId(editSale.seller_id ?? "");
     setEditSaleDate(editSale.sale_date ? editSale.sale_date.slice(0, 10) : "");
     const qty = editSale.quantity ?? 1;
-    const unitPrice = editSale.sale_price;
-    const total =
-      editSale.total_price != null
-        ? editSale.total_price
-        : unitPrice * qty;
-    setEditTotalPrice(String(total));
-    setEditSalePrice(String(unitPrice));
+    setEditSalePrice(String(editSale.sale_price));
     setEditQuantity(String(qty));
-    setEditStatus(editSale.status ?? "");
     setEditNotes(editSale.notes ?? "");
-    setEditItemDescription(editSale.item_description ?? "");
   }, [editSale]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -406,13 +393,39 @@ export default function SalesClient() {
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex gap-1 pt-1 flex-wrap">
                           <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
                             <PencilIcon className="size-3.5 ml-1" />ערוך
                           </Button>
                           <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
                             <BanknoteIcon className="size-3.5 ml-1" />תשלום
                           </Button>
+                          {/* שלח לאישור — WA */}
+                          <a
+                            href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
+                            title="שלח בקשת תשלום בוואטסאפ"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 text-xs transition-colors"
+                          >
+                            <MessageCircleIcon className="size-3.5" />
+                          </a>
+                          {/* שלח במייל */}
+                          <a
+                            href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
+                            title="שלח בקשת תשלום במייל"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 text-xs transition-colors"
+                          >
+                            <MailIcon className="size-3.5" />
+                          </a>
+                          {/* הוסף ליומן */}
+                          <a
+                            href={buildCalendarEventUrl({ title: `תשלום: ${getSaleDisplay(s)}`, date: s.sale_date, details: `קונה: ${s.buyer_name ?? "—"}\nסכום: ${(s.total_price ?? s.sale_price).toLocaleString("he-IL")} ₪\nיתרה: ${(s.remaining_balance ?? 0).toLocaleString("he-IL")} ₪` })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="הוסף תזכורת ליומן Google"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 text-xs transition-colors"
+                          >
+                            <CalendarIcon className="size-3.5" />
+                          </a>
                         </div>
                       </div>
                     );
@@ -471,6 +484,22 @@ export default function SalesClient() {
                                 <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
                                   <BanknoteIcon className="size-3.5 ml-1" />תשלום
                                 </Button>
+                                <a
+                                  href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
+                                  title="שלח בקשת תשלום בוואטסאפ"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                ><MessageCircleIcon className="size-3.5" /></a>
+                                <a
+                                  href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
+                                  title="שלח בקשת תשלום במייל"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 transition-colors"
+                                ><MailIcon className="size-3.5" /></a>
+                                <a
+                                  href={buildCalendarEventUrl({ title: `תשלום: ${getSaleDisplay(s)}`, date: s.sale_date, details: `קונה: ${s.buyer_name ?? "—"}\nסכום: ${(s.total_price ?? s.sale_price).toLocaleString("he-IL")} ₪` })}
+                                  target="_blank" rel="noopener noreferrer"
+                                  title="הוסף ליומן Google"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                ><CalendarIcon className="size-3.5" /></a>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -891,6 +920,8 @@ export default function SalesClient() {
           setNewSaleBuyerId(c.id);
         }}
       />
+
+      <ScrollToTop />
     </div>
   );
 }

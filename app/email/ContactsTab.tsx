@@ -23,13 +23,15 @@ import {
 import {
   fetchEmailContacts,
   importEmailContacts,
-  importGmailContactsForEmail,
+  importCrmContactsToEmail,
   deleteEmailContact,
   bulkDeleteEmailContacts,
+  bulkAddTagsToEmailContacts,
+  bulkRemoveTagFromEmailContacts,
   type EmailContact,
 } from "./actions";
 import { CsvActions } from "@/components/shared/CsvActions";
-import { UsersIcon, Trash2Icon, UploadIcon, DownloadIcon } from "lucide-react";
+import { UsersIcon, Trash2Icon, UploadIcon, TagIcon } from "lucide-react";
 
 type Props = {
   initialContacts: EmailContact[];
@@ -42,8 +44,31 @@ export default function ContactsTab({ initialContacts }: Props) {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importLoading, setImportLoading] = useState(false);
-  const [gmailImportLoading, setGmailImportLoading] = useState(false);
+  const [crmImportLoading, setCrmImportLoading] = useState(false);
+
+  const handleCrmImport = async () => {
+    setCrmImportLoading(true);
+    const res = await importCrmContactsToEmail();
+    setCrmImportLoading(false);
+    if (res.success) {
+      toast.success(
+        res.added > 0
+          ? `יובאו ${res.added} אנשי קשר חדשים מ-CRM (${res.total} סה״כ)`
+          : `כל ${res.total} אנשי הקשר מ-CRM כבר ברשימה`
+      );
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tagAddOpen, setTagAddOpen] = useState(false);
+  const [tagRemoveOpen, setTagRemoveOpen] = useState(false);
+  const [tagAddInput, setTagAddInput] = useState("");
+  const [tagRemoveInput, setTagRemoveInput] = useState("");
+  const [tagActionLoading, setTagActionLoading] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search) return contacts;
@@ -56,6 +81,11 @@ export default function ContactsTab({ initialContacts }: Props) {
         (c.tags ?? []).some((t) => t.toLowerCase().includes(q))
     );
   }, [contacts, search]);
+
+  const visibleSelectedIds = useMemo(() => {
+    const visible = new Set(filtered.map((c) => c.id));
+    return [...selected].filter((id) => visible.has(id));
+  }, [selected, filtered]);
 
   const subscribedCount = useMemo(
     () => filtered.filter((c) => c.subscribed !== false).length,
@@ -73,7 +103,7 @@ export default function ContactsTab({ initialContacts }: Props) {
 
   const toggleSelectAll = () => {
     const selectable = filtered.filter((c) => c.subscribed !== false);
-    if (selected.size === selectable.length && selectable.length > 0) {
+    if (visibleSelectedIds.length === selectable.length && selectable.length > 0) {
       setSelected(new Set());
     } else {
       setSelected(new Set(selectable.map((c) => c.id)));
@@ -96,23 +126,11 @@ export default function ContactsTab({ initialContacts }: Props) {
     const res = await importEmailContacts(rows);
     setImportLoading(false);
     if (res.success) {
-      toast.success(`${rows.length} אנשי קשר יובאו`);
       setImportOpen(false);
       setImportText("");
       const updated = await fetchEmailContacts();
-      if (updated.success) setContacts(updated.contacts);
-    } else {
-      toast.error(res.error);
-    }
-  };
-
-  const handleGmailImport = async () => {
-    setGmailImportLoading(true);
-    const res = await importGmailContactsForEmail();
-    setGmailImportLoading(false);
-    if (res.success) {
-      toast.success(`יובאו ${res.imported} אנשי קשר מ-Gmail`);
-      const updated = await fetchEmailContacts();
+      const actualCount = updated.success ? updated.contacts.length - contacts.length : rows.length;
+      toast.success(`יובאו ${Math.max(0, actualCount)} אנשי קשר חדשים`);
       if (updated.success) setContacts(updated.contacts);
     } else {
       toast.error(res.error);
@@ -133,13 +151,44 @@ export default function ContactsTab({ initialContacts }: Props) {
   };
 
   const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
-    const res = await bulkDeleteEmailContacts([...selected]);
+    if (visibleSelectedIds.length === 0) return;
+    const count = visibleSelectedIds.length;
+    const res = await bulkDeleteEmailContacts(visibleSelectedIds);
+    if (!res.success) { toast.error(res.error); return; }
     setDeleteOpen(false);
+    const idsToDelete = new Set(visibleSelectedIds);
+    setContacts((prev) => prev.filter((c) => !idsToDelete.has(c.id)));
+    setSelected(new Set());
+    toast.success(`${count} אנשי קשר נמחקו`);
+  };
+
+  const handleBulkAddTags = async () => {
+    const parts = tagAddInput.split(/[,|]/).map((t) => t.trim()).filter(Boolean);
+    if (visibleSelectedIds.length === 0 || parts.length === 0) return;
+    setTagActionLoading(true);
+    const res = await bulkAddTagsToEmailContacts(visibleSelectedIds, parts);
+    setTagActionLoading(false);
     if (res.success) {
-      setContacts((prev) => prev.filter((c) => !selected.has(c.id)));
-      setSelected(new Set());
-      toast.success(`${selected.size} אנשי קשר נמחקו`);
+      toast.success("תגיות נוספו");
+      setTagAddOpen(false);
+      setTagAddInput("");
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
+    } else toast.error(res.error);
+  };
+
+  const handleBulkRemoveTag = async () => {
+    const tag = tagRemoveInput.trim();
+    if (visibleSelectedIds.length === 0 || !tag) return;
+    setTagActionLoading(true);
+    const res = await bulkRemoveTagFromEmailContacts(visibleSelectedIds, tag);
+    setTagActionLoading(false);
+    if (res.success) {
+      toast.success(`התגית "${tag}" הוסרה מהנבחרים`);
+      setTagRemoveOpen(false);
+      setTagRemoveInput("");
+      const updated = await fetchEmailContacts();
+      if (updated.success) setContacts(updated.contacts);
     } else toast.error(res.error);
   };
 
@@ -182,37 +231,38 @@ export default function ContactsTab({ initialContacts }: Props) {
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <UsersIcon className="w-5 h-5 text-indigo-500" />
+            <UsersIcon className="w-5 h-5 text-sky-500" />
             <div>
               <h2 className="text-base font-semibold text-slate-700">אנשי קשר</h2>
               <p className="text-sm text-muted-foreground">ניהול אנשי קשר לייבוא וקמפיינים</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <CsvActions
-              data={contacts.map((c) => ({ email: c.email, name: c.name, phone: c.phone, tags: c.tags?.join(",") }))}
-              onImport={handleCsvImport}
-              filename="email-contacts"
-            />
+          <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
               size="sm"
-              onClick={handleGmailImport}
-              disabled={gmailImportLoading}
-              className="rounded-xl"
+              onClick={() => void handleCrmImport()}
+              disabled={crmImportLoading}
+              className="rounded-xl gap-1.5"
+              title="סנכרון אנשי קשר מ-CRM (כל מי שיש לו אימייל)"
             >
-              <DownloadIcon className="size-4 ml-1" />
-              ייבוא מ-Gmail
+              <UsersIcon className="size-4" />
+              {crmImportLoading ? "מסנכרן..." : "סנכרון מ-CRM"}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setImportOpen(true)}
-              className="rounded-xl"
+              className="rounded-xl gap-1.5"
+              title="ייבוא ידני — הדבק אימיילים או העלה CSV"
             >
-              <UploadIcon className="size-4 ml-1" />
-              ייבוא ידני
+              <UploadIcon className="size-4" />
+              ייבוא
             </Button>
+            <CsvActions
+              data={contacts.map((c) => ({ email: c.email, name: c.name, phone: c.phone, tags: c.tags?.join(",") }))}
+              onImport={handleCsvImport}
+              filename="email-contacts"
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -231,20 +281,39 @@ export default function ContactsTab({ initialContacts }: Props) {
               onClick={toggleSelectAll}
               className="rounded-xl"
             >
-              {selected.size === filtered.filter((c) => c.subscribed !== false).length && filtered.filter((c) => c.subscribed !== false).length > 0
+              {visibleSelectedIds.length === filtered.filter((c) => c.subscribed !== false).length && filtered.filter((c) => c.subscribed !== false).length > 0
                 ? "בטל בחירה"
                 : "בחר הכל"}
             </Button>
-            {selected.size > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteOpen(true)}
-                className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
-              >
-                <Trash2Icon className="size-4 ml-1" />
-                מחק ({selected.size})
-              </Button>
+            {visibleSelectedIds.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTagAddOpen(true)}
+                  className="rounded-xl border-sky-200 text-sky-700 hover:bg-sky-50"
+                >
+                  <TagIcon className="size-4 ml-1" />
+                  הוסף תגיות ({visibleSelectedIds.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTagRemoveOpen(true)}
+                  className="rounded-xl border-amber-200 text-amber-800 hover:bg-amber-50"
+                >
+                  הסר תגית
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteOpen(true)}
+                  className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  <Trash2Icon className="size-4 ml-1" />
+                  מחק ({visibleSelectedIds.length})
+                </Button>
+              </>
             )}
             <span className="text-sm text-muted-foreground">
               {subscribedCount} מנויים פעילים
@@ -259,7 +328,7 @@ export default function ContactsTab({ initialContacts }: Props) {
                     <TableHead className="w-10">
                       <Checkbox
                         checked={
-                          selected.size === filtered.filter((c) => c.subscribed !== false).length &&
+                          visibleSelectedIds.length === filtered.filter((c) => c.subscribed !== false).length &&
                           filtered.filter((c) => c.subscribed !== false).length > 0
                         }
                         onCheckedChange={toggleSelectAll}
@@ -291,7 +360,7 @@ export default function ContactsTab({ initialContacts }: Props) {
                           {(c.tags ?? []).map((t) => (
                             <span
                               key={t}
-                              className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700"
+                              className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700"
                             >
                               {t}
                             </span>
@@ -316,15 +385,22 @@ export default function ContactsTab({ initialContacts }: Props) {
           ) : (
             <div className="flex flex-col items-center justify-center py-16 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
               <UsersIcon className="size-12 text-slate-400 mb-4" />
-              <h3 className="text-lg font-semibold text-slate-700 mb-2">אין אנשי קשר</h3>
-              <p className="text-center text-muted-foreground max-w-sm mb-4">
-                ייבא מ-Gmail או הדבק רשימת אימיילים
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">אין אנשי קשר עדיין</h3>
+              <p className="text-center text-muted-foreground max-w-sm mb-6">
+                סנכרן אנשי קשר מה-CRM (כולל כל מי שיש לו אימייל), או ייבא ידנית.
               </p>
-              <div className="flex gap-2">
-                <Button onClick={handleGmailImport} variant="outline" disabled={gmailImportLoading} className="rounded-xl">
-                  ייבוא מ-Gmail
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  onClick={() => void handleCrmImport()}
+                  disabled={crmImportLoading}
+                  className="rounded-xl gap-1.5"
+                >
+                  <UsersIcon className="size-4" />
+                  {crmImportLoading ? "מסנכרן..." : "סנכרון מ-CRM"}
                 </Button>
-                <Button onClick={() => setImportOpen(true)}>ייבוא ידני</Button>
+                <Button variant="outline" onClick={() => setImportOpen(true)} className="rounded-xl">
+                  ייבוא ידני
+                </Button>
               </div>
             </div>
           )}
@@ -366,11 +442,60 @@ export default function ContactsTab({ initialContacts }: Props) {
             <DialogTitle>מחיקת אנשי קשר</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            האם למחוק {selected.size} אנשי קשר?
+            האם למחוק {visibleSelectedIds.length} אנשי קשר?
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>ביטול</Button>
             <Button variant="destructive" onClick={handleBulkDelete}>מחק</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagAddOpen} onOpenChange={setTagAddOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הוספת תגיות לנבחרים</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mb-2">
+            מופרד בפסיק — התגיות יתווספו לכל {visibleSelectedIds.length} הנבחרים (ללא מחיקת תגיות קיימות). לדוגמה:{" "}
+            <strong>VIP, סוחרים_קרים</strong>
+          </p>
+          <Input
+            value={tagAddInput}
+            onChange={(e) => setTagAddInput(e.target.value)}
+            placeholder="VIP, לקוחות_פעילים"
+            className="rounded-xl"
+            dir="rtl"
+          />
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => setTagAddOpen(false)}>ביטול</Button>
+            <Button onClick={() => void handleBulkAddTags()} disabled={tagActionLoading}>
+              {tagActionLoading ? "שומר…" : "הוסף"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagRemoveOpen} onOpenChange={setTagRemoveOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הסרת תגית אחת מהנבחרים</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mb-2">
+            שם תגית מדויק כפי שמופיע ברשימה. אם לא תישאר אף תגית — תוגדר &quot;כללי&quot;.
+          </p>
+          <Input
+            value={tagRemoveInput}
+            onChange={(e) => setTagRemoveInput(e.target.value)}
+            placeholder="למשל: VIP"
+            className="rounded-xl"
+            dir="rtl"
+          />
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => setTagRemoveOpen(false)}>ביטול</Button>
+            <Button onClick={() => void handleBulkRemoveTag()} disabled={tagActionLoading}>
+              {tagActionLoading ? "מעדכן…" : "הסר"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

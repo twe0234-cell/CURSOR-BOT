@@ -280,7 +280,8 @@ export default function TorahDetailClient({
     if (bulkMode) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        next.has(row.id) ? next.delete(row.id) : next.add(row.id);
+        if (next.has(row.id)) next.delete(row.id);
+        else next.add(row.id);
         return next;
       });
       return;
@@ -449,7 +450,8 @@ export default function TorahDetailClient({
   const toggleBatchSheet = (id: string) => {
     setBatchSheetIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };

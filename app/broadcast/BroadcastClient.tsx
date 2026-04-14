@@ -16,6 +16,7 @@ import {
   sendSingleMessage,
   insertBroadcastLog,
   deleteBroadcastLog,
+  scheduleBroadcastAction,
   type BroadcastLog,
   type QueueItem,
 } from "./actions";
@@ -65,6 +66,8 @@ export default function BroadcastClient({
   const [nextScribeNum, setNextScribeNum] = useState(121);
   const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -196,6 +199,37 @@ export default function BroadcastClient({
     toast.info(`נמענים: ${combined.length}`);
   };
 
+  const handleSchedule = async () => {
+    if (selectedTags.size === 0 && selectedGroups.size === 0) {
+      toast.error("בחר לפחות תגית אחת או קבוצה");
+      return;
+    }
+    if (!messageText.trim()) { toast.error("הזן טקסט להודעה"); return; }
+    if (!scheduledAt) { toast.error("בחר תאריך ושעה לתזמון"); return; }
+    if (new Date(scheduledAt) <= new Date()) { toast.error("יש לבחור זמן עתידי"); return; }
+
+    setScheduling(true);
+    const res = await scheduleBroadcastAction(
+      [...selectedTags],
+      [...selectedGroups],
+      messageText.trim(),
+      imageUrl.trim() || null,
+      new Date(scheduledAt).toISOString()
+    );
+    setScheduling(false);
+
+    if (res.success) {
+      toast.success(`שידור תוזמן ל-${new Date(scheduledAt).toLocaleString("he-IL")} ✓`);
+      setScheduledAt("");
+      setMessageText("");
+      setSelectedTags(new Set());
+      setSelectedGroups(new Set());
+      refreshLogs();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const handleSend = () => {
     if (selectedTags.size === 0 && selectedGroups.size === 0) {
       toast.error("בחר לפחות תגית אחת או קבוצה");
@@ -250,11 +284,9 @@ export default function BroadcastClient({
       const errors: string[] = [];
       const finalScribe = scribeCode.trim() || undefined;
 
-      const progressInterval = 5;
+      setSendProgress({ current: 0, total });
       for (let i = 0; i < targets.length; i++) {
-        if (i % progressInterval === 0 || i === targets.length - 1) {
-          setSendProgress({ current: i + 1, total });
-        }
+        setSendProgress({ current: i + 1, total });
         const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };
@@ -520,18 +552,39 @@ export default function BroadcastClient({
         </CardContent>
       </Card>
 
-      <Button
-        onClick={handleSend}
-        disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
-        className="w-full rounded-xl bg-primary py-6 text-base font-semibold hover:bg-primary/90 hover:shadow-lg"
-      >
-        <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
-        {loading && sendProgress
-          ? `שולח ${sendProgress.current}/${sendProgress.total}...`
-          : loading
-            ? "שולח..."
-            : "שלח שידור"}
-      </Button>
+      <div className="space-y-3">
+        <Button
+          onClick={handleSend}
+          disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
+          className="w-full rounded-xl bg-primary py-6 text-base font-semibold hover:bg-primary/90 hover:shadow-lg"
+        >
+          <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
+          {loading && sendProgress
+            ? `שולח ${sendProgress.current}/${sendProgress.total}...`
+            : loading
+              ? "שולח..."
+              : "שלח שידור עכשיו"}
+        </Button>
+
+        {/* ── Schedule ────────────────────────────────────────────── */}
+        <div className="flex gap-2 items-center">
+          <input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+            className="flex-1 rounded-xl border border-border px-3 py-2 text-sm bg-background"
+            dir="ltr"
+          />
+          <Button
+            variant="outline"
+            onClick={handleSchedule}
+            disabled={scheduling || !scheduledAt || (selectedTags.size === 0 && selectedGroups.size === 0)}
+            className="rounded-xl border-amber-400 text-amber-700 hover:bg-amber-50 shrink-0"
+          >
+            ⏱ תזמן שידור
+          </Button>
+        </div>
+      </div>
         </TabsContent>
 
         <TabsContent value="logs" className="mt-0">
@@ -595,6 +648,22 @@ export default function BroadcastClient({
                         <span className="text-red-600 font-semibold tabular-nums whitespace-nowrap">
                           כשלונות: {log.failed}
                         </span>
+                        {log.message_text && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 border-blue-200 text-blue-700 hover:bg-blue-50"
+                            type="button"
+                            onClick={() => {
+                              setMessageText(log.message_text!);
+                              if (log.tags?.length) setSelectedTags(new Set(log.tags));
+                              setActiveTab("compose");
+                              toast.info("הודעה הוכנסה לחיבור — ערוך ושלח");
+                            }}
+                          >
+                            🔁 שלח שוב
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

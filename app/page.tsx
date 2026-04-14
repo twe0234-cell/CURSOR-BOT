@@ -33,6 +33,7 @@ export default async function HomePage() {
   ]);
 
   const kpis = kpisRes.success ? kpisRes.kpis : null;
+  const dashboardError = !kpisRes.success ? kpisRes.error : undefined;
   const chartData = chartRes.success ? chartRes.data : [];
   const inventoryDistribution = invDistRes.success ? invDistRes.data : [];
   const recentInventory = recentRes.success ? recentRes.data : [];
@@ -67,6 +68,7 @@ export default async function HomePage() {
 
       <DashboardClient
         kpis={kpis}
+        dashboardError={dashboardError}
         chartData={chartData}
         inventoryDistribution={inventoryDistribution}
         recentInventory={recentInventory}

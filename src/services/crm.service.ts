@@ -102,6 +102,7 @@ export type UpdateCrmContactInput = Partial<{
   phone_type: string;
   handwriting_image_url: string | null;
   city: string | null;
+  address: string | null;
 }>;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -113,6 +114,20 @@ async function getAuthClient() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, user };
+}
+
+/** תיק סופר ריק ב־crm_sofer_profiles — מאפשר הופעה עקבית במאגר סופרים */
+async function ensureSoferProfileRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  contactId: string
+): Promise<void> {
+  const { error } = await supabase.from("crm_sofer_profiles").upsert(
+    { contact_id: contactId },
+    { onConflict: "contact_id" }
+  );
+  if (error) {
+    logError("CRM", "ensureSoferProfileRow", { contactId, message: error.message });
+  }
 }
 
 /**
@@ -291,7 +306,7 @@ export async function fetchScribes(): Promise<
   }
 }
 
-/** Fetches all contacts of type "Merchant" (dealers) for the authenticated user. */
+/** Fetches ALL CRM contacts for the authenticated user (for dealer/owner selection). */
 export async function fetchDealers(): Promise<
   | { success: true; dealers: { id: string; name: string }[] }
   | { success: false; error: string }
@@ -304,7 +319,6 @@ export async function fetchDealers(): Promise<
       .from("crm_contacts")
       .select("id, name")
       .eq("user_id", user.id)
-      .eq("type", "Merchant")
       .order("name");
 
     if (error) return { success: false, error: handleSupabaseError(error) };
@@ -432,6 +446,8 @@ export async function createScribeContact(
       return { success: false, error: handleSupabaseError(error) };
     }
 
+    await ensureSoferProfileRow(supabase, data.id);
+
     logInfo("CRM", "createScribeContact completed", {
       scribeId: data.id,
       name: data.name,
@@ -482,21 +498,28 @@ export async function bulkImportCrmContacts(
         ? rawType
         : "Other";
 
-      const { error } = await supabase.from("crm_contacts").insert({
-        user_id: user.id,
-        name,
-        type: typeVal,
-        preferred_contact: "WhatsApp",
-        email,
-        phone,
-        tags: [],
-        sku: generateSku(crmSkuPrefix),
-      });
+      const { data: insRow, error } = await supabase
+        .from("crm_contacts")
+        .insert({
+          user_id: user.id,
+          name,
+          type: typeVal,
+          preferred_contact: "WhatsApp",
+          email,
+          phone,
+          tags: [],
+          sku: generateSku(crmSkuPrefix),
+        })
+        .select("id")
+        .single();
 
       if (error) {
         errors.push(`שורה ${i + 1}: ${handleSupabaseError(error)}`);
       } else {
         imported++;
+        if (typeVal === "Scribe" && insRow?.id) {
+          await ensureSoferProfileRow(supabase, insRow.id as string);
+        }
       }
     }
 
@@ -534,7 +557,11 @@ export async function createCrmContact(
       .single();
 
     if (error) return { success: false, error: handleSupabaseError(error) };
-    return { success: true, id: data?.id as string | undefined };
+    const newId = data?.id as string | undefined;
+    if (newId && (input.type ?? "Other") === "Scribe") {
+      await ensureSoferProfileRow(supabase, newId);
+    }
+    return { success: true, id: newId };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }
@@ -587,6 +614,9 @@ export async function updateCrmContact(
     if (input.city !== undefined) {
       payload.city = input.city?.trim() ? input.city.trim() : null;
     }
+    if (input.address !== undefined) {
+      payload.address = input.address?.trim() ? input.address.trim() : null;
+    }
 
     const { error } = await supabase
       .from("crm_contacts")
@@ -595,6 +625,17 @@ export async function updateCrmContact(
       .eq("user_id", user.id);
 
     if (error) return { success: false, error: handleSupabaseError(error) };
+
+    const { data: typeRow } = await supabase
+      .from("crm_contacts")
+      .select("type")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (typeRow?.type === "Scribe") {
+      await ensureSoferProfileRow(supabase, id);
+    }
+
     return { success: true };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
@@ -740,20 +781,24 @@ export async function addDocument(
   fileUrl: string,
   docType?: string,
   name?: string
-): Promise<ActionResult> {
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
   try {
     const { supabase, user } = await getAuthClient();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { error } = await supabase.from("crm_documents").insert({
-      contact_id: contactId,
-      file_url: fileUrl,
-      doc_type: docType ?? "Other",
-      name: name?.trim() || null,
-    });
+    const { data, error } = await supabase
+      .from("crm_documents")
+      .insert({
+        contact_id: contactId,
+        file_url: fileUrl,
+        doc_type: docType ?? "Other",
+        name: name?.trim() || null,
+      })
+      .select("id")
+      .single();
 
     if (error) return { success: false, error: handleSupabaseError(error) };
-    return { success: true };
+    return { success: true, id: data.id as string };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }
@@ -1311,6 +1356,8 @@ export type ContactDetailPageData = {
     pricing_notes: string | null;
     writing_constraints: string | null;
     past_writings: string | null;
+    community: string | null;
+    sample_image_url: string | null;
   } | null;
   debtToContact: number;
   debtFromContact: number;
@@ -1381,23 +1428,43 @@ export type ContactDetailPageData = {
  * then assembles the final `ContactDetailPageData` payload.
  * No query logic lives here.
  */
+export type UpsertSoferProfileFields = {
+  writing_style?: string | null;
+  writing_level?: string | null;
+  handwriting_quality?: number | null;
+  daily_page_capacity?: number | null;
+  pricing_notes?: string | null;
+  writing_constraints?: string | null;
+  past_writings?: string | null;
+  /** קהילה / מוסד (שדה ב-crm_sofer_profiles) */
+  community?: string | null;
+  /** URL תמונת דוגמת כתב (שדה ב-crm_sofer_profiles) */
+  sample_image_url?: string | null;
+};
+
 export async function upsertSoferProfile(
   contactId: string,
-  fields: {
-    writing_style?: string | null;
-    writing_level?: string | null;
-    handwriting_quality?: number | null;
-    daily_page_capacity?: number | null;
-    pricing_notes?: string | null;
-    writing_constraints?: string | null;
-    past_writings?: string | null;
-  }
+  fields: UpsertSoferProfileFields
 ): Promise<{ success: true } | { success: false; error: string }> {
   const { supabase, user } = await getAuthClient();
   if (!user) return { success: false, error: "יש להתחבר" };
+  const payload: Record<string, unknown> = {
+    contact_id: contactId,
+    updated_at: new Date().toISOString(),
+  };
+  if (fields.writing_style !== undefined) payload.writing_style = fields.writing_style;
+  if (fields.writing_level !== undefined) payload.writing_level = fields.writing_level;
+  if (fields.handwriting_quality !== undefined) payload.handwriting_quality = fields.handwriting_quality;
+  if (fields.daily_page_capacity !== undefined) payload.daily_page_capacity = fields.daily_page_capacity;
+  if (fields.pricing_notes !== undefined) payload.pricing_notes = fields.pricing_notes;
+  if (fields.writing_constraints !== undefined) payload.writing_constraints = fields.writing_constraints;
+  if (fields.past_writings !== undefined) payload.past_writings = fields.past_writings;
+  if (fields.community !== undefined) payload.community = fields.community?.trim() || null;
+  if (fields.sample_image_url !== undefined) payload.sample_image_url = fields.sample_image_url?.trim() || null;
+
   const { error } = await supabase
     .from("crm_sofer_profiles")
-    .upsert({ contact_id: contactId, ...fields }, { onConflict: "contact_id" });
+    .upsert(payload, { onConflict: "contact_id" });
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
@@ -1425,7 +1492,7 @@ export async function loadContactDetailPage(
     supabase
       .from("crm_sofer_profiles")
       .select(
-        "writing_style, writing_level, handwriting_quality, daily_page_capacity, pricing_notes, writing_constraints, past_writings"
+        "writing_style, writing_level, handwriting_quality, daily_page_capacity, pricing_notes, writing_constraints, past_writings, community, sample_image_url"
       )
       .eq("contact_id", id)
       .maybeSingle(),
@@ -1522,6 +1589,8 @@ export async function loadContactDetailPage(
             pricing_notes: soferProfile.pricing_notes ?? null,
             writing_constraints: soferProfile.writing_constraints ?? null,
             past_writings: soferProfile.past_writings ?? null,
+            community: soferProfile.community ?? null,
+            sample_image_url: soferProfile.sample_image_url ?? null,
           }
         : null,
       debtToContact,
@@ -1670,6 +1739,48 @@ export async function findDuplicateCrmContacts(): Promise<
   }
 }
 
+type ExtraContactLine = { label: string; value: string };
+
+function parseExtraContactJson(raw: unknown): ExtraContactLine[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+    .map((x) => ({
+      label: String(x.label ?? ""),
+      value: String(x.value ?? "").trim(),
+    }))
+    .filter((x) => x.value.length > 0);
+}
+
+function mergeExtraContactLines(primary: unknown, dupValues: unknown[]): ExtraContactLine[] {
+  const seen = new Set<string>();
+  const out: ExtraContactLine[] = [];
+  const push = (arr: ExtraContactLine[]) => {
+    for (const it of arr) {
+      const k = it.value.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(it);
+    }
+  };
+  push(parseExtraContactJson(primary));
+  for (const d of dupValues) push(parseExtraContactJson(d));
+  return out;
+}
+
+function coalesceText(
+  primary: string | null | undefined,
+  fallbacks: (string | null | undefined)[]
+): string | null {
+  const p = (primary ?? "").trim();
+  if (p) return p;
+  for (const f of fallbacks) {
+    const t = (f ?? "").trim();
+    if (t) return t;
+  }
+  return null;
+}
+
 export async function mergeCrmContacts(
   primaryId: string,
   duplicateIds: string[]
@@ -1681,7 +1792,9 @@ export async function mergeCrmContacts(
 
     const { data: contactRows, error: fetchErr } = await supabase
       .from("crm_contacts")
-      .select("id, name, email, phone, wa_chat_id, tags, type")
+      .select(
+        "id, name, email, phone, wa_chat_id, tags, type, notes, certification, phone_type, preferred_contact, city, address, handwriting_image_url, extra_phones, extra_emails"
+      )
       .eq("user_id", user.id)
       .in("id", [primaryId, ...duplicateIds]);
     if (fetchErr) return { success: false, error: handleSupabaseError(fetchErr) };
@@ -1691,15 +1804,105 @@ export async function mergeCrmContacts(
 
     const dups = (contactRows ?? []).filter((c) => duplicateIds.includes(c.id));
 
-    const patchEmail = primary.email ?? dups.find((d) => d.email)?.email ?? null;
-    const patchPhone = primary.phone ?? dups.find((d) => d.phone)?.phone ?? null;
-    const patchWa = primary.wa_chat_id ?? dups.find((d) => d.wa_chat_id)?.wa_chat_id ?? null;
+    const altNames = dups
+      .map((d) => (d.name ?? "").trim())
+      .filter((n) => n && n !== (primary.name ?? "").trim());
+    const uniqAlt = [...new Set(altNames)];
+    const baseNotes = [(primary.notes ?? "").trim(), ...dups.map((d) => (d.notes ?? "").trim())].filter(
+      Boolean
+    );
+    let mergedNotes = [...new Set(baseNotes)].join("\n\n—\n\n") || null;
+    if (uniqAlt.length > 0) {
+      const line = `שמות נוספים (מיזוג): ${uniqAlt.join(", ")}`;
+      mergedNotes = mergedNotes ? `${mergedNotes}\n\n${line}` : line;
+    }
+
+    const patchEmail = coalesceText(primary.email as string | null, dups.map((d) => d.email as string | null));
+    const patchPhone = coalesceText(primary.phone as string | null, dups.map((d) => d.phone as string | null));
+    const patchWa = coalesceText(primary.wa_chat_id as string | null, dups.map((d) => d.wa_chat_id as string | null));
+    const patchCert = coalesceText(
+      primary.certification as string | null,
+      dups.map((d) => d.certification as string | null)
+    );
+    const patchPhoneType = coalesceText(
+      primary.phone_type as string | null,
+      dups.map((d) => d.phone_type as string | null)
+    );
+    const patchCity = coalesceText(primary.city as string | null, dups.map((d) => d.city as string | null));
+    const patchAddress = coalesceText(
+      primary.address as string | null,
+      dups.map((d) => d.address as string | null)
+    );
+    const patchHw = coalesceText(
+      primary.handwriting_image_url as string | null,
+      dups.map((d) => d.handwriting_image_url as string | null)
+    );
+    const patchPreferred =
+      (primary.preferred_contact as string | null)?.trim() ||
+      dups.find((d) => (d.preferred_contact as string | null)?.trim())?.preferred_contact ||
+      "WhatsApp";
+
     const mergedTags = [
       ...new Set([
-        ...(primary.tags as string[] ?? []),
-        ...dups.flatMap((d) => d.tags as string[] ?? []),
+        ...((primary.tags as string[]) ?? []),
+        ...dups.flatMap((d) => (d.tags as string[]) ?? []),
       ]),
     ];
+
+    const mergedExtraPhones = mergeExtraContactLines(
+      primary.extra_phones,
+      dups.map((d) => d.extra_phones)
+    );
+    const mergedExtraEmails = mergeExtraContactLines(
+      primary.extra_emails,
+      dups.map((d) => d.extra_emails)
+    );
+
+    const soferKeys = [
+      "writing_style",
+      "writing_level",
+      "handwriting_quality",
+      "daily_page_capacity",
+      "pricing_notes",
+      "writing_constraints",
+      "past_writings",
+      "community",
+      "sample_image_url",
+      "last_contact_date",
+    ] as const;
+
+    for (const dup of dups) {
+      const { data: curPrim } = await supabase
+        .from("crm_sofer_profiles")
+        .select("*")
+        .eq("contact_id", primaryId)
+        .maybeSingle();
+
+      const { data: dupProf } = await supabase
+        .from("crm_sofer_profiles")
+        .select("*")
+        .eq("contact_id", dup.id)
+        .maybeSingle();
+      if (!dupProf) continue;
+
+      if (!curPrim) {
+        const copy: Record<string, unknown> = { contact_id: primaryId };
+        for (const k of soferKeys) copy[k] = dupProf[k] ?? null;
+        await supabase.from("crm_sofer_profiles").upsert(copy, { onConflict: "contact_id" });
+      } else {
+        const patch: Record<string, unknown> = {};
+        for (const k of soferKeys) {
+          const pv = curPrim[k];
+          const dv = dupProf[k];
+          const hasP = pv != null && String(pv).trim() !== "";
+          if (!hasP && dv != null && String(dv).trim() !== "") patch[k] = dv;
+        }
+        if (Object.keys(patch).length > 0) {
+          await supabase.from("crm_sofer_profiles").update(patch).eq("contact_id", primaryId);
+        }
+      }
+      await supabase.from("crm_sofer_profiles").delete().eq("contact_id", dup.id);
+    }
 
     const { error: upErr } = await supabase
       .from("crm_contacts")
@@ -1708,33 +1911,131 @@ export async function mergeCrmContacts(
         phone: patchPhone,
         wa_chat_id: patchWa,
         tags: mergedTags,
+        notes: mergedNotes,
+        certification: patchCert,
+        phone_type: patchPhoneType,
+        preferred_contact: patchPreferred,
+        city: patchCity,
+        address: patchAddress,
+        handwriting_image_url: patchHw,
+        extra_phones: mergedExtraPhones,
+        extra_emails: mergedExtraEmails,
         updated_at: new Date().toISOString(),
       })
       .eq("id", primaryId)
       .eq("user_id", user.id);
     if (upErr) return { success: false, error: handleSupabaseError(upErr) };
 
+    if ((primary.type as string) === "Scribe") {
+      await ensureSoferProfileRow(supabase, primaryId);
+    }
+
     const FK_TABLES: Array<{ table: string; column: string }> = [
       { table: "erp_sales", column: "buyer_id" },
       { table: "erp_sales", column: "seller_id" },
+      { table: "erp_sales", column: "scribe_id" },
       { table: "crm_transactions", column: "contact_id" },
       { table: "crm_documents", column: "contact_id" },
       { table: "crm_communication_logs", column: "contact_id" },
       { table: "crm_contact_history", column: "contact_id" },
-      { table: "crm_sofer_profiles", column: "contact_id" },
+      { table: "inventory", column: "scribe_id" },
+      { table: "torah_projects", column: "client_id" },
+      { table: "torah_projects", column: "scribe_id" },
+      { table: "torah_projects", column: "current_holder_id" },
+      { table: "market_torah_books", column: "sofer_id" },
+      { table: "market_torah_books", column: "dealer_id" },
+      { table: "crm_scribe_gallery", column: "contact_id" },
+      { table: "crm_contact_identities", column: "contact_id" },
+      { table: "crm_merge_suggestions", column: "contact_id_a" },
+      { table: "crm_merge_suggestions", column: "contact_id_b" },
+      { table: "torah_qa_batches", column: "magiah_id" },
     ];
 
     for (const dupId of duplicateIds) {
       for (const { table, column } of FK_TABLES) {
-        await (supabase.from(table as "erp_sales") as ReturnType<typeof supabase.from>)
-          .update({ [column]: primaryId })
+        const { error: fkErr } = await supabase
+          .from(table as "erp_sales")
+          .update({ [column]: primaryId } as never)
           .eq(column, dupId);
+        if (fkErr) {
+          logError("CRM", "mergeCrmContacts: FK remap failed", {
+            table,
+            column,
+            dupId,
+            message: fkErr.message,
+          });
+        }
       }
-      await supabase.from("crm_contacts").delete().eq("id", dupId).eq("user_id", user.id);
+      const { error: delErr } = await supabase
+        .from("crm_contacts")
+        .delete()
+        .eq("id", dupId)
+        .eq("user_id", user.id);
+      if (delErr) {
+        logError("CRM", "mergeCrmContacts: delete dup failed", {
+          dupId,
+          message: delErr.message,
+        });
+      }
     }
 
     logInfo("CRM", "mergeCrmContacts: merged", { primaryId, duplicateIds });
     return { success: true, merged: duplicateIds.length };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function bulkDeleteCrmContacts(
+  ids: string[]
+): Promise<
+  | { success: true; deleted: number; blocked: { id: string; reason: string }[] }
+  | { success: false; error: string }
+> {
+  try {
+    const cleaned = [...new Set(ids.map((x) => x.trim()).filter(Boolean))];
+    if (cleaned.length === 0) return { success: true, deleted: 0, blocked: [] };
+
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const blocked: { id: string; reason: string }[] = [];
+    let deleted = 0;
+
+    for (const cid of cleaned) {
+      const { count: tpScribe } = await supabase
+        .from("torah_projects")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("scribe_id", cid);
+      if (tpScribe && tpScribe > 0) {
+        blocked.push({ id: cid, reason: "משויך כסופר לפרויקט ספר תורה" });
+        continue;
+      }
+      const { count: tpClient } = await supabase
+        .from("torah_projects")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("client_id", cid);
+      if (tpClient && tpClient > 0) {
+        blocked.push({ id: cid, reason: "משויך כלקוח לפרויקט ספר תורה" });
+        continue;
+      }
+
+      const { error: delErr } = await supabase
+        .from("crm_contacts")
+        .delete()
+        .eq("id", cid)
+        .eq("user_id", user.id);
+
+      if (delErr) {
+        blocked.push({ id: cid, reason: delErr.message || "לא ניתן למחוק" });
+        continue;
+      }
+      deleted++;
+    }
+
+    return { success: true, deleted, blocked };
   } catch (err) {
     return { success: false, error: toErrorMessage(err) };
   }

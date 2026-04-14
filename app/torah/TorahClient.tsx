@@ -553,11 +553,12 @@ function ProjectCard({ project }: { project: TorahProjectWithNames }) {
 type Props = {
   initialProjects: TorahProjectWithNames[];
   parchmentLabels: string[];
+  fetchError?: string;
 };
 
-export default function TorahClient({ initialProjects, parchmentLabels }: Props) {
+export default function TorahClient({ initialProjects, parchmentLabels, fetchError }: Props) {
   const router = useRouter();
-  const [projects, setProjects] = useState(initialProjects);
+  const [projects] = useState(initialProjects);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleCreated = () => {
@@ -572,6 +573,11 @@ export default function TorahClient({ initialProjects, parchmentLabels }: Props)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
+      {fetchError && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          שגיאה בטעינת פרויקטים: {fetchError}
+        </div>
+      )}
       {/* Page header */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

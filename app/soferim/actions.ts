@@ -6,6 +6,7 @@ import { logError } from "@/lib/logger";
 import { generateSku, crmSkuPrefix } from "@/lib/sku";
 import { soferProfileUpsertSchema, newScribeContactSchema } from "@/lib/validations/soferim";
 import { resolveContentType } from "@/lib/upload";
+import { upsertSoferProfile as crmUpsertSoferProfile } from "@/src/services/crm.service";
 
 const MEDIA_BUCKET = "media";
 const IMAGE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
@@ -172,10 +173,9 @@ export async function upsertSoferProfile(
       return { success: false, error: parsed.error.flatten().formErrors[0] ?? "נתונים לא תקינים" };
     }
     const v = parsed.data;
+
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
     const { data: contact } = await supabase
@@ -190,30 +190,25 @@ export async function upsertSoferProfile(
       return { success: false, error: "איש קשר לא נמצא או אינו מסוג סופר" };
     }
 
-    const sampleUrl =
-      v.sample_image_url && v.sample_image_url.length > 0 ? v.sample_image_url : null;
+    const result = await crmUpsertSoferProfile(v.contact_id, {
+      community: v.community?.trim() || null,
+      writing_style: v.writing_style ?? null,
+      writing_level: v.writing_level ?? null,
+      handwriting_quality:
+        v.handwriting_quality != null && !Number.isNaN(v.handwriting_quality)
+          ? v.handwriting_quality
+          : null,
+      sample_image_url: v.sample_image_url ?? null,
+      daily_page_capacity: v.daily_page_capacity ?? null,
+      pricing_notes: v.pricing_notes ?? null,
+      writing_constraints: v.writing_constraints ?? null,
+      past_writings: v.past_writings ?? null,
+    });
 
-    const { error } = await supabase.from("crm_sofer_profiles").upsert(
-      {
-        contact_id: v.contact_id,
-        community: v.community?.trim() ? v.community.trim() : null,
-        writing_style: v.writing_style ?? null,
-        writing_level: v.writing_level ?? null,
-        handwriting_quality:
-          v.handwriting_quality != null && !Number.isNaN(v.handwriting_quality)
-            ? v.handwriting_quality
-            : null,
-        sample_image_url: sampleUrl,
-        daily_page_capacity: v.daily_page_capacity ?? null,
-        pricing_notes: v.pricing_notes ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "contact_id" }
-    );
-
-    if (error) return { success: false, error: error.message };
+    if (!result.success) return result;
 
     revalidatePath("/soferim");
+    revalidatePath(`/crm/${v.contact_id}`);
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };

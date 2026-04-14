@@ -86,8 +86,9 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
     const totalScribeCost = pages * (scribePricePerPage || 0);
     const totalCost = totalParchmentCost + totalScribeCost + (additionalCosts || 0);
     const netSalePrice = receipt ? (targetSalePrice || 0) * 0.96 : (targetSalePrice || 0);
-    const netProfit = netSalePrice - totalCost;
-    const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+    
+    const netProfit = targetSalePrice > 0 ? netSalePrice - totalCost : 0;
+    const roi = (totalCost > 0 && targetSalePrice > 0) ? (netProfit / totalCost) * 100 : 0;
 
     return {
       totalParchmentCost,
@@ -112,7 +113,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
       <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden order-2 lg:order-1">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <CalculatorIcon className="w-5 h-5 text-indigo-500" />
+            <CalculatorIcon className="w-5 h-5 text-sky-500" />
             <CardTitle className="text-base font-semibold text-slate-700">הזנת נתונים</CardTitle>
           </div>
           <CardDescription>בחר סוג מוצר, קלף ועלויות</CardDescription>
@@ -126,7 +127,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
                 onClick={() => form.setValue("productType", "torah")}
                 className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
                   productType === "torah"
-                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    ? "border-sky-500 bg-sky-50 text-sky-700"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -137,7 +138,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
                 onClick={() => form.setValue("productType", "nevi")}
                 className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
                   productType === "nevi"
-                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    ? "border-sky-500 bg-sky-50 text-sky-700"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -152,7 +153,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
               <select
                 value={nevi}
                 onChange={(e) => form.setValue("nevi", e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
               >
                 {neviimKeys.map((k) => (
                   <option key={k} value={k}>
@@ -184,7 +185,7 @@ export default function CalculatorClient({ parchmentPrices, neviimData }: Props)
                 <select
                   value={parchmentType}
                   onChange={(e) => handleParchmentChange(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white shadow-sm px-3 py-2.5 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                 >
                   {parchmentPrices.map((p) => (
                     <option key={p.name} value={p.name}>

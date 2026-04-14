@@ -12,6 +12,7 @@
     "db:apply-view": "node scripts/apply-sale-profit-view.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@base-ui/react": "^1.2.0",
     "@hebcal/core": "^6.0.8",
     "@hookform/resolvers": "^5.2.2",

@@ -13,12 +13,14 @@ import {
   bulkImportCrmContacts,
   findDuplicateCrmContacts,
   mergeCrmContacts,
+  bulkDeleteCrmContacts,
   type CrmContact,
   type DuplicateGroup,
 } from "./actions";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -31,10 +33,15 @@ import {
   MailIcon,
   PhoneIcon,
   GitMergeIcon,
+  Trash2Icon,
+  CheckSquareIcon,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
+import { HScrollBar } from "@/components/ui/HScrollBar";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 
 // ── Tag configuration ─────────────────────────────────────────────────────────
 //
@@ -128,6 +135,10 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   const [dupeGroups, setDupeGroups] = useState<DuplicateGroup[]>([]);
   // primaryId per group index
   const [mergePrimary, setMergePrimary] = useState<Record<number, string>>({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
   // ── Derived: all unique tags that exist across all contacts ────────────────
   const allFilterTags = [
@@ -261,7 +272,6 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
     setMergeLoading(false);
     if (!res.success) { toast.error(res.error); return; }
     toast.success(`אוחדו ${res.merged} רשומות`);
-    setDupeGroups((prev) => prev.filter((_, i) => i !== groupIndex));
     setMergePrimary((prev) => {
       const next: Record<number, string> = {};
       Object.entries(prev).forEach(([k, v]) => {
@@ -271,7 +281,43 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
       return next;
     });
     await refreshContacts();
-    if (dupeGroups.length <= 1) setMergeOpen(false);
+    setDupeGroups((prev) => {
+      const next = prev.filter((_, i) => i !== groupIndex);
+      if (next.length === 0) setMergeOpen(false);
+      return next;
+    });
+  };
+
+  const toggleSelectContact = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkDeleteLoading(true);
+    const res = await bulkDeleteCrmContacts(ids);
+    setBulkDeleteLoading(false);
+    setBulkDeleteOpen(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    if (res.blocked.length > 0) {
+      toast.message(
+        `נמחקו ${res.deleted}; ${res.blocked.length} לא נמחקו (קשר לפרויקטים או מגבלת DB)`
+      );
+    } else {
+      toast.success(`נמחקו ${res.deleted} אנשי קשר`);
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    await refreshContacts();
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -332,6 +378,27 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
             {mergeLoading ? "סורק..." : "מצא כפולים"}
           </Button>
           <Button
+            variant={selectMode ? "secondary" : "outline"}
+            onClick={() => {
+              setSelectMode((m) => !m);
+              setSelectedIds(new Set());
+            }}
+            className="rounded-xl"
+          >
+            <CheckSquareIcon className="size-4 ml-2" />
+            {selectMode ? "בטל בחירה" : "בחירה מרובית"}
+          </Button>
+          {selectMode && selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              className="rounded-xl"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2Icon className="size-4 ml-2" />
+              מחק ({selectedIds.size})
+            </Button>
+          )}
+          <Button
             onClick={() => setCreateOpen(true)}
             className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
           >
@@ -343,79 +410,81 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
 
       {/* ── Tag filter bar ───────────────────────────────────────────────── */}
       {allFilterTags.length > 0 && (
-        <div className="mb-5 flex flex-wrap gap-2 items-center">
-          {/* "All" chip */}
-          <button
-            onClick={() => setSelectedTags([])}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              selectedTags.length === 0
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary"
-            }`}
-          >
-            הכל
-            <span className="mr-1 opacity-70">({contacts.length})</span>
-          </button>
-
-          {/* One chip per tag */}
-          {allFilterTags.map((tag) => {
-            const count = contacts.filter((c) =>
-              contactAllTags(c).includes(tag)
-            ).length;
-            const active = selectedTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                onClick={() => toggleFilterTag(tag)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "bg-teal-600 text-white border-teal-600"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700"
-                }`}
-              >
-                {tagLabel(tag)}
-                <span className={`mr-1 ${active ? "opacity-80" : "opacity-50"}`}>
-                  ({count})
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Clear link (shown only when something is active) */}
-          {selectedTags.length > 0 && (
+        <div className="mb-5">
+          <HScrollBar>
+            {/* "All" chip */}
             <button
               onClick={() => setSelectedTags([])}
-              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-slate-700 mr-1"
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                selectedTags.length === 0
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary"
+              }`}
             >
-              נקה סינון
+              הכל
+              <span className="mr-1 opacity-70">({contacts.length})</span>
             </button>
-          )}
 
-          {/* OR / AND toggle – shown only when 2+ tags are selected */}
-          {selectedTags.length >= 2 && (
-            <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 mr-1">
+            {/* One chip per tag */}
+            {allFilterTags.map((tag) => {
+              const count = contacts.filter((c) =>
+                contactAllTags(c).includes(tag)
+              ).length;
+              const active = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleFilterTag(tag)}
+                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-teal-600 text-white border-teal-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700"
+                  }`}
+                >
+                  {tagLabel(tag)}
+                  <span className={`mr-1 ${active ? "opacity-80" : "opacity-50"}`}>
+                    ({count})
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* Clear link (shown only when something is active) */}
+            {selectedTags.length > 0 && (
               <button
-                onClick={() => setFilterMode("or")}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  filterMode === "or"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                onClick={() => setSelectedTags([])}
+                className="shrink-0 text-xs text-muted-foreground underline underline-offset-2 hover:text-slate-700 mr-1 whitespace-nowrap"
               >
-                OR
+                נקה סינון
               </button>
-              <button
-                onClick={() => setFilterMode("and")}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  filterMode === "and"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                AND
-              </button>
-            </div>
-          )}
+            )}
+
+            {/* OR / AND toggle – shown only when 2+ tags are selected */}
+            {selectedTags.length >= 2 && (
+              <div className="shrink-0 flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 mr-1">
+                <button
+                  onClick={() => setFilterMode("or")}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    filterMode === "or"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  OR
+                </button>
+                <button
+                  onClick={() => setFilterMode("and")}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    filterMode === "and"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  AND
+                </button>
+              </div>
+            )}
+          </HScrollBar>
         </div>
       )}
 
@@ -427,17 +496,39 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
         {filtered.map((c, i) => {
           const tags = contactAllTags(c);
           return (
-            <Link
+            <div
               key={c.id}
+              className={cn(
+                "relative animate-fade-in-up",
+                i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`
+              )}
+            >
+              {selectMode && (
+                <div
+                  className="absolute top-2 left-2 z-10 flex size-8 items-center justify-center rounded-md bg-card/95 shadow-sm border border-border"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(c.id)}
+                    onCheckedChange={() => toggleSelectContact(c.id)}
+                    aria-label={`בחר ${c.name}`}
+                  />
+                </div>
+              )}
+            <Link
               href={`/crm/${c.id}`}
-              className={cn("block animate-fade-in-up", i < 12 && `stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`)}
+              className="block"
+              onClick={(e) => {
+                if (selectMode) e.preventDefault();
+              }}
             >
               {viewMode === "grid" ? (
                 <Card className="border-border hover:border-primary/30 hover:shadow-md transition-all cursor-pointer h-full card-interactive">
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2.5">
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                        {c.name[0]}
+                        {c.name?.trim()[0]?.toUpperCase() ?? "?"}
                       </div>
                       <p className="font-semibold truncate">{c.name}</p>
                     </div>
@@ -478,7 +569,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                 <Card className="border-border hover:border-primary/30 hover:bg-muted/30 transition-all cursor-pointer">
                   <CardContent className="py-2.5 px-4 flex items-center gap-3 min-w-0">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-                      {c.name[0]}
+                      {c.name?.trim()[0]?.toUpperCase() ?? "?"}
                     </div>
                     <p className="font-semibold text-sm min-w-[8rem] truncate shrink-0">{c.name}</p>
                     {c.phone && (
@@ -514,6 +605,7 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                 </Card>
               )}
             </Link>
+            </div>
           );
         })}
       </div>
@@ -710,7 +802,10 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                       אחד
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">בחר איש קשר ראשי (ישאר):</p>
+                  <p className="text-xs text-muted-foreground">
+                    בחר איש קשר ראשי (ישאר). שדות ריקים יימלאו מהכפולים; תגיות וטלפונים/מיילים נוספים
+                    יאוחדו; שמות חלופיים יתווספו להערות; תיק סופר (אם קיים) ימוזג לרשומה הראשית.
+                  </p>
                   {group.contacts.map((c) => (
                     <label
                       key={c.id}
@@ -748,6 +843,28 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>מחיקת אנשי קשר</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            למחוק <strong>{selectedIds.size}</strong> אנשי קשר? לא ניתן לבטל. רשומות המשויכות כסופר או לקוח
+            לפרויקט ספר תורה לא יימחקו.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>
+              ביטול
+            </Button>
+            <Button variant="destructive" disabled={bulkDeleteLoading} onClick={() => void handleBulkDelete()}>
+              {bulkDeleteLoading ? "מוחק…" : "מחק"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ScrollToTop />
     </div>
   );
 }

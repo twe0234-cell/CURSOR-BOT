@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +32,20 @@ import {
 } from "./actions";
 import { StarRating } from "@/components/ui/StarRating";
 
+/** הצעות לשדה קהילה / מוסד (לא עיר — עיר נשמרת בשדה ״עיר״ בנפרד) */
+const SOFER_COMMUNITY_SUGGESTIONS = [
+  "בית כנסת מרכזי",
+  "קהילה חב״ד מקומית",
+  "ישיבה / כולל",
+  "גבאות / ועד בית כנסת",
+  "מועצה דתית",
+  "היכל הנגיד",
+  "חבורת סופרים",
+  "קהילת הספרים",
+];
+
+const SOFER_COMMUNITY_LIST_ID = "sofer-community-suggestions";
+
 type Props = {
   initialRows: SoferDirectoryRow[];
 };
@@ -40,6 +55,9 @@ export default function SoferimClient({ initialRows }: Props) {
   const [rows, setRows] = useState(initialRows);
   const [filterLevel, setFilterLevel] = useState("");
   const [filterCity, setFilterCity] = useState("");
+  const [filterMinStars, setFilterMinStars] = useState("");
+  const [filterMinDaily, setFilterMinDaily] = useState("");
+  const [filterCommunity, setFilterCommunity] = useState("");
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
@@ -48,11 +66,26 @@ export default function SoferimClient({ initialRows }: Props) {
     a.localeCompare(b, "he")
   );
 
+  const communityOptions = [...new Set(rows.map((r) => (r.community ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "he")
+  );
+
   const visibleRows = rows.filter((r) => {
     if (filterLevel && !(r.writing_level ?? "").toLowerCase().includes(filterLevel.toLowerCase())) {
       return false;
     }
     if (filterCity && (r.city ?? "").trim() !== filterCity) return false;
+    if (filterMinStars) {
+      const min = Number(filterMinStars);
+      const q = r.handwriting_quality;
+      if (q == null || q < min) return false;
+    }
+    if (filterMinDaily) {
+      const minD = Number(filterMinDaily);
+      const d = r.daily_page_capacity;
+      if (d == null || d < minD) return false;
+    }
+    if (filterCommunity && (r.community ?? "").trim() !== filterCommunity) return false;
     return true;
   });
 
@@ -228,6 +261,11 @@ export default function SoferimClient({ initialRows }: Props) {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 min-h-screen">
+      <datalist id={SOFER_COMMUNITY_LIST_ID}>
+        {SOFER_COMMUNITY_SUGGESTIONS.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -256,6 +294,44 @@ export default function SoferimClient({ initialRows }: Props) {
                 {c}
               </option>
             ))}
+          </select>
+          <select
+            value={filterCommunity}
+            onChange={(e) => setFilterCommunity(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm min-w-[7rem]"
+            title="סינון לפי קהילה בתיק סופר"
+          >
+            <option value="">כל הקהילות</option>
+            {communityOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterMinStars}
+            onChange={(e) => setFilterMinStars(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm w-[7.5rem]"
+            title="מינימום כוכבי כתב (רק סופרים עם דירוג)"
+          >
+            <option value="">כל הכוכבים</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={String(n)}>
+                {n}+ כוכבים
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterMinDaily}
+            onChange={(e) => setFilterMinDaily(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm w-[8rem]"
+            title="מינימום עמודים ליום (רק עם נתון בתיק)"
+          >
+            <option value="">כל הקיבולות</option>
+            <option value="5">5+ ליום</option>
+            <option value="10">10+ ליום</option>
+            <option value="15">15+ ליום</option>
+            <option value="20">20+ ליום</option>
           </select>
           <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Button
@@ -491,7 +567,8 @@ export default function SoferimClient({ initialRows }: Props) {
                   <Input
                     value={form.community}
                     onChange={(e) => setForm((f) => ({ ...f, community: e.target.value }))}
-                    placeholder="מוסד / קהילה"
+                    placeholder="בחר מהרשימה או הקלד"
+                    list={SOFER_COMMUNITY_LIST_ID}
                   />
                 </div>
               </div>
@@ -528,7 +605,8 @@ export default function SoferimClient({ initialRows }: Props) {
                   <Input
                     value={form.community}
                     onChange={(e) => setForm((f) => ({ ...f, community: e.target.value }))}
-                    placeholder="מוסד / קהילה"
+                    placeholder="בחר מהרשימה או הקלד"
+                    list={SOFER_COMMUNITY_LIST_ID}
                   />
                 </div>
               </>
@@ -628,6 +706,8 @@ export default function SoferimClient({ initialRows }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ScrollToTop />
     </div>
   );
 }

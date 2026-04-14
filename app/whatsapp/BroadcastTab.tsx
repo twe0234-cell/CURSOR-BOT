@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition, useMemo } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { isImageFile } from "@/lib/upload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HScrollBar } from "@/components/ui/HScrollBar";
 import dynamic from "next/dynamic";
 
 const EmojiPicker = dynamic(
@@ -52,12 +54,15 @@ type GroupOption = { wa_chat_id: string; name: string | null };
 
 type Props = {
   allTags: string[];
+  /** תגיות מוצעות מ־user_settings — אותו מקור כמו בהגדרות Green API */
+  allowedTags: string[];
   prefilledMessage?: string;
   groups?: GroupOption[];
 };
 
 export default function BroadcastTab({
   allTags,
+  allowedTags,
   prefilledMessage = "",
   groups = [],
 }: Props) {
@@ -80,6 +85,11 @@ export default function BroadcastTab({
   const [isPending, startTransition] = useTransition();
   const [groupSearch, setGroupSearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const allowedSet = useMemo(
+    () => new Set((allowedTags ?? []).map((t) => t.trim()).filter(Boolean)),
+    [allowedTags]
+  );
 
   useEffect(() => {
     fetchNextScribeNumber().then((res) => {
@@ -272,11 +282,9 @@ export default function BroadcastTab({
       const errors: string[] = [];
       const finalScribe = scribeCode.trim() || undefined;
 
-      const progressInterval = 5;
+      setSendProgress({ current: 0, total });
       for (let i = 0; i < targets.length; i++) {
-        if (i % progressInterval === 0 || i === targets.length - 1) {
-          setSendProgress({ current: i + 1, total });
-        }
+        setSendProgress({ current: i + 1, total });
         const target = targets[i];
         try {
           const vars = { Name: target.name ?? "", name: target.name ?? "" };
@@ -380,28 +388,40 @@ export default function BroadcastTab({
         <Card className="shadow-sm rounded-xl border-slate-200 bg-white overflow-hidden">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <RadioIcon className="w-5 h-5 text-indigo-500" />
+              <RadioIcon className="w-5 h-5 text-sky-500" />
               <CardTitle className="text-base font-semibold text-slate-700">בחירת קהל יעד</CardTitle>
             </div>
-            <CardDescription>בחר תגיות או קבוצות ספציפיות</CardDescription>
+            <CardDescription>
+              בחר תגיות לפילוח קהל היעד או קבוצות וואטסאפ ספציפיות
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">תגיות</label>
-              <div className="flex flex-wrap gap-2">
-                {(allTags ?? []).map((tag) => (
+              <label className="mb-2 block text-sm font-semibold text-slate-700">תגיות לפילוח</label>
+              {(allTags ?? []).length === 0 ? null : (
+              <HScrollBar contentClassName="flex gap-2 flex-nowrap pb-1">
+                {(allTags ?? []).map((tag) => {
+                  const inPreset = allowedSet.has(tag);
+                  return (
                   <label
                     key={tag}
-                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                    className={cn(
+                      "flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 transition-colors",
+                      inPreset
+                        ? "border-sky-200 bg-sky-50/80 hover:bg-sky-50"
+                        : "border-amber-200 bg-amber-50/60 hover:bg-amber-50/90"
+                    )}
                   >
                     <Checkbox
                       checked={selectedTags.has(tag)}
                       onCheckedChange={() => toggleTag(tag)}
                     />
-                    <span className="text-sm">{tag}</span>
+                    <span className="text-sm whitespace-nowrap">{tag}</span>
                   </label>
-                ))}
-              </div>
+                  );
+                })}
+              </HScrollBar>
+              )}
             </div>
             {groups.length > 0 && (
               <div>
@@ -430,7 +450,10 @@ export default function BroadcastTab({
             )}
             {(allTags.length === 0 && groups.length === 0) && (
               <p className="text-sm text-muted-foreground">
-                הוסף תגיות בהגדרות או ייבא קבוצות
+                אין עדיין תגיות או קבוצות —{" "}
+                <Link href="/audience" className="text-sky-600 underline">ניהול קהל</Link>
+                {" "}|{" "}
+                <Link href="/settings" className="text-sky-600 underline">הגדרות</Link>
               </p>
             )}
             <Button
@@ -527,7 +550,7 @@ export default function BroadcastTab({
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="שלום {Name}, ..."
                 rows={5}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
               />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
@@ -541,7 +564,7 @@ export default function BroadcastTab({
                 accept="image/*"
                 onChange={handleFileChange}
                 disabled={uploading}
-                className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
               />
               {uploading && <p className="mt-2 text-sm text-muted-foreground">מעלה...</p>}
               {imageUrl && !uploading && (
@@ -555,7 +578,7 @@ export default function BroadcastTab({
                       toast.error("לא ניתן לטעון תצוגה מקדימה — בדוק את קישור האחסון");
                     }}
                   />
-                  <p className="text-sm text-indigo-600 truncate" title={imageUrl}>
+                  <p className="text-sm text-sky-600 truncate" title={imageUrl}>
                     {imageFile?.name || "תמונה הועלתה"}
                   </p>
                   <p className="text-xs text-muted-foreground break-all">{imageUrl}</p>
@@ -568,7 +591,7 @@ export default function BroadcastTab({
         <Button
           onClick={handleSend}
           disabled={loading || isPending || (selectedTags.size === 0 && selectedGroups.size === 0) || uploading}
-          className="w-full rounded-xl bg-indigo-600 py-6 text-base font-semibold hover:bg-indigo-700 hover:shadow-lg"
+          className="w-full rounded-xl bg-sky-600 py-6 text-base font-semibold hover:bg-sky-700 hover:shadow-lg"
         >
           <SendIcon className={cn("size-4 ml-2", loading && "animate-pulse")} />
           {loading && sendProgress

@@ -20,7 +20,8 @@ import {
   ScrollText,
   BookOpen,
   Users,
-  Megaphone,
+  ArrowLeftRight,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,11 +36,11 @@ export default function NavBar() {
     router.refresh();
   }
 
-  /** Order: core → דיוור ונמענים (ליד WhatsApp) → ERP */
+  /** Order: core → תקשורת → ERP */
   const navItems = [
-    { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
+    { href: "/", label: "לוח בקרה", icon: Home },
+    { href: "/transactions", label: "תנועות", icon: ArrowLeftRight },
     { href: "/audience", label: "נמענים", icon: Users },
-    { href: "/broadcast", label: "דיוור", icon: Megaphone },
     { href: "/whatsapp", label: "WhatsApp", icon: Radio },
     { href: "/email", label: "אימייל", icon: Mail },
     { href: "/calculator", label: "מחשבון", icon: Calculator },

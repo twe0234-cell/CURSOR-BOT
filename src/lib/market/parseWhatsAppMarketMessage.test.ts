@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STAM_SCRIPT_TYPES } from "@/src/lib/stam/catalog";
 import {
   parseMarketTorahMessage,
   parsedMessageIsActionable,
@@ -16,9 +17,9 @@ describe("parseMarketTorahMessage — פורמט חדש (ירידת שורה)", 
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it('ב"י עם מרכאות רגילות', () => {
+  it('ב"י עם מרכאות רגילות → ערך קנוני ל-DB (ב״י)', () => {
     const p = parseMarketTorahMessage('ב"י\n36\nכהן\nעוד חודש\n95');
-    expect(p.script_type).toBe('ב"י');
+    expect(p.script_type).toBe(STAM_SCRIPT_TYPES[1]);
     expect(p.torah_size).toBe("36");
     expect(p.owner_name).toBe("כהן");
     expect(p.asking_price_full_shekels).toBe(95_000);
@@ -125,8 +126,8 @@ describe("parseMarketTorahMessage — פורמט חדש (ירידת שורה)", 
     expect(parsedMessageIsActionable(p)).toBe(true);
   });
 
-  it("בי ללא מרכאות → ב\"י", () => {
+  it("בי ללא מרכאות → ב״י קנוני", () => {
     const p = parseMarketTorahMessage("בי\n36\n\n\n100");
-    expect(p.script_type).toBe('ב"י');
+    expect(p.script_type).toBe(STAM_SCRIPT_TYPES[1]);
   });
 });

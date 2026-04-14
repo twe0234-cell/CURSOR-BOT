@@ -7,9 +7,9 @@ import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
 import { generateSku, marketSkuPrefix } from "@/lib/sku";
 import type { MarketStage } from "./stages";
 
-/** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline (מיגרציה 058) */
+/** כולל סוחר + משא ומתן + SKU + דוגמת כתב + שלב pipeline (מיגרציה 058) + קישור מכירה (063) */
 const MARKET_SELECT_EXT =
-  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, created_at";
+  "id, sku, sofer_id, dealer_id, external_sofer_name, script_type, torah_size, parchment_type, influencer_style, asking_price, target_brokerage_price, potential_profit, currency, last_contact_date, negotiation_notes, expected_completion_date, notes, handwriting_image_url, market_stage, sale_id, created_at";
 
 export type MarketTorahBookRow = {
   id: string;
@@ -32,6 +32,8 @@ export type MarketTorahBookRow = {
   notes: string | null;
   handwriting_image_url: string | null;
   market_stage: MarketStage | null;
+  /** FK → erp_sales.id (migration 063) */
+  sale_id: string | null;
   created_at: string;
   sofer_name: string | null;
   dealer_name: string | null;
@@ -77,8 +79,9 @@ function mapBookRow(
     expected_completion_date: (b.expected_completion_date as string | null) ?? null,
     notes: (b.notes as string | null) ?? null,
     handwriting_image_url: (b.handwriting_image_url as string | null) ?? null,
+    market_stage: (b.market_stage as MarketStage | null) ?? "new",
     created_at: (b.created_at as string) ?? "",
-    market_stage: (b.market_stage as MarketStage | null) ?? null,
+    sale_id: (b.sale_id as string | null) ?? null,
   };
 }
 
@@ -338,6 +341,86 @@ export async function deleteMarketTorahBook(id: string): Promise<
   }
 }
 
+// ─── יומן מגעים ─────────────────────────────────────────────────────────────
+
+export type MarketContactLogEntry = {
+  id: string;
+  note: string;
+  contacted_at: string;
+};
+
+export async function fetchMarketContactLogs(bookId: string): Promise<
+  { success: true; logs: MarketContactLogEntry[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("market_contact_logs")
+      .select("id, note, contacted_at")
+      .eq("book_id", bookId)
+      .eq("user_id", user.id)
+      .order("contacted_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, logs: (data ?? []) as MarketContactLogEntry[] };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function addMarketContactLog(
+  bookId: string,
+  note: string,
+  contactedAt?: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const trimmed = note.trim();
+    if (!trimmed) return { success: false, error: "הזן הערה" };
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase.from("market_contact_logs").insert({
+      user_id: user.id,
+      book_id: bookId,
+      note: trimmed,
+      contacted_at: contactedAt ? new Date(contactedAt).toISOString() : new Date().toISOString(),
+    });
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function deleteMarketContactLog(logId: string): Promise<
+  { success: true } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_contact_logs")
+      .delete()
+      .eq("id", logId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 export async function updateMarketStage(
   id: string,
   stage: MarketStage
@@ -358,9 +441,66 @@ export async function updateMarketStage(
     if (error) return { success: false, error: error.message };
 
     revalidatePath("/market");
+    revalidatePath("/market/kanban");
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
 }
 
+// ── Sale link (migration 063) ─────────────────────────────────────────────────
+
+/** Fetch recent sales (last 30) for the link-to-sale picker */
+export async function fetchRecentSalesForLink(): Promise<
+  { success: true; sales: { id: string; label: string; sale_date: string }[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase
+      .from("erp_sales")
+      .select("id, sale_date, sale_type, item_description, buyer_id, crm_contacts!erp_sales_buyer_id_fkey(name)")
+      .eq("user_id", user.id)
+      .order("sale_date", { ascending: false })
+      .limit(40);
+
+    if (error) return { success: false, error: error.message };
+
+    const sales = (data ?? []).map((r: Record<string, unknown>) => {
+      const buyer = (r.crm_contacts as { name?: string } | null)?.name ?? "";
+      const desc = (r.item_description as string | null) ?? (r.sale_type as string | null) ?? "מכירה";
+      const date = (r.sale_date as string ?? "").slice(0, 10);
+      return { id: r.id as string, label: `${date} | ${desc}${buyer ? ` — ${buyer}` : ""}`, sale_date: date };
+    });
+
+    return { success: true, sales };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** Link a market Torah book to an erp_sale (or unlink with null) */
+export async function linkBookToSale(
+  bookId: string,
+  saleId: string | null
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase
+      .from("market_torah_books")
+      .update({ sale_id: saleId })
+      .eq("id", bookId)
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/market");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}

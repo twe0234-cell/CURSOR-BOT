@@ -21,6 +21,12 @@ export default async function EmailCampaignsPage() {
     .eq("id", "default")
     .single();
 
+  const { data: userSettings } = await supabase
+    .from("user_settings")
+    .select("email_tag_presets")
+    .eq("user_id", user.id)
+    .single();
+
   const mapped = (contacts ?? []).map((c) => ({
     id: c.id,
     email: c.email ?? "",
@@ -49,6 +55,11 @@ export default async function EmailCampaignsPage() {
         <CampaignsClient
           initialContacts={mapped}
           signature={sysSettings?.email_signature ?? null}
+          initialEmailTagPresets={
+            Array.isArray(userSettings?.email_tag_presets)
+              ? (userSettings.email_tag_presets as string[])
+              : []
+          }
         />
       </div>
     </div>

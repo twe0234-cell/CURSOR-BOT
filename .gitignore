@@ -45,3 +45,5 @@ next-env.d.ts
 # Local spreadsheets (do not commit)
 *.csv
 *.xlsx
+.mcp.json
+.mcp.json.local

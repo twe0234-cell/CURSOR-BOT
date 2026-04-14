@@ -131,6 +131,7 @@ export async function saveImportedGroups(
     }
 
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
@@ -205,6 +206,7 @@ export async function syncAudience(): Promise<ActionResult> {
 
     if (toUpsert.length === 0) {
       revalidatePath("/audience");
+      revalidatePath("/whatsapp");
       return { success: true };
     }
 
@@ -218,6 +220,7 @@ export async function syncAudience(): Promise<ActionResult> {
     }
 
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
@@ -240,6 +243,7 @@ export async function deleteRecipient(id: string): Promise<ActionResult> {
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
@@ -269,6 +273,7 @@ export async function bulkDeleteRecipients(ids: string[]): Promise<ActionResult>
       if (error) return { success: false, error: error.message };
     }
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -297,30 +302,33 @@ export async function bulkApplyTags(
       return { success: false, error: "בחר תגיות תקינות" };
     }
 
-    for (const id of recipientIds) {
-      if (!id) continue;
-      const { data: row } = await supabase
+    const ids = recipientIds.filter(Boolean);
+    for (let i = 0; i < ids.length; i += BULK_DELETE_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_DELETE_CHUNK);
+      const { data: rows, error: selectErr } = await supabase
         .from("audience")
-        .select("tags")
-        .eq("id", id)
+        .select("id, tags")
         .eq("user_id", user.id)
-        .single();
+        .in("id", chunk);
 
-      const currentTags = (row?.tags ?? []) as string[];
-      const merged = [...new Set([...currentTags, ...validTags])];
+      if (selectErr) return { success: false, error: selectErr.message };
 
-      const { error } = await supabase
-        .from("audience")
-        .update({ tags: merged, updated_at: new Date().toISOString() })
-        .eq("id", id)
-        .eq("user_id", user.id);
+      for (const row of rows ?? []) {
+        const currentTags = (row.tags ?? []) as string[];
+        const merged = [...new Set([...currentTags, ...validTags])];
 
-      if (error) {
-        return { success: false, error: error.message };
+        const { error } = await supabase
+          .from("audience")
+          .update({ tags: merged, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+
+        if (error) return { success: false, error: error.message };
       }
     }
 
     revalidatePath("/audience");
+    revalidatePath("/whatsapp");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";

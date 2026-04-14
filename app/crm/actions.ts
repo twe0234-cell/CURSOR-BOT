@@ -74,7 +74,10 @@ export async function createMerchantContact(name: string) {
 
 export async function createScribeContact(name: string) {
   const result = await crm.createScribeContact(name);
-  if (result.success) revalidatePath("/crm");
+  if (result.success) {
+    revalidatePath("/crm");
+    revalidatePath("/soferim");
+  }
   return result;
 }
 
@@ -86,7 +89,10 @@ export async function bulkImportCrmContacts(rows: Record<string, unknown>[]) {
 
 export async function createCrmContact(input: crm.CreateCrmContactInput) {
   const result = await crm.createCrmContact(input);
-  if (result.success) revalidatePath("/crm");
+  if (result.success) {
+    revalidatePath("/crm");
+    if (input.type === "Scribe") revalidatePath("/soferim");
+  }
   return result;
 }
 
@@ -98,6 +104,7 @@ export async function updateCrmContact(
   if (result.success) {
     revalidatePath("/crm");
     revalidatePath(`/crm/${id}`);
+    revalidatePath("/soferim");
   }
   return result;
 }
@@ -162,7 +169,10 @@ export async function upsertSoferProfile(
   fields: Parameters<typeof crm.upsertSoferProfile>[1]
 ) {
   const result = await crm.upsertSoferProfile(contactId, fields);
-  if (result.success) revalidatePath(`/crm/${contactId}`);
+  if (result.success) {
+    revalidatePath(`/crm/${contactId}`);
+    revalidatePath("/soferim");
+  }
   return result;
 }
 
@@ -172,6 +182,22 @@ export async function findDuplicateCrmContacts() {
 
 export async function mergeCrmContacts(primaryId: string, duplicateIds: string[]) {
   const result = await crm.mergeCrmContacts(primaryId, duplicateIds);
-  if (result.success) revalidatePath("/crm");
+  if (result.success) {
+    revalidatePath("/crm");
+    revalidatePath("/soferim");
+    revalidatePath("/market");
+  }
+  return result;
+}
+
+export async function bulkDeleteCrmContacts(ids: string[]) {
+  const result = await crm.bulkDeleteCrmContacts(ids);
+  if (result.success) {
+    revalidatePath("/crm");
+    revalidatePath("/soferim");
+    revalidatePath("/sales");
+    revalidatePath("/market");
+    revalidatePath("/investments");
+  }
   return result;
 }

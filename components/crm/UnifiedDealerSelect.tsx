@@ -15,7 +15,7 @@ export type UnifiedDealerSelectProps = {
   className?: string;
 };
 
-/** CRM סוחרים — `crm_contacts.type = 'Merchant'`. */
+/** כל אנשי הקשר ב-CRM — לבחירת בעלים/סוחר. */
 export function UnifiedDealerSelect({
   value,
   onChange,
@@ -119,7 +119,7 @@ export function UnifiedDealerSelect({
               }}
               className="w-full px-3 py-2 text-right text-sm text-muted-foreground hover:bg-muted"
             >
-              — ללא סוחר (הבעלים = הסופר) —
+              — ללא בעלים נפרד —
             </button>
             {loading ? (
               <div className="px-3 py-4 text-center text-sm text-muted-foreground">טוען...</div>

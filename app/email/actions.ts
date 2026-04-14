@@ -158,6 +158,84 @@ export async function updateEmailContactTags(
   }
 }
 
+/** מיזוג תגיות ללא כפילויות — לפילוח רשימות (VIP, סוחרים קרים וכו׳) */
+export async function bulkAddTagsToEmailContacts(
+  ids: string[],
+  tagsToAdd: string[]
+): Promise<ActionResult> {
+  const add = [...new Set(tagsToAdd.map((t) => t.trim()).filter(Boolean))];
+  if (!ids.length) return { success: false, error: "בחר אנשי קשר" };
+  if (!add.length) return { success: false, error: "הזן תגית אחת לפחות" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      const { data: rows, error: selErr } = await supabase
+        .from("email_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selErr) return { success: false, error: selErr.message };
+      for (const row of rows ?? []) {
+        const cur = (row.tags ?? []) as string[];
+        const merged = [...new Set([...cur, ...add])];
+        const { error: upErr } = await supabase
+          .from("email_contacts")
+          .update({ tags: merged, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (upErr) return { success: false, error: upErr.message };
+      }
+    }
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
+/** הסרת תגית אחת מכל הנבחרים — להפרדת רשימות */
+export async function bulkRemoveTagFromEmailContacts(
+  ids: string[],
+  tagToRemove: string
+): Promise<ActionResult> {
+  const tag = tagToRemove.trim();
+  if (!ids.length) return { success: false, error: "בחר אנשי קשר" };
+  if (!tag) return { success: false, error: "הזן תגית להסרה" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      const { data: rows, error: selErr } = await supabase
+        .from("email_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selErr) return { success: false, error: selErr.message };
+      for (const row of rows ?? []) {
+        const cur = (row.tags ?? []) as string[];
+        const next = cur.filter((t) => t !== tag);
+        const { error: upErr } = await supabase
+          .from("email_contacts")
+          .update({ tags: next.length ? next : ["כללי"], updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (upErr) return { success: false, error: upErr.message };
+      }
+    }
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
+  }
+}
+
 export async function importGmailContactsForEmail(): Promise<
   { success: true; imported: number } | { success: false; error: string }
 > {
@@ -259,114 +337,132 @@ export type SendCampaignResult =
   | { success: true; sent: number; failed: number }
   | { success: false; error: string };
 
-export async function sendEmailCampaign(
-  contactIds: string[],
-  subject: string,
-  bodyHtml: string
-): Promise<SendCampaignResult> {
-  if (!contactIds.length) return { success: false, error: "בחר נמענים" };
-  if (!subject.trim()) return { success: false, error: "הזן נושא" };
-
+/**
+ * ייבוא אנשי קשר מ-CRM (שיש להם אימייל) לרשימת תפוצה.
+ * מבצע upsert — אנשי קשר קיימים ברשימה לא ימחקו.
+ * מחזיר כמה נוספו/עדכנו.
+ */
+export async function importCrmContactsToEmail(): Promise<
+  | { success: true; added: number; total: number }
+  | { success: false; error: string }
+> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("gmail_refresh_token, gmail_email")
+    const { data: crmRows, error: fetchErr } = await supabase
+      .from("crm_contacts")
+      .select("id, name, email, phone")
       .eq("user_id", user.id)
-      .single();
+      .not("email", "is", null)
+      .neq("email", "");
 
-    if (!settings?.gmail_refresh_token) {
-      return { success: false, error: "חבר Gmail בהגדרות" };
+    if (fetchErr) return { success: false, error: fetchErr.message };
+
+    const valid = (crmRows ?? []).filter(
+      (r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim())
+    );
+
+    if (valid.length === 0) {
+      return { success: true, added: 0, total: 0 };
     }
 
-    const toSend: { id: string; email: string; name: string | null }[] = [];
-    for (let i = 0; i < contactIds.length; i += BULK_CHUNK) {
-      const chunk = contactIds.slice(i, i + BULK_CHUNK);
-      const { data } = await supabase
-        .from("email_contacts")
-        .select("id, email, name")
-        .eq("user_id", user.id)
-        .eq("subscribed", true)
-        .in("id", chunk);
-      for (const c of data ?? []) {
-        if (c?.email) toSend.push({ id: c.id, email: c.email, name: c.name ?? null });
-      }
-    }
-    if (toSend.length === 0) {
-      return { success: false, error: "לא נמצאו נמענים פעילים" };
-    }
+    const { data: existing } = await supabase
+      .from("email_contacts")
+      .select("email")
+      .eq("user_id", user.id);
+    const existingSet = new Set(
+      (existing ?? []).map((r) => (r.email ?? "").toLowerCase().trim())
+    );
 
-    const { getAccessToken, sendEmail } = await import("@/src/lib/gmail");
-    const accessToken = await getAccessToken(settings.gmail_refresh_token);
-    const fromEmail = settings.gmail_email ?? "noreply@example.com";
+    const toInsert = valid.map((r) => ({
+      user_id: user.id,
+      email: String(r.email).trim().toLowerCase(),
+      name: (r.name ?? "").trim() || null,
+      phone: (r.phone ?? "").trim() || null,
+      tags: ["CRM"],
+      subscribed: true,
+      source: "crm",
+    }));
 
-    const { data: campaign } = await supabase
-      .from("email_campaigns")
-      .insert({ user_id: user.id, subject, body_html: bodyHtml })
-      .select("id")
-      .single();
+    const { error: upsertErr } = await supabase.from("email_contacts").upsert(toInsert, {
+      onConflict: "user_id,email",
+      ignoreDuplicates: false,
+    });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    let sent = 0;
-    let failed = 0;
+    if (upsertErr) return { success: false, error: upsertErr.message };
 
-    for (const c of toSend) {
-      const logRes = await supabase
-        .from("email_logs")
-        .insert({
-          campaign_id: campaign?.id ?? null,
-          contact_id: c.id,
-          status: "sent",
-        })
-        .select("id")
-        .single();
-
-      const logId = logRes.data?.id;
-      const trackUrl = `${appUrl}/api/email/track/${logId ?? "x"}`;
-      const unsubUrl = `${appUrl}/api/email/unsubscribe/${logId ?? "x"}`;
-
-      const html = `
-<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="utf-8"></head>
-<body style="font-family:Heebo,sans-serif;padding:20px;direction:rtl">
-${bodyHtml || "<p>שלום,</p>"}
-<hr style="margin:24px 0;border:none;border-top:1px solid #eee">
-<p style="font-size:12px;color:#888">
-<a href="${unsubUrl}" style="color:#888">הסר מנוי</a>
-</p>
-<img src="${trackUrl}" width="1" height="1" alt="" style="display:block" />
-</body>
-</html>`;
-
-      try {
-        await sendEmail(
-          accessToken,
-          c.email!,
-          subject,
-          html,
-          fromEmail,
-          "Broadcast Buddy"
-        );
-        sent++;
-      } catch {
-        failed++;
-      }
-
-      if (sent % 5 === 0 && sent > 0) {
-        await new Promise((r) => setTimeout(r, 500));
-      }
-    }
-
+    const added = toInsert.filter((r) => !existingSet.has(r.email)).length;
     revalidatePath("/email");
-    return { success: true, sent, failed };
+    return { success: true, added, total: toInsert.length };
   } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "שגיאה בשליחה",
-    };
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/**
+ * הוספת איש קשר בודד מ-CRM לרשימת תפוצה.
+ */
+export async function addCrmContactToEmailList(
+  name: string,
+  email: string,
+  phone?: string | null
+): Promise<ActionResult> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return { success: false, error: "אימייל לא תקין" };
+  }
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { error } = await supabase.from("email_contacts").upsert(
+      {
+        user_id: user.id,
+        email: cleanEmail,
+        name: name.trim() || null,
+        phone: (phone ?? "").trim() || null,
+        tags: ["CRM"],
+        subscribed: true,
+        source: "crm",
+      },
+      { onConflict: "user_id,email" }
+    );
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/email");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** תגיות מוצעות לקמפייני אימייל בלבד — לא מערבב עם allowed_tags של וואטסאפ */
+export async function saveEmailCampaignTagPresets(
+  presets: string[]
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const cleaned = [...new Set((presets ?? []).map((t) => String(t).trim()).filter(Boolean))];
+
+    const { error } = await supabase
+      .from("user_settings")
+      .update({
+        email_tag_presets: cleaned,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/email");
+    revalidatePath("/email/campaigns");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
 }

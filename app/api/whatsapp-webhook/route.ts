@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   extractTextFromGreenIncomingWebhookMessageData,
+  extractImageUrlFromMessageData,
   greenApiSetMessageReaction,
+  greenApiSendChatMessage,
+  normalizeWhatsAppChatId,
 } from "@/lib/whatsapp/greenApi";
 import { logWarn } from "@/lib/logger";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
@@ -11,11 +14,21 @@ import {
   parseMarketTorahMessage,
   parsedMessageIsActionable,
 } from "@/src/lib/market/parseWhatsAppMarketMessage";
+import { STAM_SEFER_TORAH_SIZES } from "@/src/lib/stam/catalog";
 
 export const dynamic = "force-dynamic";
 
 const REACTION_OK = "✅";
 const REACTION_FAIL = "❌";
+
+/**
+ * סמן בלתי נראה בתחילת כל הודעת בוט — מונע לולאה אינסופית.
+ * כאשר הבוט שולח הודעה לקבוצה, היא חוזרת כ-outgoingMessageReceived.
+ * אם הטקסט מתחיל ב-\u200B, הבוט מדלג עליה ואינו מנסה לעבד אותה.
+ */
+const BOT_MESSAGE_MARKER = "\u200B";
+
+const ALLOWED_MARKET_TORAH_SIZES = new Set<string>(STAM_SEFER_TORAH_SIZES);
 
 function ok200(): NextResponse {
   return NextResponse.json({ ok: true }, { status: 200 });
@@ -38,14 +51,37 @@ async function sendReactionSafe(
   }
 }
 
+async function sendTextSafe(
+  instanceId: string,
+  token: string,
+  chatId: string,
+  message: string
+): Promise<void> {
+  try {
+    const r = await greenApiSendChatMessage(instanceId, token, chatId, BOT_MESSAGE_MARKER + message);
+    if (!r.ok) {
+      console.warn("[whatsapp-webhook] sendMessage failed:", r.error);
+    }
+  } catch (e) {
+    console.warn("[whatsapp-webhook] sendMessage error:", e);
+  }
+}
+
 function normalizeWaId(raw: string): string {
-  return raw.trim().toLowerCase();
+  return normalizeWhatsAppChatId(raw).trim().toLowerCase();
+}
+
+function formatPrice(shekels: number): string {
+  return shekels >= 1000
+    ? `${(shekels / 1000).toLocaleString("he-IL")}K ₪`
+    : `${shekels.toLocaleString("he-IL")} ₪`;
 }
 
 /**
  * Green API → סנכרון מאגר ס״ת.
  * מעבדים `incomingMessageReceived` + `outgoingMessageReceived` (כדי לייבא גם הודעות שנשלחו ע"י המשתמש לקבוצה).
- * כדי למנוע לולאה, תגובת אימוג׳י נשלחת רק להודעות incoming.
+ * תגובת אימוג׳י + הודעת טקסט נשלחות אחרי כל עיבוד.
+ * מניעת לולאה: הודעות בוט מתחילות ב-\u200B ומדולגות בעת עיבוד.
  * אימות: `?token=` חייב להתאים ל־WEBHOOK_SECRET; אחרת 401.
  * לאחר אימות — תמיד 200 ל-Green API.
  */
@@ -53,18 +89,28 @@ export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const expected = process.env.WEBHOOK_SECRET ?? "";
   if (!token || token !== expected) {
+    console.warn("[whatsapp-webhook] 401 token mismatch — received:", token?.slice(0, 6), "expected_len:", expected.length);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const admin = createAdminClient();
+
+  const dbg = (message: string, metadata?: Record<string, unknown>) => {
+    if (!admin) return;
+    void admin.from("sys_logs").insert({ level: "DEBUG", module: "whatsapp-webhook", message, metadata: metadata ?? {} });
+  };
 
   try {
     let body: unknown;
     try {
       body = await req.json();
     } catch {
+      await dbg("parse-error: failed to parse JSON body");
       return ok200();
     }
 
     if (!body || typeof body !== "object") {
+      await dbg("parse-error: body not object");
       return ok200();
     }
 
@@ -73,6 +119,9 @@ export async function POST(req: NextRequest) {
     const typeWebhook = String(b.typeWebhook ?? "");
     const isIncoming = typeWebhook === "incomingMessageReceived";
     const isOutgoing = typeWebhook === "outgoingMessageReceived";
+
+    await dbg("received", { typeWebhook, idMessage: b.idMessage });
+
     if (!isIncoming && !isOutgoing) {
       return ok200();
     }
@@ -84,8 +133,8 @@ export async function POST(req: NextRequest) {
         ? String(idInstanceRaw).trim()
         : "";
 
-    const admin = createAdminClient();
     if (!admin || !instanceId) {
+      await dbg("skip: no admin or instanceId", { instanceId });
       return ok200();
     }
 
@@ -101,11 +150,12 @@ export async function POST(req: NextRequest) {
     const configuredGroup = String(settings?.wa_market_group_id ?? "").trim();
 
     if (!greenApiToken || !userId) {
+      await dbg("skip: no settings for instanceId", { instanceId, found: !!settings });
       return ok200();
     }
 
     const senderData = b.senderData as Record<string, unknown> | undefined;
-    const chatIdRaw = String(senderData?.chatId ?? "").trim();
+    const chatIdRaw = String(senderData?.chatId ?? b.chatId ?? "").trim();
     const chatIdNorm = normalizeWaId(chatIdRaw);
     const configuredGroupNorm = normalizeWaId(configuredGroup);
 
@@ -113,49 +163,90 @@ export async function POST(req: NextRequest) {
       logWarn("whatsapp-webhook", "chatId mismatch - ignoring", {
         user_id: userId,
         chatId: chatIdRaw || null,
+        chatIdNorm: chatIdNorm || null,
         configuredGroup: configuredGroup || null,
+        configuredGroupNorm: configuredGroupNorm || null,
       });
       return ok200();
     }
 
-    const chatId = chatIdRaw;
+    const chatId = normalizeWhatsAppChatId(chatIdRaw);
 
     const instanceWid = normalizeWaId(String(instanceData?.wid ?? ""));
     const senderId = normalizeWaId(String(senderData?.sender ?? ""));
 
-    if (!senderId) {
+    if (!senderId && isIncoming) {
+      await dbg("skip: incoming with no sender", { typeWebhook });
       return ok200();
     }
 
     if (isIncoming && instanceWid && senderId === instanceWid) {
+      await dbg("skip: incoming self-message (echo)", { senderId, instanceWid });
       return ok200();
     }
 
     const idMessage = String(b.idMessage ?? "").trim();
     if (!idMessage) {
+      await dbg("skip: no idMessage");
       return ok200();
     }
 
     const text = extractTextFromGreenIncomingWebhookMessageData(b.messageData);
+    const imageUrl = extractImageUrlFromMessageData(b.messageData);
+
+    // מניעת לולאה: דלג על הודעות שנשלחו ע"י הבוט עצמו
+    if (text.startsWith(BOT_MESSAGE_MARKER)) {
+      await dbg("skip: bot's own message (loop guard)", { idMessage });
+      return ok200();
+    }
+
+    await dbg("processing message", { typeWebhook, idMessage, textLen: text.length, hasImage: !!imageUrl });
+
+    // תמונה בלי כיתוב = ספר תורה ממתין לפרטים (image_pending)
+    if (!text && imageUrl) {
+      await dbg("image-only — creating image_pending entry", { idMessage });
+      const skuImg = generateSku(marketSkuPrefix);
+      const { error: imgErr } = await admin.from("market_torah_books").insert({
+        user_id: userId,
+        sku: skuImg,
+        source_message_id: idMessage,
+        sofer_id: null, dealer_id: null, external_sofer_name: null,
+        script_type: null, torah_size: null, parchment_type: null, influencer_style: null,
+        asking_price: null, target_brokerage_price: null, currency: "ILS",
+        expected_completion_date: null, notes: null, last_contact_date: null,
+        negotiation_notes: null, handwriting_image_url: imageUrl,
+        market_stage: "image_pending",
+      });
+      if (!imgErr || imgErr.code === "23505") {
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `📷 תמונה נשמרה במאגר (${skuImg}) — ממתין לפרטים`);
+      } else {
+        await dbg("image-only insert error", { code: imgErr.code, message: imgErr.message });
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `❌ שגיאה בשמירת התמונה (${imgErr.code})`);
+      }
+      return ok200();
+    }
 
     if (!text) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await dbg("skip: no text and no image");
       return ok200();
     }
 
     const parsed = parseMarketTorahMessage(text);
     if (!parsedMessageIsActionable(parsed)) {
-      if (!isOutgoing) {
-        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-      }
+      await dbg("not-actionable", { parsed });
+      // לא שולחים ❌ על הודעות רגילות שלא בפורמט ס"ת
       return ok200();
     }
 
     const askFull = parsed.asking_price_full_shekels!;
     const askDb = marketKToDb(marketDbToK(askFull));
     const sku = generateSku(marketSkuPrefix);
+    const torahSizeDb =
+      parsed.torah_size != null && ALLOWED_MARKET_TORAH_SIZES.has(parsed.torah_size)
+        ? parsed.torah_size
+        : null;
 
     const { error: insErr } = await admin.from("market_torah_books").insert({
       user_id: userId,
@@ -163,41 +254,54 @@ export async function POST(req: NextRequest) {
       source_message_id: idMessage,
       sofer_id: null,
       dealer_id: null,
-      external_sofer_name: null,
+      external_sofer_name: parsed.owner_name ?? null,
       script_type: parsed.script_type,
-      torah_size: parsed.torah_size,
+      torah_size: torahSizeDb,
       parchment_type: null,
       influencer_style: null,
       asking_price: askDb,
       target_brokerage_price: null,
       currency: "ILS",
-      expected_completion_date: null,
+      expected_completion_date: parsed.ready_date ?? null,
       notes: null,
       last_contact_date: null,
       negotiation_notes: null,
-      handwriting_image_url: null,
+      handwriting_image_url: imageUrl ?? null,
     });
 
     if (insErr) {
       if (insErr.code === "23505") {
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
-        }
+        await dbg("duplicate sku — reacting OK", { idMessage });
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `✅ כבר קיים במאגר`);
       } else {
+        await dbg("insert error", { code: insErr.code, message: insErr.message });
         console.error("[whatsapp-webhook] market_torah_books insert:", insErr);
-        if (!isOutgoing) {
-          await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
-        }
+        await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_FAIL);
+        await sendTextSafe(instanceId, greenApiToken, chatId, `❌ שגיאה בשמירה (${insErr.code}) — נסה שוב`);
       }
       return ok200();
     }
 
-    if (!isOutgoing) {
-      await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    // הצלחה — בנה הודעת אישור מפורטת
+    const parts: string[] = [];
+    if (parsed.script_type) parts.push(parsed.script_type);
+    if (torahSizeDb) parts.push(`${torahSizeDb} עמודות`);
+    if (parsed.owner_name) parts.push(`בעלים: ${parsed.owner_name}`);
+    parts.push(formatPrice(askFull));
+    if (parsed.ready_date) {
+      const dateStr = new Date(parsed.ready_date).toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+      parts.push(`מוכן: ${dateStr}`);
     }
+    const summary = parts.join(" | ");
+
+    await dbg("success — inserted", { sku, idMessage });
+    await sendReactionSafe(instanceId, greenApiToken, chatId, idMessage, REACTION_OK);
+    await sendTextSafe(instanceId, greenApiToken, chatId, `✅ נשמר במאגר (${sku})\n${summary}`);
     return ok200();
   } catch (e) {
     console.error("[whatsapp-webhook] unhandled:", e);
+    await dbg("unhandled-error", { error: String(e) });
     return ok200();
   }
 }

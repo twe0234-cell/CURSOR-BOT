@@ -27,6 +27,8 @@ import {
   ChevronUp,
   UserIcon,
   ScrollTextIcon,
+  SendIcon,
+  PlusCircleIcon,
 } from "lucide-react";
 import { isDealDelivered } from "@/src/services/crm.logic";
 import {
@@ -35,8 +37,24 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { CrmContactHistoryEntry } from "@/src/lib/types/crm";
-import { updateCrmContact, updateContactTags, addTransaction, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
+import { updateCrmContact, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
+import { updateCrmExtraContacts } from "../galleryActions";
+import { addCrmContactToEmailList } from "@/app/email/actions";
+import ExtraContactsEditor from "@/components/crm/ExtraContactsEditor";
+import ScribeGallery from "@/components/crm/ScribeGallery";
 import { StarRating } from "@/components/ui/StarRating";
+
+const PREFERRED_CONTACT_LABELS: Record<string, string> = {
+  WhatsApp: "וואטסאפ",
+  Email: "אימייל",
+  Phone: "טלפון",
+};
+
+const PREFERRED_CONTACT_OPTIONS = [
+  { value: "WhatsApp", label: "וואטסאפ" },
+  { value: "Email", label: "אימייל" },
+  { value: "Phone", label: "טלפון" },
+] as const;
 
 type Contact = {
   id: string;
@@ -52,6 +70,10 @@ type Contact = {
   phone_type: string | null;
   created_at: string;
   handwriting_image_url: string | null;
+  city?: string | null;
+  address?: string | null;
+  extra_phones?: { label: string; value: string }[];
+  extra_emails?: { label: string; value: string }[];
 };
 
 export type LedgerPaymentRow = {
@@ -74,6 +96,8 @@ type SoferProfile = {
   pricing_notes: string | null;
   writing_constraints: string | null;
   past_writings: string | null;
+  community: string | null;
+  sample_image_url: string | null;
 } | null;
 
 type Props = {
@@ -279,7 +303,7 @@ export default function ContactDetailClient({
   investments,
 }: Props) {
   const [contact, setContact] = useState(initialContact);
-  const [transactions, setTransactions] = useState(initialTx);
+  const [transactions] = useState(initialTx);
   const [documents, setDocuments] = useState(initialDocs);
   const [history, setHistory] = useState(initialHistory);
   const [soferProfile, setSoferProfile] = useState(initialSoferProfile);
@@ -292,26 +316,44 @@ export default function ContactDetailClient({
     pricing_notes: initialSoferProfile?.pricing_notes ?? "",
     writing_constraints: initialSoferProfile?.writing_constraints ?? "",
     past_writings: initialSoferProfile?.past_writings ?? "",
+    community: initialSoferProfile?.community ?? "",
+    sample_image_url: initialSoferProfile?.sample_image_url ?? "",
   });
   const [soferLoading, setSoferLoading] = useState(false);
-  const [tagsLine, setTagsLine] = useState(() => initialContact.tags.join(", "));
-  const [tagsSaving, setTagsSaving] = useState(false);
+  const [addToEmailListLoading, setAddToEmailListLoading] = useState(false);
 
-  const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + t.amount, 0);
-  const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
+  const handleAddToEmailList = async () => {
+    if (!contact.email) return;
+    setAddToEmailListLoading(true);
+    const res = await addCrmContactToEmailList(contact.name, contact.email, contact.phone);
+    setAddToEmailListLoading(false);
+    if (res.success) {
+      toast.success("נוסף לרשימת תפוצה");
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  const totalOwed = transactions.filter((t) => t.type === "Debt").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const totalDue = transactions.filter((t) => t.type === "Credit").reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const [editMode, setEditMode] = useState(false);
   const [editWa, setEditWa] = useState(contact.wa_chat_id ?? "");
   const [editEmail, setEditEmail] = useState(contact.email ?? "");
   const [editPhone, setEditPhone] = useState(contact.phone ?? "");
+  const [editPreferred, setEditPreferred] = useState(contact.preferred_contact);
   const [editTags, setEditTags] = useState(initialContact.tags.join(", "));
   const [editNotes, setEditNotes] = useState(contact.notes ?? "");
   const [editCertification, setEditCertification] = useState(contact.certification ?? "");
   const [editPhoneType, setEditPhoneType] = useState(contact.phone_type ?? "");
+  const [editCity, setEditCity] = useState(contact.city ?? "");
+  const [editAddress, setEditAddress] = useState(contact.address ?? "");
+  const [extraPhones, setExtraPhones] = useState<{ label: string; value: string }[]>(
+    contact.extra_phones ?? []
+  );
+  const [extraEmails, setExtraEmails] = useState<{ label: string; value: string }[]>(
+    contact.extra_emails ?? []
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [newTxAmount, setNewTxAmount] = useState("");
-  const [newTxType, setNewTxType] = useState<"Debt" | "Credit">("Debt");
-  const [newTxDesc, setNewTxDesc] = useState("");
-  const [txLoading, setTxLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
   const [noteBody, setNoteBody] = useState("");
   const [noteFollowUp, setNoteFollowUp] = useState("");
@@ -341,42 +383,41 @@ export default function ContactDetailClient({
   }, [history, logs]);
 
   const handleSaveProfile = async () => {
-    const res = await updateCrmContact(contact.id, {
-      wa_chat_id: editWa.trim() || undefined,
-      email: editEmail.trim() || undefined,
-      phone: editPhone.trim() || undefined,
-      tags: editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean),
-      notes: editNotes.trim() || undefined,
-      certification: editCertification.trim() || undefined,
-      phone_type: editPhoneType.trim() || undefined,
-    });
-    if (res.success) {
-      const nextTags = editTags.split(/[,|\s]+/).map((t) => t.trim()).filter(Boolean);
-      setContact((prev) => ({
-        ...prev,
-        wa_chat_id: editWa.trim() || null,
-        email: editEmail.trim() || null,
-        phone: editPhone.trim() || null,
+    const nextTags = editTags.split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
+    const [res, extraRes] = await Promise.all([
+      updateCrmContact(contact.id, {
+        wa_chat_id: editWa.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        phone: editPhone.trim() || undefined,
+        preferred_contact: editPreferred,
         tags: nextTags,
-        notes: editNotes.trim() || null,
-        certification: editCertification.trim() || null,
-        phone_type: editPhoneType.trim() || null,
-      }));
-      setTagsLine(nextTags.join(", "));
-      setEditMode(false);
-      toast.success("נשמר");
-    } else toast.error(res.error);
-  };
-
-  const handleSaveTagsOnly = async () => {
-    const tags = tagsLine.split(/[,]+/).map((t) => t.trim()).filter(Boolean);
-    setTagsSaving(true);
-    const res = await updateContactTags(contact.id, tags);
-    setTagsSaving(false);
-    if (res.success) {
-      setContact((prev) => ({ ...prev, tags }));
-      toast.success("תגיות נשמרו");
-    } else toast.error(res.error);
+        notes: editNotes.trim() || undefined,
+        certification: editCertification.trim() || undefined,
+        phone_type: editPhoneType.trim() || undefined,
+        city: editCity.trim() || null,
+        address: editAddress.trim() || null,
+      }),
+      updateCrmExtraContacts(contact.id, extraPhones, extraEmails),
+    ]);
+    if (!res.success) { toast.error(res.error); return; }
+    if (!extraRes.success) toast.warning?.(`פרטי קשר נוספים: ${extraRes.error}`);
+    setContact((prev) => ({
+      ...prev,
+      wa_chat_id: editWa.trim() || null,
+      email: editEmail.trim() || null,
+      phone: editPhone.trim() || null,
+      preferred_contact: editPreferred,
+      tags: nextTags,
+      notes: editNotes.trim() || null,
+      certification: editCertification.trim() || null,
+      phone_type: editPhoneType.trim() || null,
+      city: editCity.trim() || null,
+      address: editAddress.trim() || null,
+      extra_phones: extraPhones,
+      extra_emails: extraEmails,
+    }));
+    setEditMode(false);
+    toast.success("נשמר");
   };
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -409,6 +450,8 @@ export default function ContactDetailClient({
       pricing_notes: soferForm.pricing_notes || null,
       writing_constraints: soferForm.writing_constraints || null,
       past_writings: soferForm.past_writings || null,
+      community: soferForm.community || null,
+      sample_image_url: soferForm.sample_image_url || null,
     });
     setSoferLoading(false);
     if (res.success) {
@@ -420,36 +463,11 @@ export default function ContactDetailClient({
         pricing_notes: soferForm.pricing_notes || null,
         writing_constraints: soferForm.writing_constraints || null,
         past_writings: soferForm.past_writings || null,
+        community: soferForm.community || null,
+        sample_image_url: soferForm.sample_image_url || null,
       });
       setEditSofer(false);
       toast.success("פרופיל סופר עודכן");
-    } else toast.error(res.error);
-  };
-
-  const handleAddTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(newTxAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("הזן סכום תקין");
-      return;
-    }
-    setTxLoading(true);
-    const res = await addTransaction(contact.id, amount, newTxType, newTxDesc);
-    setTxLoading(false);
-    if (res.success) {
-      setTransactions((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          amount,
-          type: newTxType,
-          description: newTxDesc || null,
-          date: new Date().toISOString().slice(0, 10),
-        },
-      ]);
-      setNewTxAmount("");
-      setNewTxDesc("");
-      toast.success("העסקה נוספה");
     } else toast.error(res.error);
   };
 
@@ -476,7 +494,7 @@ export default function ContactDetailClient({
       }
       const res = await addDocument(contact.id, data.url, "Script_Sample", file.name);
       if (res.success) {
-        setDocuments((prev) => [...prev, { id: crypto.randomUUID(), file_url: data.url, doc_type: "Script_Sample", name: file.name }]);
+        setDocuments((prev) => [...prev, { id: res.id, file_url: data.url, doc_type: "Script_Sample", name: file.name }]);
         toast.success("המסמך הועלה");
       } else toast.error(res.error);
     } catch {
@@ -524,7 +542,8 @@ export default function ContactDetailClient({
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              מועדף: {contact.preferred_contact} · מזהה: {contact.id.slice(0, 8)}…
+              מועדף: {PREFERRED_CONTACT_LABELS[contact.preferred_contact] ?? contact.preferred_contact} · מזהה:{" "}
+              {contact.id.slice(0, 8)}…
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               {contact.phone && (
@@ -543,8 +562,45 @@ export default function ContactDetailClient({
                 </span>
               )}
             </div>
+            {contact.email && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors"
+                >
+                  <SendIcon className="size-3.5" />
+                  שלח מייל
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void handleAddToEmailList()}
+                  disabled={addToEmailListLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                >
+                  <PlusCircleIcon className="size-3.5" />
+                  {addToEmailListLoading ? "מוסיף..." : "הוסף לרשימת תפוצה"}
+                </button>
+                <a
+                  href={`/email/campaigns?preselect=${encodeURIComponent(contact.email)}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+                >
+                  <MailIcon className="size-3.5" />
+                  קמפיין אישי
+                </a>
+              </div>
+            )}
           </div>
-          <Button variant="outline" size="sm" onClick={() => (editMode ? handleSaveProfile() : setEditMode(true))}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (editMode) void handleSaveProfile();
+              else {
+                setEditTags(contact.tags.join(", "));
+                setEditMode(true);
+              }
+            }}
+          >
             <PencilIcon className="size-4 ml-1" />
             {editMode ? "שמור" : "ערוך פרופיל"}
           </Button>
@@ -577,6 +633,20 @@ export default function ContactDetailClient({
         {editMode && (
           <CardContent className="border-t pt-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted-foreground">אמצעי קשר מועדף</label>
+                <select
+                  value={editPreferred}
+                  onChange={(e) => setEditPreferred(e.target.value)}
+                  className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {PREFERRED_CONTACT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-xs text-muted-foreground">WA Chat ID</label>
                 <Input value={editWa} onChange={(e) => setEditWa(e.target.value)} className="rounded-lg mt-1" />
@@ -599,7 +669,25 @@ export default function ContactDetailClient({
                 הגדרות מתקדמות
                 {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 space-y-2">
+              <CollapsibleContent className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="עיר" className="rounded-lg" />
+                  <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="כתובת (רחוב ומספר)" className="rounded-lg" />
+                </div>
+                <ExtraContactsEditor
+                  title="טלפונים נוספים"
+                  placeholder="05X-XXXXXXX"
+                  labelPlaceholder="סוג (נייד/בית…)"
+                  items={extraPhones}
+                  onChange={setExtraPhones}
+                />
+                <ExtraContactsEditor
+                  title="מיילים נוספים"
+                  placeholder="email@example.com"
+                  labelPlaceholder="סוג (עסקי/אישי…)"
+                  items={extraEmails}
+                  onChange={setExtraEmails}
+                />
                 <Input value={editCertification} onChange={(e) => setEditCertification(e.target.value)} placeholder="תעודה" className="rounded-lg" />
                 <Input value={editPhoneType} onChange={(e) => setEditPhoneType(e.target.value)} placeholder="סוג טלפון" className="rounded-lg" />
                 <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="הערות" className="rounded-lg" />
@@ -607,31 +695,6 @@ export default function ContactDetailClient({
             </Collapsible>
           </CardContent>
         )}
-      </Card>
-
-      <Card className="border-teal-100 shadow-sm">
-        <CardHeader className="pb-2">
-          <h3 className="text-sm font-semibold text-teal-900">תגיות</h3>
-          <p className="text-xs text-muted-foreground">הפרדה בפסיק — שמירה נפרדת מפרופיל</p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <Input
-            value={tagsLine}
-            onChange={(e) => setTagsLine(e.target.value)}
-            placeholder="למשל: VIP, ספר תורה"
-            className="rounded-lg flex-1"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            disabled={tagsSaving}
-            onClick={() => void handleSaveTagsOnly()}
-          >
-            {tagsSaving ? "שומר..." : "שמור תגיות"}
-          </Button>
-        </CardContent>
       </Card>
 
       <Tabs defaultValue="ledger" className="w-full">
@@ -1039,10 +1102,19 @@ export default function ContactDetailClient({
                       <label className="text-xs text-muted-foreground">קיבולת יומית (עמודים)</label>
                       <Input type="number" value={soferForm.daily_page_capacity} onChange={(e) => setSoferForm((f) => ({ ...f, daily_page_capacity: e.target.value }))} className="mt-1" />
                     </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">הערות תמחור</label>
-                      <Input value={soferForm.pricing_notes} onChange={(e) => setSoferForm((f) => ({ ...f, pricing_notes: e.target.value }))} className="mt-1" />
-                    </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">הערות תמחור</label>
+                    <Input value={soferForm.pricing_notes} onChange={(e) => setSoferForm((f) => ({ ...f, pricing_notes: e.target.value }))} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">קהילה / מוסד</label>
+                    <Input value={soferForm.community} onChange={(e) => setSoferForm((f) => ({ ...f, community: e.target.value }))} className="mt-1" placeholder="ישיבה, בית כנסת..." />
+                  </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">דוגמת כתב (URL תמונה)</label>
+                    <Input value={soferForm.sample_image_url} onChange={(e) => setSoferForm((f) => ({ ...f, sample_image_url: e.target.value }))} className="mt-1 font-mono text-xs" placeholder="https://..." dir="ltr" />
+                    <p className="mt-1 text-xs text-muted-foreground">להעלאת תמונות רבות — השתמש בגלריה מטה</p>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">אילוצי כתיבה</label>
@@ -1066,6 +1138,16 @@ export default function ContactDetailClient({
                   <div className="sm:col-span-2"><span className="text-xs text-muted-foreground">תיאור רמה</span><p className="font-medium">{soferProfile?.writing_level ?? "—"}</p></div>
                   <div><span className="text-xs text-muted-foreground">קיבולת יומית</span><p className="font-medium">{soferProfile?.daily_page_capacity ?? "—"} עמ׳</p></div>
                   <div><span className="text-xs text-muted-foreground">הערות תמחור</span><p className="font-medium">{soferProfile?.pricing_notes ?? "—"}</p></div>
+                  {soferProfile?.community && (
+                    <div><span className="text-xs text-muted-foreground">קהילה / מוסד</span><p className="font-medium">{soferProfile.community}</p></div>
+                  )}
+                  {soferProfile?.sample_image_url && (
+                    <div className="col-span-2">
+                      <span className="text-xs text-muted-foreground block mb-1">דוגמת כתב ראשית</span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={soferProfile.sample_image_url} alt="דוגמת כתב" className="max-h-36 rounded-lg border object-contain bg-white" />
+                    </div>
+                  )}
                   {soferProfile?.writing_constraints && (
                     <div className="col-span-2"><span className="text-xs text-muted-foreground">אילוצי כתיבה</span><p className="whitespace-pre-wrap">{soferProfile.writing_constraints}</p></div>
                   )}
@@ -1074,6 +1156,17 @@ export default function ContactDetailClient({
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* גלריית כתב יד ותמונות */}
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">גלריית כתב יד ותמונות</h3>
+              <p className="text-xs text-muted-foreground">מספר תמונות בלתי מוגבל — מאורגן לפי סדר עלייה</p>
+            </CardHeader>
+            <CardContent>
+              <ScribeGallery contactId={contact.id} />
             </CardContent>
           </Card>
         </TabsContent>
