@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +38,30 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { CrmContactHistoryEntry } from "@/src/lib/types/crm";
-import { updateCrmContact, addDocument, addHistoryEntry, upsertSoferProfile } from "../actions";
+import {
+  updateCrmContact,
+  addDocument,
+  addHistoryEntry,
+  upsertSoferProfile,
+  mergeCrmContacts,
+  fetchCrmContacts,
+} from "../actions";
 import { updateCrmExtraContacts } from "../galleryActions";
 import { addCrmContactToEmailList } from "@/app/email/actions";
 import ExtraContactsEditor from "@/components/crm/ExtraContactsEditor";
+import { CommunityCreatableSelect } from "@/components/crm/CommunityCreatableSelect";
+import { ContactSysEventsBlock } from "@/components/crm/ContactSysEventsBlock";
 import ScribeGallery from "@/components/crm/ScribeGallery";
 import { StarRating } from "@/components/ui/StarRating";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { SysEvent } from "@/src/lib/types/sys-events";
 
 const PREFERRED_CONTACT_LABELS: Record<string, string> = {
   WhatsApp: "וואטסאפ",
@@ -50,17 +69,42 @@ const PREFERRED_CONTACT_LABELS: Record<string, string> = {
   Phone: "טלפון",
 };
 
-const PREFERRED_CONTACT_OPTIONS = [
-  { value: "WhatsApp", label: "וואטסאפ" },
-  { value: "Email", label: "אימייל" },
-  { value: "Phone", label: "טלפון" },
-] as const;
+const PREFERRED_METHOD_OPTIONS = [
+  { value: "whatsapp" as const, label: "וואטסאפ" },
+  { value: "email" as const, label: "אימייל" },
+  { value: "phone" as const, label: "טלפון" },
+];
+
+type PreferredMethod = (typeof PREFERRED_METHOD_OPTIONS)[number]["value"];
+
+function preferredMethodFromContact(c: {
+  preferred_contact_method: string | null;
+  preferred_contact: string;
+}): PreferredMethod {
+  const m = c.preferred_contact_method;
+  if (m === "whatsapp" || m === "email" || m === "phone") return m;
+  const legacy = c.preferred_contact;
+  if (legacy === "Email") return "email";
+  if (legacy === "Phone") return "phone";
+  return "whatsapp";
+}
+
+function contactPreferredLabel(c: {
+  preferred_contact_method: string | null;
+  preferred_contact: string;
+}): string {
+  if (c.preferred_contact_method === "whatsapp") return "וואטסאפ";
+  if (c.preferred_contact_method === "email") return "אימייל";
+  if (c.preferred_contact_method === "phone") return "טלפון";
+  return PREFERRED_CONTACT_LABELS[c.preferred_contact] ?? c.preferred_contact;
+}
 
 type Contact = {
   id: string;
   name: string;
   type: string;
   preferred_contact: string;
+  preferred_contact_method: string | null;
   wa_chat_id: string | null;
   email: string | null;
   phone: string | null;
@@ -72,6 +116,9 @@ type Contact = {
   handwriting_image_url: string | null;
   city?: string | null;
   address?: string | null;
+  address_city?: string | null;
+  address_physical?: string | null;
+  community?: string | null;
   extra_phones?: { label: string; value: string }[];
   extra_emails?: { label: string; value: string }[];
 };
@@ -137,6 +184,7 @@ type Props = {
     amount_paid: number;
     target_date: string | null;
   }>;
+  sysEvents: SysEvent[];
 };
 
 type LegacyCommLog = {
@@ -301,7 +349,9 @@ export default function ContactDetailClient({
   buyerSales,
   sellerSales,
   investments,
+  sysEvents,
 }: Props) {
+  const router = useRouter();
   const [contact, setContact] = useState(initialContact);
   const [transactions] = useState(initialTx);
   const [documents, setDocuments] = useState(initialDocs);
@@ -340,13 +390,20 @@ export default function ContactDetailClient({
   const [editWa, setEditWa] = useState(contact.wa_chat_id ?? "");
   const [editEmail, setEditEmail] = useState(contact.email ?? "");
   const [editPhone, setEditPhone] = useState(contact.phone ?? "");
-  const [editPreferred, setEditPreferred] = useState(contact.preferred_contact);
+  const [editPreferredMethod, setEditPreferredMethod] = useState<PreferredMethod>(() =>
+    preferredMethodFromContact(initialContact)
+  );
   const [editTags, setEditTags] = useState(initialContact.tags.join(", "));
   const [editNotes, setEditNotes] = useState(contact.notes ?? "");
   const [editCertification, setEditCertification] = useState(contact.certification ?? "");
   const [editPhoneType, setEditPhoneType] = useState(contact.phone_type ?? "");
-  const [editCity, setEditCity] = useState(contact.city ?? "");
-  const [editAddress, setEditAddress] = useState(contact.address ?? "");
+  const [editAddressCity, setEditAddressCity] = useState(
+    (initialContact.address_city ?? initialContact.city) ?? ""
+  );
+  const [editAddressPhysical, setEditAddressPhysical] = useState(
+    (initialContact.address_physical ?? initialContact.address) ?? ""
+  );
+  const [editCommunity, setEditCommunity] = useState(initialContact.community ?? "");
   const [extraPhones, setExtraPhones] = useState<{ label: string; value: string }[]>(
     contact.extra_phones ?? []
   );
@@ -358,6 +415,41 @@ export default function ContactDetailClient({
   const [noteBody, setNoteBody] = useState("");
   const [noteFollowUp, setNoteFollowUp] = useState("");
   const [noteLoading, setNoteLoading] = useState(false);
+
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeList, setMergeList] = useState<
+    { id: string; name: string; email: string | null; phone: string | null }[]
+  >([]);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeSearch, setMergeSearch] = useState("");
+  const [mergeSelectedId, setMergeSelectedId] = useState<string | null>(null);
+  const [mergeSubmitting, setMergeSubmitting] = useState(false);
+
+  useEffect(() => {
+    setContact(initialContact);
+  }, [initialContact]);
+
+  useEffect(() => {
+    if (!mergeOpen) return;
+    setMergeLoading(true);
+    setMergeSearch("");
+    setMergeSelectedId(null);
+    void fetchCrmContacts().then((r) => {
+      setMergeLoading(false);
+      if (r.success) {
+        setMergeList(
+          r.contacts
+            .filter((c) => c.id !== contact.id)
+            .map((c) => ({
+              id: c.id,
+              name: c.name,
+              email: c.email ?? null,
+              phone: c.phone ?? null,
+            }))
+        );
+      } else toast.error(r.error);
+    });
+  }, [mergeOpen, contact.id]);
 
   const badges = roleBadges(contact.type);
 
@@ -382,37 +474,77 @@ export default function ContactDetailClient({
     return items;
   }, [history, logs]);
 
+  const mergeFiltered = useMemo(() => {
+    const q = mergeSearch.trim().toLowerCase();
+    if (!q) return mergeList;
+    return mergeList.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.email?.toLowerCase().includes(q) ?? false) ||
+        (c.phone?.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ?? false)
+    );
+  }, [mergeList, mergeSearch]);
+
+  const handleMergeContact = async () => {
+    if (!mergeSelectedId) return;
+    setMergeSubmitting(true);
+    const res = await mergeCrmContacts(contact.id, [mergeSelectedId]);
+    setMergeSubmitting(false);
+    if (res.success) {
+      toast.success("האנשי קשר מוזגו בהצלחה");
+      setMergeOpen(false);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const handleSaveProfile = async () => {
     const nextTags = editTags.split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
+    const cityLine = editAddressCity.trim();
+    const physicalLine = editAddressPhysical.trim();
     const [res, extraRes] = await Promise.all([
       updateCrmContact(contact.id, {
         wa_chat_id: editWa.trim() || undefined,
         email: editEmail.trim() || undefined,
         phone: editPhone.trim() || undefined,
-        preferred_contact: editPreferred,
+        preferred_contact_method: editPreferredMethod,
         tags: nextTags,
         notes: editNotes.trim() || undefined,
         certification: editCertification.trim() || undefined,
         phone_type: editPhoneType.trim() || undefined,
-        city: editCity.trim() || null,
-        address: editAddress.trim() || null,
+        address_city: cityLine || null,
+        address_physical: physicalLine || null,
+        city: cityLine || null,
+        address: physicalLine || null,
+        community: editCommunity.trim() || null,
       }),
       updateCrmExtraContacts(contact.id, extraPhones, extraEmails),
     ]);
     if (!res.success) { toast.error(res.error); return; }
     if (!extraRes.success) toast.warning?.(`פרטי קשר נוספים: ${extraRes.error}`);
+    const legacyPreferred =
+      editPreferredMethod === "email"
+        ? "Email"
+        : editPreferredMethod === "phone"
+          ? "Phone"
+          : "WhatsApp";
     setContact((prev) => ({
       ...prev,
       wa_chat_id: editWa.trim() || null,
       email: editEmail.trim() || null,
       phone: editPhone.trim() || null,
-      preferred_contact: editPreferred,
+      preferred_contact: legacyPreferred,
+      preferred_contact_method: editPreferredMethod,
       tags: nextTags,
       notes: editNotes.trim() || null,
       certification: editCertification.trim() || null,
       phone_type: editPhoneType.trim() || null,
-      city: editCity.trim() || null,
-      address: editAddress.trim() || null,
+      city: cityLine || null,
+      address: physicalLine || null,
+      address_city: cityLine || null,
+      address_physical: physicalLine || null,
+      community: editCommunity.trim() || null,
       extra_phones: extraPhones,
       extra_emails: extraEmails,
     }));
@@ -542,7 +674,7 @@ export default function ContactDetailClient({
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              מועדף: {PREFERRED_CONTACT_LABELS[contact.preferred_contact] ?? contact.preferred_contact} · מזהה:{" "}
+              מועדף: {contactPreferredLabel(contact)} · מזהה:{" "}
               {contact.id.slice(0, 8)}…
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -562,6 +694,17 @@ export default function ContactDetailClient({
                 </span>
               )}
             </div>
+            {(contact.address_city || contact.city || contact.address_physical || contact.address || contact.community) && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {(contact.address_city || contact.city) && (
+                  <span>עיר: {contact.address_city ?? contact.city}</span>
+                )}
+                {(contact.address_physical || contact.address) && (
+                  <span>כתובת: {contact.address_physical ?? contact.address}</span>
+                )}
+                {contact.community && <span>קהילה: {contact.community}</span>}
+              </div>
+            )}
             {contact.email && (
               <div className="flex flex-wrap gap-2 pt-1">
                 <a
@@ -590,20 +733,37 @@ export default function ContactDetailClient({
               </div>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (editMode) void handleSaveProfile();
-              else {
-                setEditTags(contact.tags.join(", "));
-                setEditMode(true);
-              }
-            }}
-          >
-            <PencilIcon className="size-4 ml-1" />
-            {editMode ? "שמור" : "ערוך פרופיל"}
-          </Button>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="outline" size="sm" type="button" onClick={() => setMergeOpen(true)}>
+              מיזוג איש קשר
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (editMode) void handleSaveProfile();
+                else {
+                  setEditTags(contact.tags.join(", "));
+                  setEditWa(contact.wa_chat_id ?? "");
+                  setEditEmail(contact.email ?? "");
+                  setEditPhone(contact.phone ?? "");
+                  setEditPreferredMethod(preferredMethodFromContact(contact));
+                  setEditNotes(contact.notes ?? "");
+                  setEditCertification(contact.certification ?? "");
+                  setEditPhoneType(contact.phone_type ?? "");
+                  setEditAddressCity((contact.address_city ?? contact.city) ?? "");
+                  setEditAddressPhysical((contact.address_physical ?? contact.address) ?? "");
+                  setEditCommunity(contact.community ?? "");
+                  setExtraPhones(contact.extra_phones ?? []);
+                  setExtraEmails(contact.extra_emails ?? []);
+                  setEditMode(true);
+                }
+              }}
+            >
+              <PencilIcon className="size-4 ml-1" />
+              {editMode ? "שמור" : "ערוך פרופיל"}
+            </Button>
+          </div>
         </CardHeader>
         {!editMode && (
           <CardContent className="border-t pt-4 space-y-2">
@@ -624,8 +784,20 @@ export default function ContactDetailClient({
               <CollapsibleContent className="mt-2 space-y-1 text-sm text-muted-foreground">
                 {contact.certification && <p>תעודה: {contact.certification}</p>}
                 {contact.phone_type && <p>סוג טלפון: {contact.phone_type}</p>}
+                {(contact.address_city || contact.city) && (
+                  <p>עיר: {contact.address_city ?? contact.city}</p>
+                )}
+                {(contact.address_physical || contact.address) && (
+                  <p>כתובת מלאה: {contact.address_physical ?? contact.address}</p>
+                )}
+                {contact.community && <p>קהילה / מוסד: {contact.community}</p>}
                 {contact.notes && <p>הערות: {contact.notes}</p>}
-                {!contact.certification && !contact.phone_type && !contact.notes && <p>אין נתונים נוספים</p>}
+                {!contact.certification &&
+                  !contact.phone_type &&
+                  !contact.notes &&
+                  !(contact.address_city || contact.city) &&
+                  !(contact.address_physical || contact.address) &&
+                  !contact.community && <p>אין נתונים נוספים</p>}
               </CollapsibleContent>
             </Collapsible>
           </CardContent>
@@ -636,11 +808,13 @@ export default function ContactDetailClient({
               <div className="sm:col-span-2">
                 <label className="text-xs text-muted-foreground">אמצעי קשר מועדף</label>
                 <select
-                  value={editPreferred}
-                  onChange={(e) => setEditPreferred(e.target.value)}
+                  value={editPreferredMethod}
+                  onChange={(e) =>
+                    setEditPreferredMethod(e.target.value as PreferredMethod)
+                  }
                   className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  {PREFERRED_CONTACT_OPTIONS.map((o) => (
+                  {PREFERRED_METHOD_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
@@ -670,10 +844,24 @@ export default function ContactDetailClient({
                 {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-3 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="עיר" className="rounded-lg" />
-                  <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="כתובת (רחוב ומספר)" className="rounded-lg" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input
+                    value={editAddressCity}
+                    onChange={(e) => setEditAddressCity(e.target.value)}
+                    placeholder="עיר"
+                    className="rounded-lg"
+                  />
+                  <Input
+                    value={editAddressPhysical}
+                    onChange={(e) => setEditAddressPhysical(e.target.value)}
+                    placeholder="כתובת (רחוב ומספר)"
+                    className="rounded-lg"
+                  />
                 </div>
+                <CommunityCreatableSelect
+                  value={editCommunity}
+                  onChange={setEditCommunity}
+                />
                 <ExtraContactsEditor
                   title="טלפונים נוספים"
                   placeholder="05X-XXXXXXX"
@@ -963,6 +1151,8 @@ export default function ContactDetailClient({
         </TabsContent>
 
         <TabsContent value="notes" className="space-y-4">
+          <ContactSysEventsBlock events={sysEvents} />
+
           {/* Add Note */}
           <Card className="border-teal-100">
             <CardHeader>
@@ -1171,6 +1361,62 @@ export default function ContactDetailClient({
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>מיזוג איש קשר</DialogTitle>
+            <DialogDescription className="text-right">
+              נבחר איש קשר נוסף שיימזג <span className="font-semibold text-foreground">אל תוך</span>{" "}
+              {contact.name}. הרשומות המקושרות יועברו לאיש קשר זה, והכפילות תסומן כמוזגת.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              placeholder="חיפוש לפי שם, טלפון או אימייל…"
+              value={mergeSearch}
+              onChange={(e) => setMergeSearch(e.target.value)}
+              className="rounded-lg"
+            />
+            <div className="max-h-[240px] overflow-y-auto rounded-lg border border-border/60 divide-y">
+              {mergeLoading ? (
+                <p className="p-4 text-sm text-muted-foreground text-center">טוען…</p>
+              ) : mergeFiltered.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground text-center">לא נמצאו אנשי קשר</p>
+              ) : (
+                mergeFiltered.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setMergeSelectedId(c.id)}
+                    className={`w-full text-right px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors ${
+                      mergeSelectedId === c.id ? "bg-teal-50" : ""
+                    }`}
+                  >
+                    <span className="font-medium block">{c.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {[c.phone, c.email].filter(Boolean).join(" · ") || c.id.slice(0, 8)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 flex-row-reverse">
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!mergeSelectedId || mergeSubmitting}
+              onClick={() => void handleMergeContact()}
+            >
+              {mergeSubmitting ? "ממזג…" : "מזג לתוך איש קשר זה"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setMergeOpen(false)}>
+              ביטול
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

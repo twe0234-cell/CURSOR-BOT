@@ -184,6 +184,7 @@ export async function mergeCrmContacts(primaryId: string, duplicateIds: string[]
   const result = await crm.mergeCrmContacts(primaryId, duplicateIds);
   if (result.success) {
     revalidatePath("/crm");
+    revalidatePath(`/crm/${primaryId}`);
     revalidatePath("/soferim");
     revalidatePath("/market");
   }

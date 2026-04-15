@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  type ReactNode,
+  type ChangeEvent,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -16,6 +23,9 @@ import {
   Trash2,
   ExternalLink,
   FileText,
+  Warehouse,
+  ClipboardList,
+  Wrench,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,16 +60,30 @@ import {
   uniqueParshiyotOnSheet,
 } from "@/src/lib/constants/torahPages";
 import { TorahFinancialsTab } from "./TorahFinancialsTab";
+import { TorahOverviewTab } from "./TorahOverviewTab";
 import {
   updateSheet,
   batchUpdateSheetStatuses,
   updateTorahProject,
   receiveSheetsFromScribe,
+  markTorahSheetsReceived,
   deleteTorahProject,
 } from "./actions";
 import { createCrmContact } from "@/app/crm/actions";
 import { applyNumericTransform } from "@/lib/numericInput";
-import { createQaBatch, returnQaBatch, fetchQaBatches, type QaBatchRow } from "./qa-actions";
+import {
+  createQaBatch,
+  returnQaBatch,
+  fetchQaBatches,
+  fetchQaBatchSheetRows,
+  resolveTorahSheetQa,
+  fetchTorahFixTasks,
+  createTorahFixTaskAction,
+  completeTorahFixTaskAction,
+  type QaBatchRow,
+  type QaBatchSheetRow,
+  type TorahFixTaskRow,
+} from "./qa-actions";
 import { cn } from "@/lib/utils";
 import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
 
@@ -75,9 +99,26 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
+function formatSheetStatusLabel(st: string): string {
+  const keys = Object.keys(TORAH_SHEET_STATUS_LABELS) as TorahSheetStatus[];
+  if (keys.includes(st as TorahSheetStatus)) {
+    return TORAH_SHEET_STATUS_LABELS[st as TorahSheetStatus];
+  }
+  return st;
+}
+
+const QA_KIND_LABELS: Record<"gavra" | "computer" | "repair" | "other", string> = {
+  gavra: "גב״ר",
+  computer: "מחשב",
+  repair: "תיקון",
+  other: "אחר",
+};
+
 const SHEET_CELL_STYLES: Record<TorahSheetStatus, string> = {
   not_started: "bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300/70",
   written: "bg-sky-200 text-sky-900 border-sky-400 hover:bg-sky-300",
+  reported_written: "bg-sky-100 text-sky-900 border-sky-300 hover:bg-sky-200",
+  received: "bg-teal-200 text-teal-950 border-teal-400 hover:bg-teal-300",
   in_qa: "bg-amber-200 text-amber-950 border-amber-400 hover:bg-amber-300",
   needs_fixing: "bg-red-200 text-red-900 border-red-400 hover:bg-red-300",
   approved: "bg-emerald-300 text-emerald-950 border-emerald-500 hover:bg-emerald-400",
@@ -110,14 +151,21 @@ function SheetGridCellWithTooltip({
 const LEGEND: { status: TorahSheetStatus; label: string }[] = [
   { status: "not_started", label: TORAH_SHEET_STATUS_LABELS.not_started },
   { status: "written", label: TORAH_SHEET_STATUS_LABELS.written },
+  { status: "reported_written", label: TORAH_SHEET_STATUS_LABELS.reported_written },
+  { status: "received", label: TORAH_SHEET_STATUS_LABELS.received },
   { status: "in_qa", label: TORAH_SHEET_STATUS_LABELS.in_qa },
   { status: "needs_fixing", label: TORAH_SHEET_STATUS_LABELS.needs_fixing },
   { status: "approved", label: TORAH_SHEET_STATUS_LABELS.approved },
   { status: "sewn", label: TORAH_SHEET_STATUS_LABELS.sewn },
 ];
 
-// Statuses eligible to be added to a QA batch
-const QA_ELIGIBLE: TorahSheetStatus[] = ["written", "needs_fixing"];
+// Statuses eligible to be added to a QA batch (כולל מצבי מסלול חדשים ללא שבירת יריעות legacy "written")
+const QA_ELIGIBLE: TorahSheetStatus[] = [
+  "written",
+  "reported_written",
+  "received",
+  "needs_fixing",
+];
 
 // ─────────────────────────────────────────────────────────────
 // Props
@@ -160,9 +208,36 @@ export default function TorahDetailClient({
   const [batchMagiahId, setBatchMagiahId] = useState("");
   const [batchSheetIds, setBatchSheetIds] = useState<Set<string>>(() => new Set());
   const [batchNotes, setBatchNotes] = useState("");
+  const [batchCheckerId, setBatchCheckerId] = useState("");
+  const [batchQaKind, setBatchQaKind] = useState<"" | "gavra" | "computer" | "repair" | "other">("");
+  const [batchCost, setBatchCost] = useState("");
+  const [batchReportUrl, setBatchReportUrl] = useState<string | null>(null);
+  const [batchReportUploading, setBatchReportUploading] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [returningId, setReturningId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+
+  const [fixTasks, setFixTasks] = useState<TorahFixTaskRow[]>([]);
+  const [fixTasksLoaded, setFixTasksLoaded] = useState(false);
+  const [resolvePanelBatchId, setResolvePanelBatchId] = useState<string | null>(null);
+  const [resolveRows, setResolveRows] = useState<QaBatchSheetRow[]>([]);
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolvingSheetId, setResolvingSheetId] = useState<string | null>(null);
+
+  const [fixTaskTarget, setFixTaskTarget] = useState<{
+    sheet: QaBatchSheetRow;
+    qaBatchId: string;
+  } | null>(null);
+  const [fixTaskDesc, setFixTaskDesc] = useState("");
+  const [fixTaskCostEstimate, setFixTaskCostEstimate] = useState("");
+  const [fixTaskSaving, setFixTaskSaving] = useState(false);
+
+  const [completeFixTarget, setCompleteFixTarget] = useState<TorahFixTaskRow | null>(null);
+  const [completeActualCost, setCompleteActualCost] = useState("");
+  const [completeNextStatus, setCompleteNextStatus] = useState<"in_qa" | "approved">("in_qa");
+  const [completeSaving, setCompleteSaving] = useState(false);
+
+  const [warehouseSaving, setWarehouseSaving] = useState(false);
 
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
@@ -234,11 +309,35 @@ export default function TorahDetailClient({
     setBatchesLoaded(true);
   }, [projectId]);
 
+  const loadFixTasks = useCallback(async () => {
+    const res = await fetchTorahFixTasks(projectId);
+    if (res.success) setFixTasks(res.tasks);
+    setFixTasksLoaded(true);
+  }, [projectId]);
+
   const loadContacts = useCallback(async () => {
     const { fetchCrmContactsForSelect } = await import("../actions");
     const res = await fetchCrmContactsForSelect();
     if (res.success) setContacts(res.contacts);
   }, []);
+
+  useEffect(() => {
+    if (!resolvePanelBatchId) {
+      setResolveRows([]);
+      return;
+    }
+    let cancelled = false;
+    setResolveLoading(true);
+    void fetchQaBatchSheetRows(projectId, resolvePanelBatchId).then((res) => {
+      if (cancelled) return;
+      if (res.success) setResolveRows(res.sheets);
+      else toast.error(res.error);
+      setResolveLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvePanelBatchId, projectId]);
 
   const sheetByNumber = useMemo(() => {
     const m = new Map<number, TorahSheetGridRow>();
@@ -265,6 +364,23 @@ export default function TorahDetailClient({
   const eligibleSheets = useMemo(
     () => sheets.filter((s) => QA_ELIGIBLE.includes(s.status)),
     [sheets]
+  );
+
+  const selectedSheetRows = useMemo(
+    () => sheets.filter((s) => selectedIds.has(s.id)),
+    [sheets, selectedIds]
+  );
+  const allSelectedReportedWritten =
+    selectedSheetRows.length > 0 &&
+    selectedSheetRows.every((s) => s.status === "reported_written");
+
+  const canSubmitQaBatch =
+    batchSheetIds.size > 0 &&
+    (Boolean(batchMagiahId) || Boolean(batchCheckerId) || batchQaKind === "computer");
+
+  const openFixTasks = useMemo(
+    () => fixTasks.filter((t) => t.status === "open"),
+    [fixTasks]
   );
 
   // ── Sheet grid handlers ──────────────────────────────────
@@ -332,7 +448,7 @@ export default function TorahDetailClient({
         return;
       }
       setSheets((prev) =>
-        prev.map((s) => (ids.includes(s.id) ? { ...s, status: "written" as const } : s))
+        prev.map((s) => (ids.includes(s.id) ? { ...s, status: "reported_written" as const } : s))
       );
       const paceLabel =
         res.pace.status === "delayed"
@@ -349,24 +465,202 @@ export default function TorahDetailClient({
     }
   }
 
+  async function handleMarkWarehouseReceived() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) {
+      toast.error("לא נבחרו יריעות");
+      return;
+    }
+    setWarehouseSaving(true);
+    try {
+      const res = await markTorahSheetsReceived(projectId, ids);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      setSheets((prev) =>
+        prev.map((s) => (ids.includes(s.id) ? { ...s, status: "received" as const } : s))
+      );
+      toast.success(`קליטת מחסן: ${res.updated} יריעות`);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      router.refresh();
+    } finally {
+      setWarehouseSaving(false);
+    }
+  }
+
+  async function handleBatchReportFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBatchReportUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/market/upload", { method: "POST", body: fd });
+      const j = (await r.json()) as { url?: string; error?: string };
+      if (!r.ok || !j.url) {
+        toast.error(j.error ?? "העלאה נכשלה");
+        return;
+      }
+      setBatchReportUrl(j.url);
+      toast.success("הקובץ הועלה");
+    } finally {
+      setBatchReportUploading(false);
+      e.target.value = "";
+    }
+  }
+
   // ── QA handlers ─────────────────────────────────────────
 
   async function handleCreateBatch() {
-    if (!batchMagiahId) { toast.error("בחר מגיה"); return; }
-    if (batchSheetIds.size === 0) { toast.error("בחר לפחות יריעה אחת"); return; }
+    if (!canSubmitQaBatch) {
+      toast.error("בחר יריעות, ומגיה או בודק, או סמן סוג «מחשב»");
+      return;
+    }
+    const costRaw = batchCost.trim().replace(",", ".");
+    const costNum = costRaw === "" ? undefined : Number(costRaw);
+    if (costRaw !== "" && (!Number.isFinite(costNum) || (costNum as number) < 0)) {
+      toast.error("עלות לא תקינה");
+      return;
+    }
     setBatchSaving(true);
     try {
-      const res = await createQaBatch(projectId, batchMagiahId, [...batchSheetIds], batchNotes || null);
-      if (!res.success) { toast.error(res.error); return; }
+      const sheetIdsSnapshot = [...batchSheetIds];
+      const res = await createQaBatch({
+        projectId,
+        sheetIds: sheetIdsSnapshot,
+        magiahId: batchMagiahId.trim() ? batchMagiahId : null,
+        checkerId: batchCheckerId.trim() ? batchCheckerId : null,
+        qaKind: batchQaKind || null,
+        costAmount: costNum,
+        reportUrl: batchReportUrl && batchReportUrl.trim() ? batchReportUrl.trim() : null,
+        notes: batchNotes.trim() ? batchNotes : null,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
       toast.success("שקית ההגהה נוצרה");
       setCreateBatchOpen(false);
       setBatchMagiahId("");
+      setBatchCheckerId("");
+      setBatchQaKind("");
+      setBatchCost("");
+      setBatchReportUrl(null);
       setBatchSheetIds(new Set());
       setBatchNotes("");
-      setSheets((prev) => prev.map((s) => batchSheetIds.has(s.id) ? { ...s, status: "in_qa" } : s));
+      setSheets((prev) =>
+        prev.map((s) =>
+          sheetIdsSnapshot.includes(s.id) ? { ...s, status: "in_qa" as const } : s
+        )
+      );
       await loadBatches();
+      await loadFixTasks();
       router.refresh();
-    } finally { setBatchSaving(false); }
+    } finally {
+      setBatchSaving(false);
+    }
+  }
+
+  async function handleResolveSheetQa(sheetId: string, outcome: "approved" | "needs_fixing") {
+    setResolvingSheetId(sheetId);
+    try {
+      const res = await resolveTorahSheetQa(projectId, sheetId, outcome);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(outcome === "approved" ? "היריעה אושרה" : "סומנה לתיקון");
+      const nextStatus = outcome === "approved" ? ("approved" as const) : ("needs_fixing" as const);
+      setSheets((prev) =>
+        prev.map((s) => (s.id === sheetId ? { ...s, status: nextStatus } : s))
+      );
+      setResolveRows((prev) =>
+        prev.map((r) => (r.id === sheetId ? { ...r, status: nextStatus } : r))
+      );
+      await loadFixTasks();
+      router.refresh();
+    } finally {
+      setResolvingSheetId(null);
+    }
+  }
+
+  async function handleSubmitCreateFixTask() {
+    if (!fixTaskTarget) return;
+    const raw = fixTaskCostEstimate.trim().replace(",", ".");
+    const cost = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(cost) || cost < 0) {
+      toast.error("עלות משוערת לא תקינה");
+      return;
+    }
+    setFixTaskSaving(true);
+    try {
+      const res = await createTorahFixTaskAction({
+        projectId,
+        sheetId: fixTaskTarget.sheet.id,
+        qaBatchId: fixTaskTarget.qaBatchId,
+        description: fixTaskDesc.trim() || null,
+        costAmount: cost,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("משימת תיקון נוצרה");
+      setFixTaskTarget(null);
+      setFixTaskDesc("");
+      setFixTaskCostEstimate("");
+      await loadFixTasks();
+      router.refresh();
+    } finally {
+      setFixTaskSaving(false);
+    }
+  }
+
+  async function handleSubmitCompleteFix() {
+    if (!completeFixTarget) return;
+    const raw = completeActualCost.trim().replace(",", ".");
+    let ac: number | null = null;
+    if (raw !== "") {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        toast.error("עלות בפועל לא תקינה");
+        return;
+      }
+      ac = n;
+    }
+    setCompleteSaving(true);
+    try {
+      const res = await completeTorahFixTaskAction({
+        projectId,
+        fixTaskId: completeFixTarget.id,
+        actualCost: ac,
+        nextSheetStatus: completeNextStatus,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("משימת התיקון נסגרה");
+      setCompleteFixTarget(null);
+      setCompleteActualCost("");
+      setSheets((prev) =>
+        prev.map((s) =>
+          s.id === completeFixTarget.sheet_id
+            ? { ...s, status: completeNextStatus }
+            : s
+        )
+      );
+      await loadFixTasks();
+      if (resolvePanelBatchId) {
+        const r = await fetchQaBatchSheetRows(projectId, resolvePanelBatchId);
+        if (r.success) setResolveRows(r.sheets);
+      }
+      router.refresh();
+    } finally {
+      setCompleteSaving(false);
+    }
   }
 
   async function handleSaveProjectEdit() {
@@ -440,11 +734,17 @@ export default function TorahDetailClient({
     setReturningId(batchId);
     try {
       const res = await returnQaBatch(batchId, projectId);
-      if (!res.success) { toast.error(res.error); return; }
-      toast.success("השקית סומנה כחזרה מהגהה");
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("השקית הוחזרה — ההוצאה נרשמה לפי עלות הסבב");
       await loadBatches();
+      await loadFixTasks();
       router.refresh();
-    } finally { setReturningId(null); }
+    } finally {
+      setReturningId(null);
+    }
   }
 
   const toggleBatchSheet = (id: string) => {
@@ -639,10 +939,17 @@ export default function TorahDetailClient({
         {/* ── TABS ─────────────────────────────────────────── */}
         <Tabs
           defaultValue="sheets"
-          onValueChange={(v) => { if (v === "qa" && !batchesLoaded) { loadBatches(); loadContacts(); } }}
+          onValueChange={(v) => {
+            if (v === "qa") {
+              if (!batchesLoaded) void loadBatches();
+              if (!fixTasksLoaded) void loadFixTasks();
+              void loadContacts();
+            }
+          }}
         >
           <TabsList className="mb-4 flex flex-wrap h-auto gap-1">
             <TabsTrigger value="sheets">לוח יריעות</TabsTrigger>
+            <TabsTrigger value="overview">סקירה וציר זמן</TabsTrigger>
             <TabsTrigger value="qa">מערכת הגהות</TabsTrigger>
             <TabsTrigger value="financials">פיננסים ותקציב</TabsTrigger>
           </TabsList>
@@ -704,6 +1011,10 @@ export default function TorahDetailClient({
             </div>
           </TabsContent>
 
+          <TabsContent value="overview">
+            <TorahOverviewTab projectId={projectId} project={project} sheets={sheets} />
+          </TabsContent>
+
           {/* ── TAB 2: QA Batches ────────────────────────── */}
           <TabsContent value="qa">
             <div className="flex items-center justify-between mb-4">
@@ -714,12 +1025,62 @@ export default function TorahDetailClient({
               <Button
                 size="sm"
                 className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
-                onClick={() => { loadContacts(); setCreateBatchOpen(true); }}
+                onClick={() => {
+                  void loadContacts();
+                  setCreateBatchOpen(true);
+                }}
               >
                 <PlusCircle className="size-4 ml-1" />
                 צור שקית הגהה
               </Button>
             </div>
+
+            {fixTasksLoaded && openFixTasks.length > 0 && (
+              <Card className="rounded-xl border-violet-200 bg-violet-50/40 mb-4">
+                <CardContent className="p-4">
+                  <h3 className="text-sm font-semibold text-violet-900 flex items-center gap-2 mb-3">
+                    <Wrench className="size-4 shrink-0" />
+                    משימות תיקון פתוחות ({openFixTasks.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {openFixTasks.map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-violet-100 bg-white/90 px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium text-slate-800">
+                            יריעה {t.sheet_number ?? "—"}
+                          </span>
+                          {t.description && (
+                            <span className="text-muted-foreground mr-2"> — {t.description}</span>
+                          )}
+                          <span className="text-xs text-slate-600 mr-2 tabular-nums">
+                            (משוער {formatShekels(t.cost_amount)})
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 border-violet-300"
+                          onClick={() => {
+                            setCompleteFixTarget(t);
+                            setCompleteActualCost(
+                              t.cost_amount > 0 ? String(t.cost_amount) : ""
+                            );
+                            setCompleteNextStatus("in_qa");
+                          }}
+                        >
+                          <ClipboardList className="size-3.5 ml-1" />
+                          סגור משימה
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {!batchesLoaded ? (
               <p className="text-sm text-muted-foreground py-8 text-center">טוען...</p>
@@ -730,31 +1091,48 @@ export default function TorahDetailClient({
             ) : (
               <div className="space-y-3">
                 {batches.map((b) => (
-                  <Card key={b.id} className={cn(
-                    "rounded-xl border",
-                    b.status === "sent" ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-slate-50/50"
-                  )}>
+                  <Card
+                    key={b.id}
+                    className={cn(
+                      "rounded-xl border",
+                      b.status === "sent"
+                        ? "border-amber-200 bg-amber-50/50"
+                        : "border-slate-200 bg-slate-50/50"
+                    )}
+                  >
                     <CardContent className="p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={cn(
-                              "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                              b.status === "sent" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
-                            )}>
+                            <span
+                              className={cn(
+                                "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                                b.status === "sent"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-emerald-100 text-emerald-800"
+                              )}
+                            >
                               {b.status === "sent" ? "בהגהה" : "חזרה מהגהה"}
                             </span>
-                            <span className="text-xs text-muted-foreground font-mono">{b.id.slice(0, 8)}…</span>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {b.id.slice(0, 8)}…
+                            </span>
                           </div>
                           <p className="text-sm font-medium text-slate-800">
                             מגיה:{" "}
                             {b.magiah_name ??
                               b.vendor_label ??
                               (b.magiah_id ? `${b.magiah_id.slice(0, 8)}…` : "—")}
+                            {b.checker_name && (
+                              <span className="text-muted-foreground font-normal">
+                                {" "}
+                                · בודק: {b.checker_name}
+                              </span>
+                            )}
                             {b.qa_kind != null && (
                               <span className="text-muted-foreground font-normal">
                                 {" "}
-                                ({b.qa_kind})
+                                ({QA_KIND_LABELS[b.qa_kind]})
                               </span>
                             )}
                             {typeof b.cost_amount === "number" && b.cost_amount > 0 && (
@@ -764,6 +1142,20 @@ export default function TorahDetailClient({
                               </span>
                             )}
                           </p>
+                          {b.report_url && (
+                            <p className="text-xs">
+                              <a
+                                href={b.report_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sky-600 hover:underline inline-flex items-center gap-1"
+                              >
+                                <FileText className="size-3.5" />
+                                דוח / קובץ מצורף
+                                <ExternalLink className="size-3 opacity-70" />
+                              </a>
+                            </p>
+                          )}
                           <p className="text-xs text-slate-600">
                             נשלח: {formatDate(b.sent_date)}
                             {b.returned_date && <> · חזר: {formatDate(b.returned_date)}</>}
@@ -796,14 +1188,148 @@ export default function TorahDetailClient({
                               variant="outline"
                               className="rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                               disabled={returningId === b.id}
-                              onClick={() => handleReturnBatch(b.id)}
+                              onClick={() => void handleReturnBatch(b.id)}
                             >
                               <RotateCcw className="size-3.5 ml-1" />
-                              {returningId === b.id ? "מעדכן..." : "סמן כחזר מהגהה"}
+                              {returningId === b.id ? "מעדכן..." : "החזר שקית (סגירת סבב)"}
                             </Button>
                           )}
                         </div>
                       </div>
+
+                      {b.status === "returned" && (
+                        <div className="mt-4 border-t border-slate-200 pt-3 space-y-3">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="rounded-lg"
+                            onClick={() =>
+                              setResolvePanelBatchId((prev) => (prev === b.id ? null : b.id))
+                            }
+                          >
+                            {resolvePanelBatchId === b.id
+                              ? "הסתר פתרון יריעות"
+                              : "פתרון יריעות אחרי החזרה"}
+                          </Button>
+
+                          {resolvePanelBatchId === b.id && (
+                            <div className="rounded-lg border border-slate-200 bg-white p-3">
+                              {resolveLoading ? (
+                                <p className="text-sm text-muted-foreground py-4 text-center">
+                                  טוען יריעות...
+                                </p>
+                              ) : resolveRows.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">אין יריעות מקושרות</p>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="bg-slate-50">
+                                        <TableHead className="text-right text-xs">יריעה</TableHead>
+                                        <TableHead className="text-right text-xs">סטטוס</TableHead>
+                                        <TableHead className="text-right text-xs w-[1%]">
+                                          פעולות
+                                        </TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {resolveRows.map((row) => {
+                                        const openTask = openFixTasks.find(
+                                          (x) => x.sheet_id === row.id
+                                        );
+                                        return (
+                                          <TableRow key={row.id}>
+                                            <TableCell className="tabular-nums font-medium">
+                                              {row.sheet_number}
+                                            </TableCell>
+                                            <TableCell className="text-xs">
+                                              {formatSheetStatusLabel(row.status)}
+                                            </TableCell>
+                                            <TableCell>
+                                              <div className="flex flex-wrap gap-1 justify-end">
+                                                {row.status === "in_qa" && (
+                                                  <>
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      variant="outline"
+                                                      className="h-8 text-xs border-emerald-300 text-emerald-800"
+                                                      disabled={resolvingSheetId === row.id}
+                                                      onClick={() =>
+                                                        void handleResolveSheetQa(
+                                                          row.id,
+                                                          "approved"
+                                                        )
+                                                      }
+                                                    >
+                                                      אשר
+                                                    </Button>
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      variant="outline"
+                                                      className="h-8 text-xs border-amber-300 text-amber-900"
+                                                      disabled={resolvingSheetId === row.id}
+                                                      onClick={() =>
+                                                        void handleResolveSheetQa(
+                                                          row.id,
+                                                          "needs_fixing"
+                                                        )
+                                                      }
+                                                    >
+                                                      לתיקון
+                                                    </Button>
+                                                  </>
+                                                )}
+                                                {row.status === "needs_fixing" && !openTask && (
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="h-8 text-xs"
+                                                    onClick={() =>
+                                                      setFixTaskTarget({
+                                                        sheet: row,
+                                                        qaBatchId: b.id,
+                                                      })
+                                                    }
+                                                  >
+                                                    משימת תיקון
+                                                  </Button>
+                                                )}
+                                                {row.status === "needs_fixing" && openTask && (
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 text-xs"
+                                                    onClick={() => {
+                                                      setCompleteFixTarget(openTask);
+                                                      setCompleteActualCost(
+                                                        openTask.cost_amount > 0
+                                                          ? String(openTask.cost_amount)
+                                                          : ""
+                                                      );
+                                                      setCompleteNextStatus("in_qa");
+                                                    }}
+                                                  >
+                                                    סגור תיקון
+                                                  </Button>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -1135,6 +1661,42 @@ export default function TorahDetailClient({
                 ))}
               </select>
             </div>
+            {editing?.status === "reported_written" && (
+              <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-3 space-y-2">
+                <p className="text-xs font-medium text-teal-900">מעבר מהיר אחרי קליטה מהסופר</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-teal-400 text-teal-900 hover:bg-teal-100"
+                  disabled={saving || warehouseSaving}
+                  onClick={async () => {
+                    if (!editing) return;
+                    setWarehouseSaving(true);
+                    try {
+                      const res = await markTorahSheetsReceived(projectId, [editing.id]);
+                      if (!res.success) {
+                        toast.error(res.error);
+                        return;
+                      }
+                      setSheets((prev) =>
+                        prev.map((s) =>
+                          s.id === editing.id ? { ...s, status: "received" as const } : s
+                        )
+                      );
+                      toast.success("היריעה סומנה כהתקבלה במחסן");
+                      setEditing(null);
+                      router.refresh();
+                    } finally {
+                      setWarehouseSaving(false);
+                    }
+                  }}
+                >
+                  <Warehouse className="size-4 ml-2" />
+                  {warehouseSaving ? "מעדכן..." : "קליטה במחסן (התקבל)"}
+                </Button>
+              </div>
+            )}
             <div>
               <p className="text-xs text-muted-foreground mb-1">מספר עמודות (1–12)</p>
               <Input type="number" min={1} max={12} value={editCols} onChange={(e) => setEditCols(e.target.value)} />
@@ -1150,8 +1712,22 @@ export default function TorahDetailClient({
       </Dialog>
 
       {/* ── Create QA Batch dialog ───────────────────────── */}
-      <Dialog open={createBatchOpen} onOpenChange={(o) => !o && setCreateBatchOpen(false)}>
-        <DialogContent className="sm:max-w-lg rounded-2xl">
+      <Dialog
+        open={createBatchOpen}
+        onOpenChange={(o) => {
+          setCreateBatchOpen(o);
+          if (!o) {
+            setBatchMagiahId("");
+            setBatchCheckerId("");
+            setBatchQaKind("");
+            setBatchCost("");
+            setBatchReportUrl(null);
+            setBatchSheetIds(new Set());
+            setBatchNotes("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PackageCheck className="size-5 text-amber-600" />
@@ -1159,6 +1735,9 @@ export default function TorahDetailClient({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              נדרש לפחות אחד: מגיה, בודק, או סוג «מחשב» (הגהת מחשב ללא מגיה אנושי).
+            </p>
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">מגיה</p>
               <div className="flex gap-2 items-end">
@@ -1181,6 +1760,79 @@ export default function TorahDetailClient({
                 >
                   ➕ מגיה חדש
                 </Button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">בודק (אופציונלי)</p>
+              <select
+                value={batchCheckerId}
+                onChange={(e) => setBatchCheckerId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">— בחר בודק —</option>
+                {contacts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">סוג סבב</p>
+              <select
+                value={batchQaKind}
+                onChange={(e) =>
+                  setBatchQaKind(
+                    e.target.value as "" | "gavra" | "computer" | "repair" | "other"
+                  )
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">— לא צוין —</option>
+                <option value="gavra">{QA_KIND_LABELS.gavra}</option>
+                <option value="computer">{QA_KIND_LABELS.computer}</option>
+                <option value="repair">{QA_KIND_LABELS.repair}</option>
+                <option value="other">{QA_KIND_LABELS.other}</option>
+              </select>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                עלות סבב (₪, אופציונלי)
+              </p>
+              <Input
+                inputMode="decimal"
+                placeholder="0"
+                value={batchCost}
+                onChange={(e) => setBatchCost(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                דוח / תמונה (PDF או תמונה, עד 5MB)
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex h-10 cursor-pointer items-center rounded-md border border-input bg-background px-3 text-sm hover:bg-muted">
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="sr-only"
+                    disabled={batchReportUploading}
+                    onChange={handleBatchReportFileChange}
+                  />
+                  {batchReportUploading ? "מעלה..." : "בחר קובץ"}
+                </label>
+                {batchReportUrl && (
+                  <a
+                    href={batchReportUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-600 hover:underline truncate max-w-[12rem]"
+                  >
+                    קובץ מצורף
+                  </a>
+                )}
               </div>
             </div>
 
@@ -1215,7 +1867,7 @@ export default function TorahDetailClient({
                       <span>יריעה {s.sheet_number}</span>
                       <span className={cn(
                         "mr-auto text-[10px] rounded px-1.5 py-0.5 font-medium",
-                        s.status === "written" ? "bg-sky-100 text-sky-700" : "bg-red-100 text-red-700"
+                        s.status === "needs_fixing" ? "bg-red-100 text-red-700" : "bg-sky-100 text-sky-700"
                       )}>
                         {TORAH_SHEET_STATUS_LABELS[s.status]}
                       </span>
@@ -1241,12 +1893,129 @@ export default function TorahDetailClient({
               <Button
                 type="button"
                 className="flex-1 bg-amber-600 hover:bg-amber-700"
-                disabled={batchSaving || batchSheetIds.size === 0 || !batchMagiahId}
-                onClick={handleCreateBatch}
+                disabled={batchSaving || !canSubmitQaBatch}
+                onClick={() => void handleCreateBatch()}
               >
-                {batchSaving ? "שולח..." : `שלח ${batchSheetIds.size > 0 ? batchSheetIds.size + " " : ""}יריעות להגהה`}
+                {batchSaving
+                  ? "שולח..."
+                  : `שלח ${batchSheetIds.size > 0 ? `${batchSheetIds.size} ` : ""}יריעות להגהה`}
               </Button>
-              <Button type="button" variant="outline" onClick={() => setCreateBatchOpen(false)}>ביטול</Button>
+              <Button type="button" variant="outline" onClick={() => setCreateBatchOpen(false)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!fixTaskTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setFixTaskTarget(null);
+            setFixTaskDesc("");
+            setFixTaskCostEstimate("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="size-5 text-violet-600" />
+              משימת תיקון — יריעה {fixTaskTarget?.sheet.sheet_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">תיאור (אופציונלי)</p>
+              <textarea
+                value={fixTaskDesc}
+                onChange={(e) => setFixTaskDesc(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
+                placeholder="מה לתקן..."
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">עלות משוערת (₪)</p>
+              <Input
+                inputMode="decimal"
+                value={fixTaskCostEstimate}
+                onChange={(e) => setFixTaskCostEstimate(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="outline" onClick={() => setFixTaskTarget(null)}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                className="bg-violet-600 hover:bg-violet-700"
+                disabled={fixTaskSaving}
+                onClick={() => void handleSubmitCreateFixTask()}
+              >
+                {fixTaskSaving ? "שומר..." : "צור משימה"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!completeFixTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCompleteFixTarget(null);
+            setCompleteActualCost("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="size-5 text-violet-600" />
+              סגירת משימת תיקון — יריעה {completeFixTarget?.sheet_number ?? "—"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <p className="text-xs text-muted-foreground">
+              סכום בפועל לניכוי מהסופר. אם תשאיר ריק — יילקח מהמשוער.
+            </p>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">עלות בפועל (₪)</p>
+              <Input
+                inputMode="decimal"
+                value={completeActualCost}
+                onChange={(e) => setCompleteActualCost(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">סטטוס יריעה אחרי סגירה</p>
+              <select
+                value={completeNextStatus}
+                onChange={(e) =>
+                  setCompleteNextStatus(e.target.value as "in_qa" | "approved")
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="in_qa">חזרה להגהה ({TORAH_SHEET_STATUS_LABELS.in_qa})</option>
+                <option value="approved">אושר ({TORAH_SHEET_STATUS_LABELS.approved})</option>
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="outline" onClick={() => setCompleteFixTarget(null)}>
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                className="bg-violet-600 hover:bg-violet-700"
+                disabled={completeSaving}
+                onClick={() => void handleSubmitCompleteFix()}
+              >
+                {completeSaving ? "סוגר..." : "סגור והחל"}
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -1264,11 +2033,28 @@ export default function TorahDetailClient({
                 type="button"
                 variant="outline"
                 className="whitespace-nowrap border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-                disabled={receivingSaving || saving}
-                onClick={handleReceiveFromScribe}
+                disabled={receivingSaving || saving || warehouseSaving}
+                onClick={() => void handleReceiveFromScribe()}
               >
                 <Inbox className="size-4 ml-1" />
-                {receivingSaving ? "מקליט..." : "קלוט יריעות מהסופר"}
+                {receivingSaving ? "מקליט..." : "דווח נכתב (מהסופר)"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="whitespace-nowrap border-teal-300 text-teal-900 hover:bg-teal-50"
+                disabled={
+                  warehouseSaving || saving || receivingSaving || !allSelectedReportedWritten
+                }
+                title={
+                  allSelectedReportedWritten
+                    ? "מעבר לקליטה במחסן"
+                    : "בחר יריעות בסטטוס «דווח נכתב» בלבד"
+                }
+                onClick={() => void handleMarkWarehouseReceived()}
+              >
+                <Warehouse className="size-4 ml-1" />
+                {warehouseSaving ? "מעדכן..." : "קליטה במחסן (התקבל)"}
               </Button>
               <select
                 value={bulkStatus}
@@ -1282,8 +2068,8 @@ export default function TorahDetailClient({
               <Button
                 type="button"
                 className="bg-sky-600 hover:bg-sky-700 whitespace-nowrap"
-                disabled={saving}
-                onClick={applyBulk}
+                disabled={saving || warehouseSaving || receivingSaving}
+                onClick={() => void applyBulk()}
               >
                 החל על {selectedIds.size} יריעות
               </Button>

@@ -41,10 +41,12 @@ function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
 }
 
-function displayOwner(row: MarketTorahBookRow): string {
-  if (row.dealer_name) return row.dealer_name;
+/** תואם ל־cardHeadline ב־MarketClient — טקסט בעלים מההצעה לפני שמות CRM */
+function cardHeadline(row: MarketTorahBookRow): string {
+  const ext = row.external_sofer_name?.trim();
+  if (ext) return ext;
+  if (row.dealer_id && row.dealer_name) return row.dealer_name;
   if (row.sofer_name) return row.sofer_name;
-  if (row.external_sofer_name) return row.external_sofer_name;
   return "";
 }
 
@@ -61,7 +63,7 @@ function KanbanCard({ row, onMove, isPending }: CardProps) {
   const canGoBack = currentIdx > 0;
   const canGoForward = currentIdx < STAGE_ORDER.length - 1;
   const days = daysAgo(row.created_at);
-  const owner = displayOwner(row);
+  const owner = cardHeadline(row);
 
   return (
     <motion.div

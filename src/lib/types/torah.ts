@@ -6,6 +6,7 @@
 // 047 — workflow: columns_per_day, qa_weeks_buffer, gavra_qa_count, computer_qa_count, requires_tagging
 // 052 — contract: price_per_column, qa_agreed_types (jsonb), includes_accessories, parchment_type
 // 057 — client_contract_url, scribe_contract_url; parchment_type unrestricted (calculator-driven)
+// 069 — calculator_snapshot, snapshot_locked_at; sheet statuses reported_written/received; torah_fix_tasks; checker_id on QA batches
 // ============================================================
 
 /** Parse qa_agreed_types JSON from DB */
@@ -37,7 +38,10 @@ export type TorahProjectStatus =
 
 export type TorahSheetStatus =
   | "not_started"
+  /** legacy — same family as reported_written */
   | "written"
+  | "reported_written"
+  | "received"
   | "in_qa"
   | "needs_fixing"
   | "approved"
@@ -87,6 +91,10 @@ export interface TorahProject {
   client_contract_url: string | null;
   /** קישור חיצוני לחוזה סופר */
   scribe_contract_url: string | null;
+  /** צילום מחירים מהמחשבון בעת חתימה (sys_calculator_config) */
+  calculator_snapshot: Record<string, unknown> | null;
+  /** מתי ננעל צילום המחירים */
+  snapshot_locked_at: string | null;
   created_at: string;           // ISO timestamptz
 }
 
@@ -113,6 +121,8 @@ export interface TorahQaBatch {
   project_id: string;
   /** The מגיה (QA reader / fixer) receiving this batch — optional e.g. computer QA without CRM contact */
   magiah_id: string | null;
+  /** בודק/מאשר סבב (איש קשר) — אופציונלי */
+  checker_id: string | null;
   /** סוג סבב הגהה */
   qa_kind?: "gavra" | "computer" | "repair" | "other" | null;
   /** עלות סבב (₪) */
@@ -132,6 +142,37 @@ export interface TorahQaBatch {
 export interface TorahBatchSheet {
   batch_id: string;
   sheet_id: string;
+}
+
+/** torah_fix_tasks row — לולאת תיקון ליריעה */
+export type TorahFixTaskStatus = "open" | "in_progress" | "done" | "cancelled";
+
+export interface TorahFixTask {
+  id: string;
+  project_id: string;
+  sheet_id: string;
+  qa_batch_id: string | null;
+  status: TorahFixTaskStatus;
+  description: string | null;
+  cost_amount: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** torah_project_transactions row — יומן כספי לפרויקט */
+export interface TorahProjectTransaction {
+  id: string;
+  project_id: string;
+  transaction_type: string;
+  amount: number;
+  date: string;
+  notes: string | null;
+  receipt_sent: boolean;
+  attachment_url: string | null;
+  qa_batch_id: string | null;
+  fix_task_id: string | null;
+  created_at: string;
 }
 
 // ── Enriched / joined types used in the UI ──────────────────
@@ -182,6 +223,8 @@ export const TORAH_PROJECT_STATUSES: TorahProjectStatus[] = [
 export const TORAH_SHEET_STATUSES: TorahSheetStatus[] = [
   "not_started",
   "written",
+  "reported_written",
+  "received",
   "in_qa",
   "needs_fixing",
   "approved",
@@ -199,6 +242,8 @@ export const TORAH_PROJECT_STATUS_LABELS: Record<TorahProjectStatus, string> = {
 export const TORAH_SHEET_STATUS_LABELS: Record<TorahSheetStatus, string> = {
   not_started: "טרם התחיל",
   written: "נכתב",
+  reported_written: "דווח נכתב",
+  received: "התקבל",
   in_qa: "בהגהה",
   needs_fixing: "לתיקון",
   approved: "אושר",

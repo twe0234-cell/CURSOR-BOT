@@ -67,7 +67,7 @@ function makeChain(data: unknown, error: unknown = null): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: Record<string, any> = {};
 
-  for (const method of ["select", "eq", "neq", "in", "order", "limit", "not", "is"]) {
+  for (const method of ["select", "eq", "neq", "in", "order", "limit", "not", "is", "or"]) {
     chain[method] = () => chain;
   }
 
@@ -478,7 +478,7 @@ describe("loadContactDetailPage", () => {
 
     // ── All array fields are present and are arrays ────────────────────────
     for (const key of [
-      "contactHistory", "transactions", "documents", "logs",
+      "contactHistory", "sysEvents", "transactions", "documents", "logs",
       "buyerSales", "sellerSales", "investments", "ledgerPayments",
     ] as const) {
       expect(data[key], `expected data.${key} to be an array`).toBeInstanceOf(Array);

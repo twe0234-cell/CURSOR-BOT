@@ -19,6 +19,7 @@ import type {
   AddHistoryEntryInput,
   CrmContactHistoryEntry,
 } from "@/src/lib/types/crm";
+import type { SysEvent } from "@/src/lib/types/sys-events";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -82,10 +83,14 @@ export type CreateCrmContactInput = {
   name: string;
   type?: string;
   preferred_contact?: string;
+  preferred_contact_method?: "whatsapp" | "email" | "phone";
   wa_chat_id?: string;
   email?: string;
   phone?: string;
   tags?: string[];
+  address_city?: string | null;
+  address_physical?: string | null;
+  community?: string | null;
 };
 
 /** Input type for updateCrmContact (all fields optional except id) */
@@ -93,6 +98,7 @@ export type UpdateCrmContactInput = Partial<{
   name: string;
   type: string;
   preferred_contact: string;
+  preferred_contact_method: "whatsapp" | "email" | "phone";
   wa_chat_id: string;
   email: string;
   phone: string;
@@ -103,6 +109,9 @@ export type UpdateCrmContactInput = Partial<{
   handwriting_image_url: string | null;
   city: string | null;
   address: string | null;
+  address_city: string | null;
+  address_physical: string | null;
+  community: string | null;
 }>;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -181,6 +190,7 @@ export async function fetchCrmContacts(): Promise<
         "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at"
       )
       .eq("user_id", user.id)
+      .is("archived_at", null)
       .order("name");
 
     if (error) return { success: false, error: handleSupabaseError(error) };
@@ -540,18 +550,38 @@ export async function createCrmContact(
     const { supabase, user } = await getAuthClient();
     if (!user) return { success: false, error: "יש להתחבר" };
 
+    const legacyMap: Record<string, string> = {
+      whatsapp: "WhatsApp",
+      email: "Email",
+      phone: "Phone",
+    };
+    let preferredContact = input.preferred_contact ?? "WhatsApp";
+    let preferredMethod = input.preferred_contact_method ?? null;
+    if (input.preferred_contact_method) {
+      preferredContact =
+        legacyMap[input.preferred_contact_method] ?? preferredContact;
+    }
+
     const { data, error } = await supabase
       .from("crm_contacts")
       .insert({
         user_id: user.id,
         name: input.name.trim(),
         type: input.type ?? "Other",
-        preferred_contact: input.preferred_contact ?? "WhatsApp",
+        preferred_contact: preferredContact,
+        preferred_contact_method: preferredMethod,
         wa_chat_id: input.wa_chat_id?.trim() || null,
         email: input.email?.trim() || null,
         phone: input.phone?.trim() || null,
         tags: (input.tags ?? []).filter(Boolean),
         sku: generateSku(crmSkuPrefix),
+        address_city: input.address_city?.trim() ? input.address_city.trim() : null,
+        address_physical: input.address_physical?.trim()
+          ? input.address_physical.trim()
+          : null,
+        community: input.community?.trim() ? input.community.trim() : null,
+        city: input.address_city?.trim() ? input.address_city.trim() : null,
+        address: input.address_physical?.trim() ? input.address_physical.trim() : null,
       })
       .select("id")
       .single();
@@ -616,6 +646,27 @@ export async function updateCrmContact(
     }
     if (input.address !== undefined) {
       payload.address = input.address?.trim() ? input.address.trim() : null;
+    }
+    if (input.address_city !== undefined) {
+      payload.address_city = input.address_city?.trim() ? input.address_city.trim() : null;
+    }
+    if (input.address_physical !== undefined) {
+      payload.address_physical = input.address_physical?.trim()
+        ? input.address_physical.trim()
+        : null;
+    }
+    if (input.community !== undefined) {
+      payload.community = input.community?.trim() ? input.community.trim() : null;
+    }
+    if (input.preferred_contact_method !== undefined) {
+      payload.preferred_contact_method = input.preferred_contact_method;
+      const legacyMap: Record<string, string> = {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        phone: "Phone",
+      };
+      payload.preferred_contact =
+        legacyMap[input.preferred_contact_method] ?? "WhatsApp";
     }
 
     const { error } = await supabase
@@ -921,12 +972,76 @@ async function fetchContactById(
   const { data } = await supabase
     .from("crm_contacts")
     .select(
-      "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at, handwriting_image_url"
+      "id, name, type, preferred_contact, preferred_contact_method, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at, handwriting_image_url, city, address, address_city, address_physical, community, extra_phones, extra_emails, archived_at"
     )
     .eq("id", contactId)
     .eq("user_id", userId)
+    .is("archived_at", null)
     .single();
   return data ?? null;
+}
+
+function mapSysEventRow(r: Record<string, unknown>): SysEvent {
+  const meta = r.metadata;
+  const metadata: Record<string, unknown> =
+    meta && typeof meta === "object" && meta !== null && !Array.isArray(meta)
+      ? (meta as Record<string, unknown>)
+      : {};
+  return {
+    id: String(r.id ?? ""),
+    user_id: String(r.user_id ?? ""),
+    source: String(r.source ?? "torah"),
+    entity_type: String(r.entity_type ?? ""),
+    entity_id: String(r.entity_id ?? ""),
+    project_id: (r.project_id as string | null) ?? null,
+    action: String(r.action ?? ""),
+    from_state: (r.from_state as string | null) ?? null,
+    to_state: (r.to_state as string | null) ?? null,
+    metadata,
+    created_at: String(r.created_at ?? ""),
+  };
+}
+
+/** אירועי sys_events: ישירות על איש קשר + פרויקטי תורה שבהם הוא לקוח/סופר/מחזיק */
+async function fetchContactSysEventsForPage(
+  supabase: SupabaseClient,
+  contactId: string,
+  userId: string
+): Promise<SysEvent[]> {
+  const { data: projRows } = await supabase
+    .from("torah_projects")
+    .select("id")
+    .eq("user_id", userId)
+    .or(`client_id.eq.${contactId},scribe_id.eq.${contactId},current_holder_id.eq.${contactId}`);
+
+  const projectIds = [...new Set((projRows ?? []).map((r) => r.id as string))];
+
+  const { data: direct } = await supabase
+    .from("sys_events")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("entity_type", "crm_contact")
+    .eq("entity_id", contactId);
+
+  let projectEvents: Record<string, unknown>[] = [];
+  if (projectIds.length > 0) {
+    const { data: pe } = await supabase
+      .from("sys_events")
+      .select("*")
+      .eq("user_id", userId)
+      .in("project_id", projectIds);
+    projectEvents = pe ?? [];
+  }
+
+  const byId = new Map<string, SysEvent>();
+  for (const r of [...(direct ?? []), ...projectEvents]) {
+    const id = (r as { id?: string }).id;
+    if (!id || byId.has(id)) continue;
+    byId.set(id, mapSysEventRow(r as Record<string, unknown>));
+  }
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 }
 
 /**
@@ -1337,6 +1452,7 @@ export type ContactDetailPageData = {
     name: string;
     type: string;
     preferred_contact: string;
+    preferred_contact_method: string | null;
     wa_chat_id: string | null;
     email: string | null;
     phone: string | null;
@@ -1346,8 +1462,16 @@ export type ContactDetailPageData = {
     phone_type: string | null;
     created_at: string;
     handwriting_image_url: string | null;
+    city: string | null;
+    address: string | null;
+    address_city: string | null;
+    address_physical: string | null;
+    community: string | null;
+    extra_phones: { label: string; value: string }[];
+    extra_emails: { label: string; value: string }[];
   };
   contactHistory: CrmContactHistoryEntry[];
+  sysEvents: SysEvent[];
   soferProfile: {
     writing_style: string | null;
     writing_level: string | null;
@@ -1485,8 +1609,8 @@ export async function loadContactDetailPage(
     return { success: false, error: "לא נמצא" };
   }
 
-  // 2. Fetch CRM activity, ERP data, and sofer profile in parallel.
-  const [crmActivity, erpData, soferRes] = await Promise.all([
+  // 2. Fetch CRM activity, ERP data, sofer profile, and sys_events (audit) in parallel.
+  const [crmActivity, erpData, soferRes, sysEvents] = await Promise.all([
     fetchCrmActivity(supabase, id),
     fetchErpData(supabase, id, user.id),
     supabase
@@ -1496,6 +1620,7 @@ export async function loadContactDetailPage(
       )
       .eq("contact_id", id)
       .maybeSingle(),
+    fetchContactSysEventsForPage(supabase, id, user.id),
   ]);
   const soferProfile = soferRes.data ?? null;
 
@@ -1545,6 +1670,7 @@ export async function loadContactDetailPage(
     name: string | null;
     type: string | null;
     preferred_contact: string | null;
+    preferred_contact_method?: string | null;
     wa_chat_id: string | null;
     email: string | null;
     phone: string | null;
@@ -1554,6 +1680,24 @@ export async function loadContactDetailPage(
     phone_type: string | null;
     created_at: string | null;
     handwriting_image_url?: string | null;
+    city?: string | null;
+    address?: string | null;
+    address_city?: string | null;
+    address_physical?: string | null;
+    community?: string | null;
+    extra_phones?: unknown;
+    extra_emails?: unknown;
+  };
+
+  const parseExtra = (raw: unknown): { label: string; value: string }[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+      .map((x) => ({
+        label: String(x.label ?? ""),
+        value: String(x.value ?? "").trim(),
+      }))
+      .filter((x) => x.value.length > 0);
   };
 
   return {
@@ -1564,6 +1708,7 @@ export async function loadContactDetailPage(
         name: c.name ?? "",
         type: c.type ?? "Other",
         preferred_contact: c.preferred_contact ?? "WhatsApp",
+        preferred_contact_method: c.preferred_contact_method ?? null,
         wa_chat_id: c.wa_chat_id ?? null,
         email: c.email ?? null,
         phone: c.phone ?? null,
@@ -1573,10 +1718,18 @@ export async function loadContactDetailPage(
         phone_type: c.phone_type ?? null,
         created_at: c.created_at ?? "",
         handwriting_image_url: c.handwriting_image_url ?? null,
+        city: c.city ?? null,
+        address: c.address ?? null,
+        address_city: c.address_city ?? null,
+        address_physical: c.address_physical ?? null,
+        community: c.community ?? null,
+        extra_phones: parseExtra(c.extra_phones),
+        extra_emails: parseExtra(c.extra_emails),
       },
       contactHistory: contactHistoryRows.map((h) =>
         mapContactHistoryRow(h as Record<string, unknown>)
       ),
+      sysEvents,
       soferProfile: soferProfile
         ? {
             writing_style: soferProfile.writing_style ?? null,
@@ -1677,6 +1830,7 @@ export async function findDuplicateCrmContacts(): Promise<
         "id, name, type, preferred_contact, wa_chat_id, email, phone, tags, notes, certification, phone_type, created_at"
       )
       .eq("user_id", user.id)
+      .is("archived_at", null)
       .order("name");
     if (error) return { success: false, error: handleSupabaseError(error) };
 
@@ -1793,7 +1947,7 @@ export async function mergeCrmContacts(
     const { data: contactRows, error: fetchErr } = await supabase
       .from("crm_contacts")
       .select(
-        "id, name, email, phone, wa_chat_id, tags, type, notes, certification, phone_type, preferred_contact, city, address, handwriting_image_url, extra_phones, extra_emails"
+        "id, name, email, phone, wa_chat_id, tags, type, notes, certification, phone_type, preferred_contact, preferred_contact_method, city, address, address_city, address_physical, community, handwriting_image_url, extra_phones, extra_emails"
       )
       .eq("user_id", user.id)
       .in("id", [primaryId, ...duplicateIds]);
@@ -1803,6 +1957,22 @@ export async function mergeCrmContacts(
     if (!primary) return { success: false, error: "איש הקשר הראשי לא נמצא" };
 
     const dups = (contactRows ?? []).filter((c) => duplicateIds.includes(c.id));
+
+    for (const dupId of duplicateIds) {
+      const { error: clearErr } = await supabase
+        .from("crm_contacts")
+        .update({
+          email: null,
+          phone: null,
+          wa_chat_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", dupId)
+        .eq("user_id", user.id);
+      if (clearErr) {
+        return { success: false, error: `שחרור ייחודיות מייל/טלפון נכשל: ${clearErr.message}` };
+      }
+    }
 
     const altNames = dups
       .map((d) => (d.name ?? "").trim())
@@ -1833,6 +2003,18 @@ export async function mergeCrmContacts(
       primary.address as string | null,
       dups.map((d) => d.address as string | null)
     );
+    const patchAddressCity = coalesceText(
+      (primary as { address_city?: string | null }).address_city ?? null,
+      dups.map((d) => (d as { address_city?: string | null }).address_city ?? null)
+    );
+    const patchAddressPhysical = coalesceText(
+      (primary as { address_physical?: string | null }).address_physical ?? null,
+      dups.map((d) => (d as { address_physical?: string | null }).address_physical ?? null)
+    );
+    const patchCommunity = coalesceText(
+      (primary as { community?: string | null }).community ?? null,
+      dups.map((d) => (d as { community?: string | null }).community ?? null)
+    );
     const patchHw = coalesceText(
       primary.handwriting_image_url as string | null,
       dups.map((d) => d.handwriting_image_url as string | null)
@@ -1841,6 +2023,22 @@ export async function mergeCrmContacts(
       (primary.preferred_contact as string | null)?.trim() ||
       dups.find((d) => (d.preferred_contact as string | null)?.trim())?.preferred_contact ||
       "WhatsApp";
+    const legacyToMethod = (p: string): "whatsapp" | "email" | "phone" => {
+      const t = p.trim();
+      if (t === "Email") return "email";
+      if (t === "Phone") return "phone";
+      return "whatsapp";
+    };
+    const patchPreferredMethod =
+      ((primary as { preferred_contact_method?: string | null }).preferred_contact_method?.trim() as
+        | "whatsapp"
+        | "email"
+        | "phone"
+        | undefined) ||
+      (dups
+        .map((d) => (d as { preferred_contact_method?: string | null }).preferred_contact_method)
+        .find((m) => m && String(m).trim()) as "whatsapp" | "email" | "phone" | undefined) ||
+      legacyToMethod(patchPreferred);
 
     const mergedTags = [
       ...new Set([
@@ -1849,14 +2047,36 @@ export async function mergeCrmContacts(
       ]),
     ];
 
-    const mergedExtraPhones = mergeExtraContactLines(
+    let mergedExtraPhones = mergeExtraContactLines(
       primary.extra_phones,
       dups.map((d) => d.extra_phones)
     );
-    const mergedExtraEmails = mergeExtraContactLines(
+    let mergedExtraEmails = mergeExtraContactLines(
       primary.extra_emails,
       dups.map((d) => d.extra_emails)
     );
+    const primaryPhoneKey = (patchPhone ?? "").trim().toLowerCase();
+    const primaryEmailKey = (patchEmail ?? "").trim().toLowerCase();
+    for (const d of dups) {
+      const dp = ((d.phone as string | null) ?? "").trim();
+      if (dp && dp.toLowerCase() !== primaryPhoneKey) {
+        if (!mergedExtraPhones.some((x) => x.value.toLowerCase() === dp.toLowerCase())) {
+          mergedExtraPhones = [
+            ...mergedExtraPhones,
+            { label: "ממוזג (טלפון)", value: dp },
+          ];
+        }
+      }
+      const de = ((d.email as string | null) ?? "").trim();
+      if (de && de.toLowerCase() !== primaryEmailKey) {
+        if (!mergedExtraEmails.some((x) => x.value.toLowerCase() === de.toLowerCase())) {
+          mergedExtraEmails = [
+            ...mergedExtraEmails,
+            { label: "ממוזג (דוא״ל)", value: de },
+          ];
+        }
+      }
+    }
 
     const soferKeys = [
       "writing_style",
@@ -1914,9 +2134,18 @@ export async function mergeCrmContacts(
         notes: mergedNotes,
         certification: patchCert,
         phone_type: patchPhoneType,
-        preferred_contact: patchPreferred,
+        preferred_contact:
+          patchPreferredMethod === "email"
+            ? "Email"
+            : patchPreferredMethod === "phone"
+              ? "Phone"
+              : "WhatsApp",
+        preferred_contact_method: patchPreferredMethod,
         city: patchCity,
         address: patchAddress,
+        address_city: patchAddressCity,
+        address_physical: patchAddressPhysical,
+        community: patchCommunity,
         handwriting_image_url: patchHw,
         extra_phones: mergedExtraPhones,
         extra_emails: mergedExtraEmails,
@@ -1934,6 +2163,7 @@ export async function mergeCrmContacts(
       { table: "erp_sales", column: "buyer_id" },
       { table: "erp_sales", column: "seller_id" },
       { table: "erp_sales", column: "scribe_id" },
+      { table: "erp_investments", column: "scribe_id" },
       { table: "crm_transactions", column: "contact_id" },
       { table: "crm_documents", column: "contact_id" },
       { table: "crm_communication_logs", column: "contact_id" },
@@ -1945,11 +2175,33 @@ export async function mergeCrmContacts(
       { table: "market_torah_books", column: "sofer_id" },
       { table: "market_torah_books", column: "dealer_id" },
       { table: "crm_scribe_gallery", column: "contact_id" },
-      { table: "crm_contact_identities", column: "contact_id" },
-      { table: "crm_merge_suggestions", column: "contact_id_a" },
-      { table: "crm_merge_suggestions", column: "contact_id_b" },
       { table: "torah_qa_batches", column: "magiah_id" },
+      { table: "torah_qa_batches", column: "checker_id" },
     ];
+
+    for (const dupId of duplicateIds) {
+      await supabase.from("crm_merge_suggestions").delete().eq("contact_id_a", dupId);
+      await supabase.from("crm_merge_suggestions").delete().eq("contact_id_b", dupId);
+    }
+
+    for (const dupId of duplicateIds) {
+      const { data: idRows } = await supabase
+        .from("crm_contact_identities")
+        .select("id")
+        .eq("contact_id", dupId);
+      for (const row of idRows ?? []) {
+        const { error: idErr } = await supabase
+          .from("crm_contact_identities")
+          .update({ contact_id: primaryId })
+          .eq("id", (row as { id: string }).id);
+        if (idErr) {
+          await supabase
+            .from("crm_contact_identities")
+            .delete()
+            .eq("id", (row as { id: string }).id);
+        }
+      }
+    }
 
     for (const dupId of duplicateIds) {
       for (const { table, column } of FK_TABLES) {
@@ -1966,17 +2218,51 @@ export async function mergeCrmContacts(
           });
         }
       }
-      const { error: delErr } = await supabase
+      const { error: evErr } = await supabase
+        .from("sys_events")
+        .update({ entity_id: primaryId })
+        .eq("user_id", user.id)
+        .eq("entity_type", "crm_contact")
+        .eq("entity_id", dupId);
+      if (evErr) {
+        logError("CRM", "mergeCrmContacts: sys_events remap", { dupId, message: evErr.message });
+      }
+    }
+
+    for (const dupId of duplicateIds) {
+      const { error: archErr } = await supabase
         .from("crm_contacts")
-        .delete()
+        .update({
+          merged_into: primaryId,
+          archived_at: new Date().toISOString(),
+          email: null,
+          phone: null,
+          wa_chat_id: null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", dupId)
         .eq("user_id", user.id);
-      if (delErr) {
-        logError("CRM", "mergeCrmContacts: delete dup failed", {
-          dupId,
-          message: delErr.message,
-        });
+      if (archErr) {
+        logError("CRM", "mergeCrmContacts: archive dup failed", { dupId, message: archErr.message });
       }
+    }
+
+    const { error: mergeEvErr } = await supabase.from("sys_events").insert({
+      user_id: user.id,
+      source: "crm",
+      entity_type: "crm_contact",
+      entity_id: primaryId,
+      project_id: null,
+      action: "contacts_merged",
+      from_state: null,
+      to_state: null,
+      metadata: {
+        merged_contact_ids: duplicateIds,
+        primary_name: primary.name,
+      },
+    });
+    if (mergeEvErr) {
+      logError("CRM", "mergeCrmContacts: merge sys_event", { message: mergeEvErr.message });
     }
 
     logInfo("CRM", "mergeCrmContacts: merged", { primaryId, duplicateIds });

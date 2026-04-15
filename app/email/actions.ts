@@ -408,7 +408,9 @@ export async function addCrmContactToEmailList(
   name: string,
   email: string,
   phone?: string | null
-): Promise<ActionResult> {
+): Promise<
+  { success: true; emailContactId?: string } | { success: false; error: string }
+> {
   const cleanEmail = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return { success: false, error: "אימייל לא תקין" };
@@ -418,22 +420,27 @@ export async function addCrmContactToEmailList(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { error } = await supabase.from("email_contacts").upsert(
-      {
-        user_id: user.id,
-        email: cleanEmail,
-        name: name.trim() || null,
-        phone: (phone ?? "").trim() || null,
-        tags: ["CRM"],
-        subscribed: true,
-        source: "crm",
-      },
-      { onConflict: "user_id,email" }
-    );
+    const { data: row, error } = await supabase
+      .from("email_contacts")
+      .upsert(
+        {
+          user_id: user.id,
+          email: cleanEmail,
+          name: name.trim() || null,
+          phone: (phone ?? "").trim() || null,
+          tags: ["CRM"],
+          subscribed: true,
+          source: "crm",
+        },
+        { onConflict: "user_id,email" }
+      )
+      .select("id")
+      .single();
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
-    return { success: true };
+    revalidatePath("/email/campaigns");
+    return { success: true, emailContactId: row?.id as string | undefined };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

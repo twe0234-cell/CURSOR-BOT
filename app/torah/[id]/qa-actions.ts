@@ -4,6 +4,14 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/src/lib/supabase/server";
 import type { TorahQaBatchSummary } from "@/src/lib/types/torah";
+import {
+  engineCreateQaBatch,
+  engineReturnQaBatch,
+  engineSetSheetQaOutcome,
+  engineCreateFixTask,
+  engineCompleteFixTask,
+  type QaKind,
+} from "@/src/services/torah.service";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -11,6 +19,26 @@ import type { TorahQaBatchSummary } from "@/src/lib/types/torah";
 
 export type QaBatchRow = TorahQaBatchSummary & {
   sheet_numbers: number[];
+  checker_name?: string | null;
+};
+
+export type QaBatchSheetRow = {
+  id: string;
+  sheet_number: number;
+  status: string;
+};
+
+export type TorahFixTaskRow = {
+  id: string;
+  project_id: string;
+  sheet_id: string;
+  sheet_number: number | null;
+  qa_batch_id: string | null;
+  status: string;
+  description: string | null;
+  cost_amount: number;
+  completed_at: string | null;
+  created_at: string;
 };
 
 type ActionResult = { success: true } | { success: false; error: string };
@@ -21,80 +49,56 @@ type ActionResult = { success: true } | { success: false; error: string };
 
 const createQaBatchSchema = z.object({
   projectId: z.string().uuid(),
-  magiahId: z.string().uuid("יש לבחור מגיה"),
   sheetIds: z.array(z.string().uuid()).min(1, "בחר לפחות יריעה אחת"),
+  magiahId: z.union([z.string().uuid(), z.literal("")]).optional().nullable(),
+  checkerId: z.union([z.string().uuid(), z.literal("")]).optional().nullable(),
+  qaKind: z.enum(["gavra", "computer", "repair", "other"]).optional().nullable(),
+  costAmount: z.coerce.number().nonnegative().optional(),
+  reportUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   notes: z.string().max(500).nullable().optional(),
-});
+}).refine(
+  (d) =>
+    Boolean((d.magiahId && d.magiahId.length > 0) ||
+      (d.checkerId && d.checkerId.length > 0) ||
+      d.qaKind === "computer"),
+  { message: "יש לבחור מגיה או בודק, או לסמן סוג «מחשב»" }
+);
+
+export type CreateQaBatchInput = z.infer<typeof createQaBatchSchema>;
 
 export async function createQaBatch(
-  projectId: string,
-  magiahId: string,
-  sheetIds: string[],
-  notes?: string | null
+  input: CreateQaBatchInput
 ): Promise<{ success: true; batchId: string } | { success: false; error: string }> {
-  const parsed = createQaBatchSchema.safeParse({ projectId, magiahId, sheetIds, notes });
+  const parsed = createQaBatchSchema.safeParse(input);
   if (!parsed.success) {
     const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
-    return { success: false, error: (first as string) ?? "שגיאת ולידציה" };
+    return { success: false, error: (first as string) ?? parsed.error.issues[0]?.message ?? "שגיאת ולידציה" };
   }
 
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "יש להתחבר" };
+    const d = parsed.data;
+    const magiah =
+      d.magiahId && String(d.magiahId).trim().length > 0 ? String(d.magiahId) : null;
+    const checker =
+      d.checkerId && String(d.checkerId).trim().length > 0 ? String(d.checkerId) : null;
 
-    // Verify project ownership
-    const { data: proj } = await supabase
-      .from("torah_projects")
-      .select("id")
-      .eq("id", parsed.data.projectId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!proj) return { success: false, error: "הפרויקט לא נמצא" };
+    const res = await engineCreateQaBatch({
+      projectId: d.projectId,
+      sheetIds: d.sheetIds,
+      magiahId: magiah,
+      checkerId: checker,
+      qaKind: (d.qaKind ?? null) as QaKind | null,
+      notes: d.notes ?? null,
+      costAmount: d.costAmount ?? 0,
+      reportUrl: d.reportUrl && String(d.reportUrl).trim() ? String(d.reportUrl).trim() : null,
+    });
+    if (!res.success) return { success: false, error: res.error };
+    const batchId = res.data?.batchId;
+    if (!batchId) return { success: false, error: "מזהה סבב חסר" };
 
-    // 1. Insert batch
-    const { data: batch, error: bErr } = await supabase
-      .from("torah_qa_batches")
-      .insert({
-        project_id: parsed.data.projectId,
-        magiah_id: parsed.data.magiahId,
-        status: "sent",
-        sent_date: new Date().toISOString(),
-        notes: parsed.data.notes ?? null,
-      })
-      .select("id")
-      .single();
-
-    if (bErr || !batch) return { success: false, error: bErr?.message ?? "שגיאה ביצירת שקית" };
-
-    // 2. Insert junction rows
-    const junctionRows = parsed.data.sheetIds.map((sheetId) => ({
-      batch_id: batch.id,
-      sheet_id: sheetId,
-    }));
-
-    const { error: jErr } = await supabase
-      .from("torah_batch_sheets")
-      .insert(junctionRows);
-
-    if (jErr) {
-      // rollback batch
-      await supabase.from("torah_qa_batches").delete().eq("id", batch.id);
-      return { success: false, error: jErr.message };
-    }
-
-    // 3. Update sheet statuses to in_qa
-    const { error: sErr } = await supabase
-      .from("torah_sheets")
-      .update({ status: "in_qa" })
-      .in("id", parsed.data.sheetIds)
-      .eq("project_id", parsed.data.projectId);
-
-    if (sErr) return { success: false, error: sErr.message };
-
-    revalidatePath(`/torah/${parsed.data.projectId}`);
+    revalidatePath(`/torah/${d.projectId}`);
     revalidatePath("/torah");
-    return { success: true, batchId: batch.id };
+    return { success: true, batchId };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
@@ -111,11 +115,127 @@ export async function returnQaBatch(
   if (!batchId || !projectId) return { success: false, error: "מזהים חסרים" };
 
   try {
+    const res = await engineReturnQaBatch({ batchId, projectId });
+    if (!res.success) return { success: false, error: res.error };
+
+    revalidatePath(`/torah/${projectId}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// QA sheet resolution (אחרי שהסבב חזר — יריעות עדיין in_qa עד לפתרון)
+// ─────────────────────────────────────────────────────────────
+
+const resolveSchema = z.object({
+  projectId: z.string().uuid(),
+  sheetId: z.string().uuid(),
+  outcome: z.enum(["approved", "needs_fixing"]),
+});
+
+export async function resolveTorahSheetQa(
+  projectId: string,
+  sheetId: string,
+  outcome: "approved" | "needs_fixing"
+): Promise<ActionResult> {
+  const parsed = resolveSchema.safeParse({ projectId, sheetId, outcome });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+  }
+  try {
+    const res = await engineSetSheetQaOutcome({
+      projectId: parsed.data.projectId,
+      sheetId: parsed.data.sheetId,
+      outcome: parsed.data.outcome,
+    });
+    if (!res.success) return { success: false, error: res.error };
+    revalidatePath(`/torah/${projectId}`);
+    revalidatePath("/torah");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fix tasks
+// ─────────────────────────────────────────────────────────────
+
+const createFixSchema = z.object({
+  projectId: z.string().uuid(),
+  sheetId: z.string().uuid(),
+  qaBatchId: z.string().uuid().optional().nullable(),
+  description: z.string().max(2000).optional().nullable(),
+  costAmount: z.coerce.number().nonnegative().optional(),
+});
+
+export async function createTorahFixTaskAction(
+  input: z.infer<typeof createFixSchema>
+): Promise<{ success: true; fixTaskId: string } | { success: false; error: string }> {
+  const parsed = createFixSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+  }
+  try {
+    const res = await engineCreateFixTask({
+      projectId: parsed.data.projectId,
+      sheetId: parsed.data.sheetId,
+      qaBatchId: parsed.data.qaBatchId ?? null,
+      description: parsed.data.description ?? null,
+      costAmount: parsed.data.costAmount ?? 0,
+    });
+    if (!res.success) return { success: false, error: res.error };
+    const id = res.data?.fixTaskId;
+    if (!id) return { success: false, error: "חסר מזהה משימה" };
+    revalidatePath(`/torah/${parsed.data.projectId}`);
+    return { success: true, fixTaskId: id };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+const completeFixSchema = z.object({
+  projectId: z.string().uuid(),
+  fixTaskId: z.string().uuid(),
+  actualCost: z.coerce.number().nonnegative().optional().nullable(),
+  nextSheetStatus: z.enum(["in_qa", "approved"]),
+});
+
+export async function completeTorahFixTaskAction(
+  input: z.infer<typeof completeFixSchema>
+): Promise<ActionResult> {
+  const parsed = completeFixSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+  }
+  try {
+    const res = await engineCompleteFixTask({
+      projectId: parsed.data.projectId,
+      fixTaskId: parsed.data.fixTaskId,
+      actualCost: parsed.data.actualCost ?? null,
+      nextSheetStatus: parsed.data.nextSheetStatus,
+    });
+    if (!res.success) return { success: false, error: res.error };
+    revalidatePath(`/torah/${parsed.data.projectId}`);
+    revalidatePath("/torah");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function fetchTorahFixTasks(
+  projectId: string
+): Promise<{ success: true; tasks: TorahFixTaskRow[] } | { success: false; error: string }> {
+  try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    // Verify ownership through project
     const { data: proj } = await supabase
       .from("torah_projects")
       .select("id")
@@ -124,21 +244,84 @@ export async function returnQaBatch(
       .maybeSingle();
     if (!proj) return { success: false, error: "הפרויקט לא נמצא" };
 
-    const { error } = await supabase
-      .from("torah_qa_batches")
-      .update({
-        status: "returned",
-        returned_date: new Date().toISOString(),
-      })
-      .eq("id", batchId)
-      .eq("project_id", projectId);
+    const { data: tasks, error } = await supabase
+      .from("torah_fix_tasks")
+      .select("id, project_id, sheet_id, qa_batch_id, status, description, cost_amount, completed_at, created_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
 
-    revalidatePath(`/torah/${projectId}`);
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+    const sheetIds = [...new Set((tasks ?? []).map((t) => t.sheet_id as string))];
+    const { data: sheets } =
+      sheetIds.length > 0
+        ? await supabase.from("torah_sheets").select("id, sheet_number").in("id", sheetIds)
+        : { data: [] };
+
+    const numMap = new Map((sheets ?? []).map((s) => [s.id as string, Number(s.sheet_number)]));
+
+    const rows: TorahFixTaskRow[] = (tasks ?? []).map((t) => ({
+      id: t.id as string,
+      project_id: t.project_id as string,
+      sheet_id: t.sheet_id as string,
+      sheet_number: numMap.get(t.sheet_id as string) ?? null,
+      qa_batch_id: (t.qa_batch_id as string | null) ?? null,
+      status: String(t.status),
+      description: (t.description as string | null) ?? null,
+      cost_amount: Number((t as { cost_amount?: unknown }).cost_amount ?? 0),
+      completed_at: (t.completed_at as string | null) ?? null,
+      created_at: (t.created_at as string) ?? "",
+    }));
+
+    return { success: true, tasks: rows };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sheets linked to a QA batch (לפתרון סטטוס אחרי החזרה)
+// ─────────────────────────────────────────────────────────────
+
+export async function fetchQaBatchSheetRows(
+  projectId: string,
+  batchId: string
+): Promise<{ success: true; sheets: QaBatchSheetRow[] } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: junc, error: jErr } = await supabase
+      .from("torah_batch_sheets")
+      .select("sheet_id")
+      .eq("batch_id", batchId);
+
+    if (jErr) return { success: false, error: jErr.message };
+
+    const ids = (junc ?? []).map((j) => j.sheet_id as string);
+    if (ids.length === 0) return { success: true, sheets: [] };
+
+    const { data: sheetRows, error: sErr } = await supabase
+      .from("torah_sheets")
+      .select("id, sheet_number, status")
+      .eq("project_id", projectId)
+      .in("id", ids)
+      .order("sheet_number", { ascending: true });
+
+    if (sErr) return { success: false, error: sErr.message };
+
+    const sheets: QaBatchSheetRow[] = (sheetRows ?? []).map((s) => ({
+      id: s.id as string,
+      sheet_number: Number(s.sheet_number),
+      status: String(s.status),
+    }));
+
+    return { success: true, sheets };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
 }
 
@@ -154,31 +337,36 @@ export async function fetchQaBatches(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    // Fetch batches
     const { data: batches, error: bErr } = await supabase
       .from("torah_qa_batches")
-      .select(
-        "id, project_id, magiah_id, qa_kind, cost_amount, report_url, vendor_label, status, sent_date, returned_date, notes, created_at"
-      )
+      .select("*")
       .eq("project_id", projectId)
       .order("sent_date", { ascending: false });
 
     if (bErr) return { success: false, error: bErr.message };
     if (!batches || batches.length === 0) return { success: true, batches: [] };
 
-    // Get magiah names
     const magiahIds = [
       ...new Set(
         batches.map((b) => b.magiah_id as string | null).filter((id): id is string => Boolean(id))
       ),
     ];
-    const { data: contacts } = await supabase
-      .from("crm_contacts")
-      .select("id, name")
-      .in("id", magiahIds);
+    const checkerIds = [
+      ...new Set(
+        batches
+          .map((b) => (b as { checker_id?: string | null }).checker_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const contactIds = [...new Set([...magiahIds, ...checkerIds])];
+
+    const { data: contacts } =
+      contactIds.length > 0
+        ? await supabase.from("crm_contacts").select("id, name").in("id", contactIds)
+        : { data: [] };
+
     const nameMap = new Map((contacts ?? []).map((c) => [c.id as string, c.name as string]));
 
-    // Get sheet numbers per batch
     const batchIds = batches.map((b) => b.id as string);
     const { data: junctions } = await supabase
       .from("torah_batch_sheets")
@@ -195,7 +383,6 @@ export async function fetchQaBatches(
 
     const sheetNumberMap = new Map((sheetRows ?? []).map((s) => [s.id as string, s.sheet_number as number]));
 
-    // Group sheet numbers by batch
     const batchSheetNumbers = new Map<string, number[]>();
     for (const j of junctions ?? []) {
       const bId = j.batch_id as string;
@@ -204,26 +391,30 @@ export async function fetchQaBatches(
       if (!batchSheetNumbers.has(bId)) batchSheetNumbers.set(bId, []);
       batchSheetNumbers.get(bId)!.push(num);
     }
-    // Sort sheet numbers within each batch
     for (const arr of batchSheetNumbers.values()) arr.sort((a, b) => a - b);
 
-    const result: QaBatchRow[] = batches.map((b) => ({
-      id: b.id as string,
-      project_id: b.project_id as string,
-      magiah_id: (b.magiah_id as string | null) ?? null,
-      qa_kind: (b.qa_kind as "gavra" | "computer" | "repair" | "other" | null) ?? null,
-      cost_amount: Number((b as { cost_amount?: unknown }).cost_amount ?? 0) || 0,
-      report_url: ((b as { report_url?: string | null }).report_url as string | null) ?? null,
-      vendor_label: ((b as { vendor_label?: string | null }).vendor_label as string | null) ?? null,
-      status: (b.status as "sent" | "returned"),
-      sent_date: b.sent_date as string,
-      returned_date: (b.returned_date as string | null) ?? null,
-      notes: (b.notes as string | null) ?? null,
-      created_at: b.created_at as string,
-      magiah_name: b.magiah_id ? nameMap.get(b.magiah_id as string) ?? null : null,
-      sheet_count: (batchSheetNumbers.get(b.id as string) ?? []).length,
-      sheet_numbers: batchSheetNumbers.get(b.id as string) ?? [],
-    }));
+    const result: QaBatchRow[] = batches.map((b) => {
+      const checkerId = ((b as { checker_id?: string | null }).checker_id as string | null) ?? null;
+      return {
+        id: b.id as string,
+        project_id: b.project_id as string,
+        magiah_id: (b.magiah_id as string | null) ?? null,
+        checker_id: checkerId,
+        qa_kind: (b.qa_kind as "gavra" | "computer" | "repair" | "other" | null) ?? null,
+        cost_amount: Number((b as { cost_amount?: unknown }).cost_amount ?? 0) || 0,
+        report_url: ((b as { report_url?: string | null }).report_url as string | null) ?? null,
+        vendor_label: ((b as { vendor_label?: string | null }).vendor_label as string | null) ?? null,
+        status: (b.status as "sent" | "returned"),
+        sent_date: b.sent_date as string,
+        returned_date: (b.returned_date as string | null) ?? null,
+        notes: (b.notes as string | null) ?? null,
+        created_at: b.created_at as string,
+        magiah_name: b.magiah_id ? nameMap.get(b.magiah_id as string) ?? null : null,
+        checker_name: checkerId ? nameMap.get(checkerId) ?? null : null,
+        sheet_count: (batchSheetNumbers.get(b.id as string) ?? []).length,
+        sheet_numbers: batchSheetNumbers.get(b.id as string) ?? [],
+      };
+    });
 
     return { success: true, batches: result };
   } catch (err) {

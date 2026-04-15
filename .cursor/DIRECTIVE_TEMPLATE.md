@@ -1,5 +1,7 @@
 # [DIRECTIVE: AUTONOMOUS FEATURE DEVELOPMENT - {שם המודול}]
 
+**לפני ביצוע:** `ENGINEERING_QA_PROTOCOL.md` + `CLAUDE.md` — במיוחד לפיצ'רים פיננסיים או תהליכיים.
+
 ## [TRIPLE-AI ORCHESTRATION PROTOCOL]
 Claude (אורקסטרטור) ← MCP → Codex CLI (מבצע) + Gemini Pro (יועץ/מבקר)
 

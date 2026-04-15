@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +27,7 @@ import {
 } from "@/app/email/actions";
 import { sendGmailCampaignAction, fetchCampaignStats, saveCampaignSignatureAction, type CampaignStat } from "./actions";
 import EmailComposer from "./EmailComposer";
+import { CrmEmailRecipientPicker } from "@/components/email/CrmEmailRecipientPicker";
 import {
   KeyIcon,
   SparklesIcon,
@@ -73,7 +75,17 @@ function stripHtmlRough(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200);
 }
 
+/** טקסט פשוט מ-URL → HTML בסיסי לעורך TipTap */
+function plainToEmailHtml(plain: string): string {
+  const esc = (t: string) =>
+    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const lines = plain.split("\n");
+  if (lines.every((l) => !l.trim())) return "<p></p>";
+  return lines.map((l) => `<p>${esc(l) || "&nbsp;"}</p>`).join("");
+}
+
 export default function CampaignsClient({ initialContacts, signature, initialEmailTagPresets }: Props) {
+  const searchParams = useSearchParams();
   const [contacts, setContacts] = useState(initialContacts);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [subject, setSubject] = useState("");
@@ -149,6 +161,38 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
       if (r.success) setGmailConnected(r.connected);
     });
   }, []);
+
+  useEffect(() => {
+    const pre = searchParams.get("preselect");
+    const subj = searchParams.get("prefillSubject");
+    const body = searchParams.get("prefillBody");
+    if (subj) setSubject(decodeURIComponent(subj));
+    if (body) setBodyHtml(plainToEmailHtml(decodeURIComponent(body)));
+    if (pre) {
+      const em = decodeURIComponent(pre);
+      void fetchEmailContacts().then((r) => {
+        if (!r.success) return;
+        setContacts(r.contacts);
+        const m = r.contacts.find((c) => c.email.toLowerCase() === em.toLowerCase());
+        if (m) setSelected(new Set([m.id]));
+      });
+    }
+  }, [searchParams]);
+
+  const handleCrmRecipientPicked = (emailContactId: string, email: string) => {
+    setFilterSegmentTags([]);
+    void fetchEmailContacts().then((r) => {
+      if (!r.success) return;
+      setContacts(r.contacts);
+      const match =
+        (emailContactId && r.contacts.find((c) => c.id === emailContactId)) ||
+        r.contacts.find((c) => c.email.toLowerCase() === email.toLowerCase());
+      if (match) {
+        setSelected(new Set([match.id]));
+        toast.success(`נמען נבחר: ${match.email}`);
+      }
+    });
+  };
 
   const loadStats = () => {
     setStatsLoading(true);
@@ -449,6 +493,7 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <CrmEmailRecipientPicker onEmailContactResolved={handleCrmRecipientPicked} />
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-slate-600">פילוח מהיר</p>
                   <div className="flex flex-wrap gap-1.5">

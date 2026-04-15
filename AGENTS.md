@@ -9,6 +9,23 @@ After any session-created branch: merge back to main, then delete the branch.
 
 ---
 
+## Engineering QA (mandatory)
+
+Read [ENGINEERING_QA_PROTOCOL.md](ENGINEERING_QA_PROTOCOL.md) before financial, workflow, ledger, or webhook work. It defines non-bypassable rules: state safety, financial integrity, atomicity, concurrency, validation, and when to stop and report risk.
+
+### Where each tool picks up repo rules
+
+| כלי | מיקום במאגר / הערה |
+|-----|-------------------|
+| **Cursor** | [CLAUDE.md](CLAUDE.md), [AGENTS.md](AGENTS.md), [.cursorrules](.cursorrules), [.cursor/rules/engineering-qa-protocol.mdc](.cursor/rules/engineering-qa-protocol.mdc) |
+| **OpenAI Codex** | [AGENTS.md](AGENTS.md) (מומלץ רשמית), [CODEX.md](CODEX.md), [.codex/README.md](.codex/README.md); הגדרות גלובליות: `~/.codex/config.toml` |
+| **Antigravity** | [ANTIGRAVITY.md](ANTIGRAVITY.md) + אותם מסמכי שורש; נתוני IDE ב־`%APPDATA%\Antigravity\` (לא קוד) |
+| **Claude Code** | [CLAUDE.md](CLAUDE.md) כמקור ראשי |
+
+פירוט נתיבים במחשב מקומי: [docs/AI_AGENT_PATHS.md](docs/AI_AGENT_PATHS.md).
+
+---
+
 ## Cursor Cloud specific instructions
 
 ### Overview

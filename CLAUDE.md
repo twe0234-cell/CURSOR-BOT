@@ -2,6 +2,8 @@
 
 Source of truth for Claude Code. Read before touching any file.
 
+**Mandatory for all agents:** [ENGINEERING_QA_PROTOCOL.md](ENGINEERING_QA_PROTOCOL.md) — QA, bug prevention, and safe-change rules for a live financial system (complements this file; not optional).
+
 ---
 
 ## 1. מה המערכת
@@ -195,6 +197,11 @@ lib/sku.ts                        ← יצירת SKU
 app/api/cron/process-broadcasts/  ← Cron יומי
 supabase/migrations/              ← כל ה-DDL
 ARCHITECTURE.md                   ← סכמה + אלגוריתם מפורט
+ENGINEERING_QA_PROTOCOL.md        ← QA + פיתוח בטוח (חובה לסוכני AI)
+CODEX.md / ANTIGRAVITY.md         ← מצביעים ל-Codex / Antigravity
+.codex/README.md                  ← הנחיות תחת .codex (OpenAI Codex)
+.cursor/rules/*.mdc               ← כללי Cursor (כולל QA)
+docs/AI_AGENT_PATHS.md            ← טבלת נתיבים לסוכנים
 ```
 
 ---

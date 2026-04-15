@@ -14,8 +14,6 @@ import {
   Kanban,
   ChevronRight,
   MessageSquareIcon,
-  MessageCircle,
-  Mail,
   AlertTriangleIcon,
 } from "lucide-react";
 import MarketContactLog from "./MarketContactLog";
@@ -24,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -63,11 +61,7 @@ import { UnifiedDealerSelect } from "@/components/crm/UnifiedDealerSelect";
 // of 175. Use formatDisplayK (below) for values that are already in K.
 import { isLikelyImageFile } from "@/lib/broadcast/imageFile";
 import { applyNumericTransform } from "@/lib/numericInput";
-import {
-  buildMarketTorahShareText,
-  mailtoOfferHref,
-  whatsappPrefillPath,
-} from "@/lib/market/shareOfferText";
+import { MarketShareQuoteDialog } from "@/components/market/MarketShareQuoteDialog";
 import {
   STAM_SEFER_TORAH_SIZES,
   MARKET_PARCHMENT_TYPES,
@@ -87,11 +81,19 @@ type Props = {
   calculatorParchmentNames?: string[];
 };
 
-function displayOwner(row: MarketTorahBookRow): string {
+/** כרטיס / קנבן — שורת כותרת אחת (בלי כפילות עם עמודות סופר/סוחר בטבלה) */
+function cardHeadline(row: MarketTorahBookRow): string {
+  const ext = row.external_sofer_name?.trim();
+  if (ext) return ext;
   if (row.dealer_id && row.dealer_name) return row.dealer_name;
   if (row.sofer_name) return row.sofer_name;
-  if (row.external_sofer_name) return row.external_sofer_name;
   return "—";
+}
+
+/** טבלה — עמודה ראשונה: רק טקסט בעלים מההצעה (וואטסאפ וכו׳). סוחר ב-CRM מופיע בעמודת ״סוחר״ בלבד */
+function tableOwnerOfferText(row: MarketTorahBookRow): string {
+  const t = row.external_sofer_name?.trim();
+  return t || "—";
 }
 
 /** Values arrive already in K-units from mapBookRow — no division needed. */
@@ -116,42 +118,6 @@ function SkuBadge({ sku }: { sku: string | null }) {
   );
 }
 
-function MarketRowShareLinks({ row }: { row: MarketTorahBookRow }) {
-  const body = buildMarketTorahShareText(row);
-  const subject =
-    row.sku != null && String(row.sku).trim()
-      ? `ספר תורה — ${row.sku}`
-      : "ספר תורה מהמאגר";
-  const mailHref = mailtoOfferHref(subject, body);
-  const iconBtn = "shrink-0";
-  return (
-    <>
-      <Link
-        href={whatsappPrefillPath(body)}
-        prefetch={false}
-        title="שיתוף לוואטסאפ"
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "icon" }),
-          "text-emerald-600 hover:bg-emerald-50",
-          iconBtn
-        )}
-      >
-        <MessageCircle className="size-4" />
-      </Link>
-      <a
-        href={mailHref}
-        title="פתיחת הודעה במייל"
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "icon" }),
-          "text-slate-600 hover:bg-slate-100",
-          iconBtn
-        )}
-      >
-        <Mail className="size-4" />
-      </a>
-    </>
-  );
-}
 
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
@@ -189,6 +155,11 @@ export default function MarketClient({
   const [viewMode, setViewMode] = useViewMode("market");
   const [kanbanMode, setKanbanMode] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [shareQuoteRowId, setShareQuoteRowId] = useState<string | null>(null);
+  const shareQuoteRow = useMemo(
+    () => rows.find((r) => r.id === shareQuoteRowId) ?? null,
+    [rows, shareQuoteRowId]
+  );
 
   const parchmentOptions = useMemo(() => {
     const set = new Set<string>();
@@ -208,8 +179,14 @@ export default function MarketClient({
     if (filterText) {
       const q = filterText.toLowerCase();
       const hit = [
-        row.sofer_name, row.dealer_name, row.external_sofer_name,
-        row.script_type, row.sku, row.notes, row.negotiation_notes, row.torah_size,
+        row.sofer_name,
+        row.dealer_name,
+        row.external_sofer_name,
+        row.script_type,
+        row.sku,
+        row.notes,
+        row.negotiation_notes,
+        row.torah_size,
       ].some((v) => v?.toLowerCase().includes(q));
       if (!hit) return false;
     }
@@ -851,7 +828,7 @@ export default function MarketClient({
                       key={row.id}
                       className="bg-white rounded-lg border border-border p-2.5 shadow-sm space-y-1 text-sm"
                     >
-                      <div className="font-semibold truncate">{displayOwner(row)}</div>
+                      <div className="font-semibold truncate">{cardHeadline(row)}</div>
                       <div className="flex gap-1 flex-wrap text-xs text-muted-foreground">
                         {row.torah_size && <span className="bg-muted rounded px-1">{row.torah_size} ס&quot;מ</span>}
                         {row.script_type && <span className="bg-muted rounded px-1">{row.script_type}</span>}
@@ -860,7 +837,15 @@ export default function MarketClient({
                         <div className="text-xs font-bold text-primary">{formatK(row.asking_price)}</div>
                       )}
                       <div className="flex gap-0.5 pt-0.5 items-center justify-center [&_a]:h-7 [&_a]:w-7 [&_a]:min-h-7 [&_svg]:size-3.5">
-                        <MarketRowShareLinks row={row} />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          onClick={() => setShareQuoteRowId(row.id)}
+                        >
+                          הצעת מחיר
+                        </Button>
                       </div>
                       <div className="flex gap-1 pt-0.5">
                         <Button
@@ -930,7 +915,7 @@ export default function MarketClient({
                   )}
                 </div>
                 <CardContent className="p-3 space-y-1.5">
-                  <p className="font-semibold text-sm truncate">{displayOwner(row)}</p>
+                  <p className="font-semibold text-sm truncate">{cardHeadline(row)}</p>
                   {row.sofer_name && <p className="text-xs text-muted-foreground">סופר: {row.sofer_name}</p>}
                   <div className="flex gap-1 text-xs flex-wrap">
                     {row.parchment_type && <span className="bg-muted rounded px-1.5 py-0.5 text-muted-foreground">{row.parchment_type}</span>}
@@ -943,7 +928,15 @@ export default function MarketClient({
                     <p className="text-xs text-emerald-600">רווח: {formatK(row.potential_profit)}</p>
                   )}
                   <div className="flex gap-1 pt-1 items-center">
-                    <MarketRowShareLinks row={row} />
+                    <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          onClick={() => setShareQuoteRowId(row.id)}
+                        >
+                          הצעת מחיר
+                        </Button>
                     <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => setEditRow(row)}>
                       <PencilIcon className="size-3 ml-1" />ערוך
                     </Button>
@@ -963,14 +956,14 @@ export default function MarketClient({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50 border-b border-border">
-                  <TableHead className="text-right py-3 px-4 w-[150px]">בעלים</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[150px]">בעלים (מההצעה)</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר (CRM)</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">קשר אחרון</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[72px]">גודל</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">סוג קלף</TableHead>
                   <TableHead className="text-right py-3 px-4 w-[100px]">כתב</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px]">כתב</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px]">תמונה</TableHead>
                   <TableHead className="text-right py-3 px-4 w-[100px]">מחיר דורש</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px]">יעד תיווך</TableHead>
                   <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[100px]">רווח צפוי</TableHead>
@@ -993,7 +986,7 @@ export default function MarketClient({
                   filteredRows.map((row) => (
                     <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3 px-4 font-medium">
-                        <div className="truncate max-w-[138px]">{displayOwner(row)}</div>
+                        <div className="truncate max-w-[138px]">{tableOwnerOfferText(row)}</div>
                         <SkuBadge sku={row.sku} />
                       </TableCell>
                       <TableCell className="py-3 px-4 hidden sm:table-cell text-sm text-slate-700 truncate max-w-[108px]">
@@ -1046,7 +1039,15 @@ export default function MarketClient({
                       </TableCell>
                       <TableCell className="py-3 px-4">
                         <div className="flex flex-wrap gap-0.5 max-w-[9rem] justify-end">
-                          <MarketRowShareLinks row={row} />
+                          <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          onClick={() => setShareQuoteRowId(row.id)}
+                        >
+                          הצעת מחיר
+                        </Button>
                           <Button
                             type="button"
                             variant="ghost"
@@ -1292,6 +1293,14 @@ export default function MarketClient({
           )}
         </DialogContent>
       </Dialog>
+
+      <MarketShareQuoteDialog
+        row={shareQuoteRow}
+        open={shareQuoteRowId != null}
+        onOpenChange={(v) => {
+          if (!v) setShareQuoteRowId(null);
+        }}
+      />
     </div>
   );
 }

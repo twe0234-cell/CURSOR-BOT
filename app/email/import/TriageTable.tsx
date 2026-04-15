@@ -20,7 +20,8 @@ import {
   type ContactType,
 } from "./actions";
 import { fetchCrmContacts } from "@/app/crm/actions";
-import { UserPlusIcon, MergeIcon, BanIcon } from "lucide-react";
+import { SaveTriageToCrmDialog } from "@/components/email/SaveTriageToCrmDialog";
+import { UserPlusIcon, MergeIcon, BanIcon, BookmarkIcon } from "lucide-react";
 
 const CONTACT_TYPES: { value: ContactType; label: string }[] = [
   { value: "Scribe", label: "סופר" },
@@ -119,6 +120,7 @@ export default function TriageTable({
   const [createState, setCreateState] = useState<Record<string, { name: string; type: ContactType }>>({});
   const [mergeState, setMergeState] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState<Record<string, string>>({});
+  const [saveDialogRow, setSaveDialogRow] = useState<GmailTriageContact | null>(null);
 
   const handleCreate = async (email: string) => {
     const state = createState[email];
@@ -192,6 +194,7 @@ export default function TriageTable({
             <TableHead className="font-semibold">יצירה חדשה</TableHead>
             <TableHead className="font-semibold">מיזוג</TableHead>
             <TableHead className="font-semibold w-24">התעלם</TableHead>
+            <TableHead className="font-semibold min-w-[7rem]">שמור ב-CRM</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -274,10 +277,35 @@ export default function TriageTable({
                   <BanIcon className="size-4" />
                 </Button>
               </TableCell>
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 gap-1"
+                  onClick={() => setSaveDialogRow(c)}
+                >
+                  <BookmarkIcon className="size-4" />
+                  שמור ב-CRM
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+
+      <SaveTriageToCrmDialog
+        row={saveDialogRow}
+        open={saveDialogRow !== null}
+        onOpenChange={(v) => !v && setSaveDialogRow(null)}
+        onSaved={(email) => {
+          setContacts((prev) => {
+            const next = prev.filter((x) => x.email !== email);
+            onContactsChange?.(next);
+            return next;
+          });
+          setSaveDialogRow(null);
+        }}
+      />
     </div>
   );
 }

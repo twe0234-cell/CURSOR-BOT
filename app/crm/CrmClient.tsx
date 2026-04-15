@@ -42,6 +42,7 @@ import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import { HScrollBar } from "@/components/ui/HScrollBar";
 import { ScrollToTop } from "@/components/ui/ScrollToTop";
+import { CommunityCreatableSelect } from "@/components/crm/CommunityCreatableSelect";
 
 // ── Tag configuration ─────────────────────────────────────────────────────────
 //
@@ -128,6 +129,12 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   const [newRoleTags, setNewRoleTags] = useState<string[]>([]);
   /** Comma-separated custom tags typed by the user. */
   const [newCustomTags, setNewCustomTags] = useState("");
+  const [newAddressCity, setNewAddressCity] = useState("");
+  const [newAddressPhysical, setNewAddressPhysical] = useState("");
+  const [newCommunity, setNewCommunity] = useState("");
+  const [newPreferredMethod, setNewPreferredMethod] = useState<
+    "whatsapp" | "email" | "phone"
+  >("whatsapp");
   const [createLoading, setCreateLoading] = useState(false);
   const [viewMode, setViewMode] = useViewMode("crm");
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -197,6 +204,10 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
     setNewPhone("");
     setNewRoleTags([]);
     setNewCustomTags("");
+    setNewAddressCity("");
+    setNewAddressPhysical("");
+    setNewCommunity("");
+    setNewPreferredMethod("whatsapp");
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -219,6 +230,10 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
       // Keep `type` for ERP compatibility; use the first role tag if chosen.
       type: newRoleTags[0] ?? "Other",
       tags: allTags,
+      preferred_contact_method: newPreferredMethod,
+      address_city: newAddressCity.trim() || null,
+      address_physical: newAddressPhysical.trim() || null,
+      community: newCommunity.trim() || null,
     });
     setCreateLoading(false);
     if (res.success) {
@@ -752,6 +767,46 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
                     הפרד תגיות בפסיקים
                   </p>
                 </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">אמצעי קשר מועדף</label>
+                  <select
+                    value={newPreferredMethod}
+                    onChange={(e) =>
+                      setNewPreferredMethod(
+                        e.target.value as "whatsapp" | "email" | "phone"
+                      )
+                    }
+                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="whatsapp">וואטסאפ</option>
+                    <option value="email">אימייל</option>
+                    <option value="phone">טלפון</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">עיר</label>
+                    <Input
+                      value={newAddressCity}
+                      onChange={(e) => setNewAddressCity(e.target.value)}
+                      placeholder="עיר"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-sm font-medium">כתובת</label>
+                    <Input
+                      value={newAddressPhysical}
+                      onChange={(e) => setNewAddressPhysical(e.target.value)}
+                      placeholder="רחוב ומספר"
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <CommunityCreatableSelect value={newCommunity} onChange={setNewCommunity} />
 
                 <div className="flex gap-2 justify-end pt-1">
                   <Button

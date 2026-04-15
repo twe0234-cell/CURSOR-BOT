@@ -19,6 +19,12 @@ import {
   notifyClientPayment,
   notifyScribePayment,
 } from "@/src/services/notification.service";
+import {
+  engineBatchTransitionSheets,
+  engineTransitionTorahSheet,
+  engineUpdateTorahSheetColumns,
+} from "@/src/services/torah.service";
+import type { SysEvent } from "@/src/lib/types/sys-events";
 
 /** סוג קלף — דינמי מהמחשבון; DB ללא CHECK אחרי מיגרציה 057 */
 const optTorahParchmentText = z
@@ -40,6 +46,8 @@ const optContractLink = z
 const SHEET_STATUS_TUPLE = [
   "not_started",
   "written",
+  "reported_written",
+  "received",
   "in_qa",
   "needs_fixing",
   "approved",
@@ -128,6 +136,12 @@ export async function fetchProjectWithSheets(
       scribe_contract_url:
         ((row as { scribe_contract_url?: string | null }).scribe_contract_url as string | null) ??
         null,
+      calculator_snapshot:
+        (row as { calculator_snapshot?: Record<string, unknown> | null }).calculator_snapshot ??
+        null,
+      snapshot_locked_at:
+        ((row as { snapshot_locked_at?: string | null }).snapshot_locked_at as string | null) ??
+        null,
       created_at: row.created_at as string,
       scribe_name: nameMap.get(row.scribe_id as string) ?? null,
       client_name: row.client_id ? (nameMap.get(row.client_id as string) ?? null) : null,
@@ -184,18 +198,23 @@ export async function updateSheet(
     } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const updatePayload: Record<string, unknown> = {};
-    if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
-    if (parsed.data.columns_count !== undefined)
-      updatePayload.columns_count = parsed.data.columns_count;
+    if (parsed.data.status !== undefined) {
+      const tr = await engineTransitionTorahSheet({
+        sheetId,
+        projectId,
+        toStatus: parsed.data.status,
+      });
+      if (!tr.success) return { success: false, error: tr.error };
+    }
 
-    const { error } = await supabase
-      .from("torah_sheets")
-      .update(updatePayload)
-      .eq("id", sheetId)
-      .eq("project_id", projectId);
-
-    if (error) return { success: false, error: error.message };
+    if (parsed.data.columns_count !== undefined) {
+      const cols = await engineUpdateTorahSheetColumns({
+        sheetId,
+        projectId,
+        columnsCount: parsed.data.columns_count,
+      });
+      if (!cols.success) return { success: false, error: cols.error };
+    }
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);
@@ -270,13 +289,12 @@ export async function receiveSheetsFromScribe(
       }
     }
 
-    const { error: upErr } = await supabase
-      .from("torah_sheets")
-      .update({ status: "written" })
-      .in("id", parsed.data.sheetIds)
-      .eq("project_id", projectId);
-
-    if (upErr) return { success: false, error: upErr.message };
+    const batchTr = await engineBatchTransitionSheets({
+      projectId,
+      sheetIds: parsed.data.sheetIds,
+      toStatus: "reported_written",
+    });
+    if (!batchTr.success) return { success: false, error: batchTr.error };
 
     const { data: allSheetRows, error: allErr } = await supabase
       .from("torah_sheets")
@@ -351,18 +369,84 @@ export async function batchUpdateSheetStatuses(
     } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data, error } = await supabase
-      .from("torah_sheets")
-      .update({ status: parsed.data.status })
-      .in("id", parsed.data.sheetIds)
-      .eq("project_id", projectId)
-      .select("id");
+    const { data: proj } = await supabase
+      .from("torah_projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!proj) return { success: false, error: "הפרויקט לא נמצא" };
 
-    if (error) return { success: false, error: error.message };
+    const batchTr = await engineBatchTransitionSheets({
+      projectId,
+      sheetIds: parsed.data.sheetIds,
+      toStatus: parsed.data.status,
+    });
+    if (!batchTr.success) return { success: false, error: batchTr.error };
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);
-    return { success: true, updated: (data ?? []).length };
+    return { success: true, updated: parsed.data.sheetIds.length };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** קליטה במחסן: reported_written → received */
+export async function markTorahSheetsReceived(
+  projectId: string,
+  sheetIds: string[]
+): Promise<{ success: true; updated: number } | { success: false; error: string }> {
+  try {
+    const parsed = receiveSheetsSchema.safeParse({ sheetIds });
+    if (!parsed.success) {
+      const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+      return { success: false, error: (first as string) ?? "שגיאת ולידציה" };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: proj } = await supabase
+      .from("torah_projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!proj) return { success: false, error: "הפרויקט לא נמצא" };
+
+    const { data: rows } = await supabase
+      .from("torah_sheets")
+      .select("id, status")
+      .in("id", parsed.data.sheetIds)
+      .eq("project_id", projectId);
+
+    if (!rows || rows.length !== parsed.data.sheetIds.length) {
+      return { success: false, error: "לא כל היריעות שייכות לפרויקט" };
+    }
+
+    for (const r of rows) {
+      if ((r.status as string) !== "reported_written") {
+        return {
+          success: false,
+          error: "קליטת מחסן זמינה רק ליריעות בסטטוס «דווח נכתב»",
+        };
+      }
+    }
+
+    const batchTr = await engineBatchTransitionSheets({
+      projectId,
+      sheetIds: parsed.data.sheetIds,
+      toStatus: "received",
+    });
+    if (!batchTr.success) return { success: false, error: batchTr.error };
+
+    revalidatePath("/torah");
+    revalidatePath(`/torah/${projectId}`);
+    return { success: true, updated: parsed.data.sheetIds.length };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
@@ -485,6 +569,8 @@ export type TorahProjectTransactionRow = {
   notes: string | null;
   attachment_url: string | null;
   receipt_sent: boolean;
+  qa_batch_id: string | null;
+  fix_task_id: string | null;
 };
 
 const createTorahTransactionSchema = z.object({
@@ -522,7 +608,7 @@ export async function fetchTorahProjectTransactions(
 
     const { data, error } = await supabase
       .from("torah_project_transactions")
-      .select("id, project_id, transaction_type, amount, date, notes, attachment_url, receipt_sent")
+      .select("*")
       .eq("project_id", projectId)
       .order("date", { ascending: false });
 
@@ -537,9 +623,100 @@ export async function fetchTorahProjectTransactions(
       notes: (r.notes as string | null) ?? null,
       attachment_url: (r.attachment_url as string | null) ?? null,
       receipt_sent: Boolean(r.receipt_sent),
+      qa_batch_id: (r as { qa_batch_id?: string | null }).qa_batch_id ?? null,
+      fix_task_id: (r as { fix_task_id?: string | null }).fix_task_id ?? null,
     }));
 
     return { success: true, transactions };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+/** אירועי audit לפרויקט — קריאה בלבד (ציר זמן). */
+export type TorahSysEventView = SysEvent & {
+  /** מולא ל־entity_type = torah_sheet בלבד */
+  sheet_number: number | null;
+};
+
+export async function fetchTorahProjectSysEvents(
+  projectId: string
+): Promise<
+  { success: true; events: TorahSysEventView[] } | { success: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: proj } = await supabase
+      .from("torah_projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!proj) return { success: false, error: "הפרויקט לא נמצא" };
+
+    const { data: rows, error } = await supabase
+      .from("sys_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+
+    const sheetIds = [
+      ...new Set(
+        (rows ?? [])
+          .filter((r) => (r as { entity_type?: string }).entity_type === "torah_sheet")
+          .map((r) => String((r as { entity_id?: string }).entity_id ?? ""))
+          .filter(Boolean)
+      ),
+    ];
+
+    const numMap = new Map<string, number>();
+    if (sheetIds.length > 0) {
+      const { data: sh } = await supabase
+        .from("torah_sheets")
+        .select("id, sheet_number")
+        .eq("project_id", projectId)
+        .in("id", sheetIds);
+      for (const s of sh ?? []) {
+        numMap.set(s.id as string, Number(s.sheet_number));
+      }
+    }
+
+    const events: TorahSysEventView[] = (rows ?? []).map((r) => {
+      const entityType = String((r as { entity_type: string }).entity_type);
+      const entityId = String((r as { entity_id: string }).entity_id);
+      const metaRaw = (r as { metadata?: unknown }).metadata;
+      const metadata: Record<string, unknown> =
+        metaRaw && typeof metaRaw === "object" && metaRaw !== null && !Array.isArray(metaRaw)
+          ? (metaRaw as Record<string, unknown>)
+          : {};
+
+      return {
+        id: r.id as string,
+        user_id: r.user_id as string,
+        source: String((r as { source?: string }).source ?? "torah"),
+        entity_type: entityType,
+        entity_id: entityId,
+        project_id: ((r as { project_id?: string | null }).project_id as string | null) ?? null,
+        action: String((r as { action: string }).action),
+        from_state: ((r as { from_state?: string | null }).from_state as string | null) ?? null,
+        to_state: ((r as { to_state?: string | null }).to_state as string | null) ?? null,
+        metadata,
+        created_at: r.created_at as string,
+        sheet_number:
+          entityType === "torah_sheet" ? numMap.get(entityId) ?? null : null,
+      };
+    });
+
+    return { success: true, events };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

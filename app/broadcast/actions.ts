@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { logError, logInfo } from "@/lib/logger";
 import { resolveContentType } from "@/lib/upload";
 import { greenApiDispatchSpacingDelayMs } from "@/lib/whatsapp/greenApi";
+import type { BroadcastLogRow } from "@/src/lib/types/broadcast";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -223,20 +224,7 @@ export async function sendSingleMessage(
   }
 }
 
-export type BroadcastLog = {
-  id: string;
-  sent: number;
-  failed: number;
-  errors: string[];
-  tags: string[];
-  scribe_code: string | null;
-  internal_notes: string | null;
-  message_snippet: string | null;
-  message_text: string | null;
-  created_at: string;
-  status?: string;
-  log_details?: unknown;
-};
+export type BroadcastLog = BroadcastLogRow;
 
 function broadcastMessageSnippet(text: string, maxLen = 120): string {
   const t = text.replace(/\s+/g, " ").trim();

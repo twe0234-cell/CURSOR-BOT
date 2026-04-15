@@ -53,3 +53,70 @@ export function mailtoOfferHref(subject: string, body: string): string {
   const b = encodeURIComponent(body);
   return `mailto:?subject=${s}&body=${b}`;
 }
+
+/** מחירים במאגר/שורה כבר ביחידות K (אלפי ₪) — תצוגה עקבית עם המאגר */
+function fmtK(n: number) {
+  return Number.isInteger(n)
+    ? n.toLocaleString("he-IL")
+    : n.toLocaleString("he-IL", { maximumFractionDigits: 2 });
+}
+
+/**
+ * הצעת מחיר מפורטת ללקוח (עברית) — כולל בעלים/סופר חיצוני כשמצוין,
+ * בלי לחשוף פרטי תיווך פנימיים.
+ */
+export function buildMarketTorahQuoteText(row: {
+  sku: string | null;
+  torah_size: string | null;
+  script_type: string | null;
+  parchment_type: string | null;
+  influencer_style: string | null;
+  asking_price: number | null;
+  notes: string | null;
+  negotiation_notes: string | null;
+  external_sofer_name: string | null;
+  sofer_name: string | null;
+  dealer_name: string | null;
+}): string {
+  const owner =
+    row.external_sofer_name?.trim() ||
+    row.sofer_name?.trim() ||
+    row.dealer_name?.trim() ||
+    null;
+
+  const lines: string[] = [];
+  lines.push("הצעת מחיר — ספר תורה");
+  lines.push("━━━━━━━━━━━━━━━━");
+  lines.push("");
+  if (row.sku) lines.push(`מק״ט: ${row.sku}`);
+  if (owner) lines.push(`בעלים / סופר (לפי הפרסום): ${owner}`);
+  if (row.torah_size) lines.push(`גודל ספר תורה: ${row.torah_size} ס״מ`);
+  if (row.script_type) lines.push(`סוג כתב: ${row.script_type}`);
+  if (row.parchment_type) lines.push(`סוג קלף: ${row.parchment_type}`);
+  if (row.influencer_style?.trim()) {
+    lines.push(`סגנון / דגש: ${row.influencer_style.trim()}`);
+  }
+  if (row.asking_price != null) {
+    lines.push(`מחיר מבוקש: ${fmtK(row.asking_price)} אלף ₪ (לפני מע״מ לפי העסקה)`);
+  }
+  lines.push("");
+  if (row.negotiation_notes?.trim()) {
+    lines.push("פרטי משא ומתן (פנימי לציטוט):");
+    lines.push(row.negotiation_notes.trim());
+    lines.push("");
+  }
+  if (row.notes?.trim()) {
+    lines.push("הערות נוספות:");
+    lines.push(row.notes.trim());
+    lines.push("");
+  }
+  lines.push("לפרטים נוספים — נשמח לעמוד לשירותכם.");
+  return lines.join("\n");
+}
+
+/** קישור לעמוד קמפיין עם מילוי טקסט (גוף כטקסט פשוט; יומר ל-HTML בצד הלקוח) */
+export function emailCampaignsPrefillPath(subject: string, bodyPlain: string): string {
+  const s = encodeURIComponent(subject);
+  const b = encodeURIComponent(bodyPlain);
+  return `/email/campaigns?prefillSubject=${s}&prefillBody=${b}`;
+}

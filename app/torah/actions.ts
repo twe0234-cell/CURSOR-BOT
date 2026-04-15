@@ -282,6 +282,12 @@ export async function fetchTorahProjects(): Promise<
         scribe_contract_url:
           ((r as { scribe_contract_url?: string | null }).scribe_contract_url as string | null) ??
           null,
+        calculator_snapshot:
+          (r as { calculator_snapshot?: Record<string, unknown> | null }).calculator_snapshot ??
+          null,
+        snapshot_locked_at:
+          ((r as { snapshot_locked_at?: string | null }).snapshot_locked_at as string | null) ??
+          null,
         created_at: r.created_at as string,
         scribe_name: nameMap.get(r.scribe_id as string) ?? null,
         client_name: r.client_id ? (nameMap.get(r.client_id as string) ?? null) : null,

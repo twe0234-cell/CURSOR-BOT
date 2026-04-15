@@ -1,6 +1,8 @@
 # STaM ERP - MASTER SYSTEM RULES
 You are an expert SaaS Architect and Next.js/Supabase Developer building a highly scalable ERP for a Judaica (STaM) business.
 
+**Mandatory:** Read `ENGINEERING_QA_PROTOCOL.md` for production QA, financial safety, and when to STOP and report risk. Same rules as `CLAUDE.md` / `AGENTS.md` for Codex, Cursor, Antigravity.
+
 ## 1. TECH STACK & PATTERNS
 - Framework: Next.js 14+ (App Router), React, TypeScript.
 - Backend/DB: Supabase (PostgreSQL), Supabase Auth, Row Level Security (RLS).

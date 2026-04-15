@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
@@ -52,15 +53,23 @@ export default async function EmailCampaignsPage() {
             <Button variant="outline" className="rounded-xl">חזרה לדיוור</Button>
           </Link>
         </div>
-        <CampaignsClient
-          initialContacts={mapped}
-          signature={sysSettings?.email_signature ?? null}
-          initialEmailTagPresets={
-            Array.isArray(userSettings?.email_tag_presets)
-              ? (userSettings.email_tag_presets as string[])
-              : []
+        <Suspense
+          fallback={
+            <div className="py-16 text-center text-muted-foreground rounded-xl border border-dashed">
+              טוען עורך קמפיין…
+            </div>
           }
-        />
+        >
+          <CampaignsClient
+            initialContacts={mapped}
+            signature={sysSettings?.email_signature ?? null}
+            initialEmailTagPresets={
+              Array.isArray(userSettings?.email_tag_presets)
+                ? (userSettings.email_tag_presets as string[])
+                : []
+            }
+          />
+        </Suspense>
       </div>
     </div>
   );
