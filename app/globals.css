@@ -168,8 +168,10 @@
   --color-navy-light:              var(--navy-light);
 
   /* Typography */
-  --font-sans: var(--font-heebo), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+  --font-sans:    var(--font-heebo), system-ui, sans-serif;
+  --font-mono:    var(--font-geist-mono);
+  /* Serif display — Frank Ruhl Libre. Reserved for Display / H1 / H2 via <Display>/<H1>/<H2>. */
+  --font-display: var(--font-display), "Frank Ruhl Libre", "David Libre", serif;
 
   /* Radius scale */
   --radius-sm:  calc(var(--radius) * 0.5);
@@ -393,6 +395,36 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  /* ── Typography family utilities ─────────────────────────────── */
+  .font-display { font-family: var(--font-display); }
+  .font-sans    { font-family: var(--font-sans); }
+  .font-mono    { font-family: var(--font-mono); }
+
+  /* Tabular figures — critical for financial tables. */
+  .tabular       { font-variant-numeric: tabular-nums; }
+  .num           {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+
+  /* ── Typographic rhythm ──────────────────────────────────────── */
+  /* Utility helpers mapped to the canonical scale (desktop).
+     Prefer the <Display>/<H1>/<H2>/<H3>/<Body>/<Caption> components
+     over raw classes so the scale stays in one place. */
+  .type-display { font-family: var(--font-display); font-weight: 700; font-size: 3rem;     line-height: 1.12; letter-spacing: -0.015em; }
+  .type-h1      { font-family: var(--font-display); font-weight: 700; font-size: 2rem;     line-height: 1.2;  letter-spacing: -0.01em;  }
+  .type-h2      { font-family: var(--font-display); font-weight: 500; font-size: 1.5rem;   line-height: 1.28;                             }
+  .type-h3      {                                  font-weight: 600; font-size: 1.25rem;  line-height: 1.35;                             }
+  .type-body-lg {                                  font-weight: 400; font-size: 1rem;     line-height: 1.55;                             }
+  .type-body    {                                  font-weight: 400; font-size: 0.875rem; line-height: 1.55;                             }
+  .type-caption {                                  font-weight: 500; font-size: 0.75rem;  line-height: 1.4;  letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Semantic number colors (profit / loss / neutral). */
+  .num-positive { color: var(--color-chart-4);   }
+  .num-negative { color: var(--destructive);     }
+  .num-neutral  { color: var(--muted-foreground); }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -443,6 +475,22 @@ body {
     var(--background);
   color: var(--foreground);
   font-family: var(--font-heebo), system-ui, sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDUCED MOTION — accessibility
+   Respects the user's "Reduce Motion" OS preference.
+   Framer Motion variants in lib/motion.ts honor this at the JS level too.
+   ═══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration:   0.001ms !important;
+    animation-iteration-count: 1  !important;
+    transition-duration:  0.001ms !important;
+    scroll-behavior:      auto    !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
