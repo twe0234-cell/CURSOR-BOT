@@ -17,6 +17,7 @@ import { describe, it, expect } from "vitest";
 import {
   getDealFinancials,
   computeSaleProfit,
+  computeSaleRowDisplay,
   isDealDelivered,
   classifyDealBalance,
   normalizeDealType,
@@ -976,5 +977,139 @@ describe("computeTorahProjectNetCashflowFromLedger", () => {
       { transaction_type: "not_a_ledger_type", amount: 999 } as TorahLedgerLine,
     ]);
     expect(r.netCashPosition).toBe(100);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeSaleRowDisplay — ZERO UI MATH: centralizes sale-row totals
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computeSaleRowDisplay", () => {
+  it("prefers total_price over sale_price × quantity", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 1000,
+      sale_price: 9999,
+      quantity: 3,
+      total_paid: 250,
+    });
+    expect(r.totalDeal).toBe(1000);
+    expect(r.paid).toBe(250);
+    expect(r.balance).toBe(750);
+    expect(r.paidPct).toBe(25);
+  });
+
+  it("falls back to sale_price × quantity when total_price is absent", () => {
+    const r = computeSaleRowDisplay({
+      sale_price: 500,
+      quantity: 2,
+      total_paid: 100,
+    });
+    expect(r.totalDeal).toBe(1000);
+    expect(r.balance).toBe(900);
+    expect(r.paidPct).toBe(10);
+  });
+
+  it("treats quantity < 1 as 1 (floor + clamp)", () => {
+    const r = computeSaleRowDisplay({ sale_price: 800, quantity: 0 });
+    expect(r.totalDeal).toBe(800);
+  });
+
+  it("floors fractional quantity to avoid phantom revenue", () => {
+    const r = computeSaleRowDisplay({ sale_price: 100, quantity: 2.9 });
+    expect(r.totalDeal).toBe(200);
+  });
+
+  it("prefers total_paid over amount_paid_row", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 500,
+      total_paid: 300,
+      amount_paid_row: 999,
+    });
+    expect(r.paid).toBe(300);
+  });
+
+  it("falls back to amount_paid_row when total_paid is undefined", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 500,
+      amount_paid_row: 120,
+    });
+    expect(r.paid).toBe(120);
+  });
+
+  it("prefers server-provided remaining_balance over derived difference", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 1000,
+      total_paid: 200,
+      remaining_balance: 650, // canonical from DB — e.g. after refund logic
+    });
+    expect(r.balance).toBe(650);
+  });
+
+  it("derives balance when remaining_balance is null", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 1000,
+      total_paid: 400,
+      remaining_balance: null,
+    });
+    expect(r.balance).toBe(600);
+  });
+
+  it("clamps balance to ≥ 0 when overpaid", () => {
+    const r = computeSaleRowDisplay({ total_price: 100, total_paid: 250 });
+    expect(r.balance).toBe(0);
+  });
+
+  it("clamps paidPct to 100 when overpaid", () => {
+    const r = computeSaleRowDisplay({ total_price: 100, total_paid: 250 });
+    expect(r.paidPct).toBe(100);
+  });
+
+  it("returns 0%s gracefully when the deal has no value", () => {
+    const r = computeSaleRowDisplay({
+      total_price: 0,
+      total_paid: 0,
+    });
+    expect(r.totalDeal).toBe(0);
+    expect(r.paidPct).toBe(0);
+    expect(r.balance).toBe(0);
+  });
+
+  it("SAFE TYPES: null / undefined / NaN all resolve to 0, never crash", () => {
+    const r = computeSaleRowDisplay({
+      total_price: null,
+      sale_price: null,
+      quantity: null,
+      total_paid: undefined,
+      amount_paid_row: Number.NaN,
+      remaining_balance: null,
+    });
+    expect(r.totalDeal).toBe(0);
+    expect(r.paid).toBe(0);
+    expect(r.balance).toBe(0);
+    expect(r.paidPct).toBe(0);
+  });
+
+  it("SAFE TYPES: non-finite Infinity treated as 0", () => {
+    const r = computeSaleRowDisplay({
+      total_price: Number.POSITIVE_INFINITY,
+      total_paid: 50,
+    });
+    expect(r.totalDeal).toBe(0);
+    expect(r.balance).toBe(0);
+    expect(r.paidPct).toBe(0);
+  });
+
+  it("all returned numbers are finite and ≥ 0", () => {
+    const r = computeSaleRowDisplay({
+      total_price: -100, // garbage upstream
+      total_paid: -999,
+      remaining_balance: -50,
+    });
+    expect(Number.isFinite(r.totalDeal)).toBe(true);
+    expect(Number.isFinite(r.paid)).toBe(true);
+    expect(Number.isFinite(r.balance)).toBe(true);
+    expect(r.totalDeal).toBeGreaterThanOrEqual(0);
+    expect(r.paid).toBeGreaterThanOrEqual(0);
+    expect(r.balance).toBeGreaterThanOrEqual(0);
   });
 });

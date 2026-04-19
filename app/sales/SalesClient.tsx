@@ -48,6 +48,7 @@ import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon } from "lucide-react";
 import { buildPaymentRequestText, buildCalendarEventUrl, mailtoPaymentHref } from "@/lib/sales/paymentRequest";
+import { computeSaleRowDisplay } from "@/src/services/crm.logic";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -347,10 +348,7 @@ export default function SalesClient() {
               {viewMode === "grid" ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sales.map((s, i) => {
-                    const totalDeal = s.total_price ?? s.sale_price * (s.quantity ?? 1);
-                    const paid = s.total_paid ?? s.amount_paid_row ?? 0;
-                    const balance = s.remaining_balance ?? totalDeal - paid;
-                    const pct = totalDeal > 0 ? Math.min(100, Math.round((paid / totalDeal) * 100)) : 0;
+                    const { totalDeal, paid, balance, paidPct: pct } = computeSaleRowDisplay(s);
                     return (
                       <div
                         key={s.id}
@@ -450,9 +448,7 @@ export default function SalesClient() {
                     </TableHeader>
                     <TableBody>
                       {sales.map((s, i) => {
-                        const totalDeal = s.total_price ?? s.sale_price * (s.quantity ?? 1);
-                        const paid = s.total_paid ?? s.amount_paid_row ?? 0;
-                        const balance = s.remaining_balance ?? totalDeal - paid;
+                        const { totalDeal, paid, balance } = computeSaleRowDisplay(s);
                         return (
                           <TableRow key={s.id} className={`table-row-animate stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
                             <TableCell>

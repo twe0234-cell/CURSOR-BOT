@@ -398,6 +398,84 @@ export function computeDealFinancialsByType(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// computeSaleRowDisplay — row-level totals for sale tables/cards.
+// Kills the "ZERO UI MATH" violation in app/sales/SalesClient.tsx by centralizing
+// the (total_price ?? sale_price × qty) / paid / balance / pct derivation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SaleRowInput = {
+  /** Pre-computed deal total when available. */
+  total_price?: number | null;
+  /** Unit price fallback when total_price is absent. */
+  sale_price?: number | null;
+  /** Quantity fallback — floored to ≥ 1 internally. */
+  quantity?: number | null;
+  /** Preferred paid figure (ledger-aggregated). */
+  total_paid?: number | null;
+  /** Legacy single-row amount_paid, used only when total_paid is absent. */
+  amount_paid_row?: number | null;
+  /** Server-computed remaining balance. When present it wins over the derivation. */
+  remaining_balance?: number | null;
+};
+
+export type SaleRowDisplay = {
+  /** Total deal value, always finite ≥ 0. */
+  totalDeal: number;
+  /** Amount paid so far, always finite ≥ 0. */
+  paid: number;
+  /** Outstanding balance, always finite ≥ 0. */
+  balance: number;
+  /** Paid percentage 0..100, integer. 0 when totalDeal ≤ 0. */
+  paidPct: number;
+};
+
+/**
+ * Pure row-display helper for the sales list UI.
+ *
+ * Resolution order (SAFE TYPES: null/undefined/NaN → 0):
+ *   totalDeal = total_price ?? (sale_price × max(1, floor(quantity)))
+ *   paid      = total_paid ?? amount_paid_row ?? 0
+ *   balance   = remaining_balance ?? max(0, totalDeal − paid)
+ *   paidPct   = totalDeal > 0 ? clamp(round(paid / totalDeal × 100), 0..100) : 0
+ *
+ * UI MUST consume this instead of computing inline. Any change to how a sale row
+ * is summarized lives here so the grid, table, and any future export agree.
+ */
+export function computeSaleRowDisplay(sale: SaleRowInput): SaleRowDisplay {
+  const safe = (v: number | null | undefined): number => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : n;
+  };
+
+  const qty = Math.max(1, Math.floor(safe(sale.quantity ?? 1)));
+  const derivedTotal = safe(sale.sale_price) * qty;
+  const totalDeal =
+    sale.total_price != null ? safe(sale.total_price) : derivedTotal;
+
+  const paid =
+    sale.total_paid != null
+      ? safe(sale.total_paid)
+      : safe(sale.amount_paid_row);
+
+  const balance =
+    sale.remaining_balance != null
+      ? Math.max(0, safe(sale.remaining_balance))
+      : Math.max(0, totalDeal - paid);
+
+  const paidPct =
+    totalDeal > 0
+      ? Math.min(100, Math.max(0, Math.round((paid / totalDeal) * 100)))
+      : 0;
+
+  return {
+    totalDeal: Math.max(0, totalDeal),
+    paid: Math.max(0, paid),
+    balance,
+    paidPct,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // validatePaymentAmount — Zod-backed ledger overpayment guard
 // ─────────────────────────────────────────────────────────────────────────────
 
