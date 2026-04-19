@@ -29,6 +29,9 @@ export default function NavBar() {
   const router = useRouter();
   const pathname = usePathname();
 
+
+  // Public intake routes render their own chrome — no NavBar.
+  if (pathname?.startsWith("/intake")) return null;
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
