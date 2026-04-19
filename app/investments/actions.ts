@@ -470,7 +470,7 @@ export async function addInvestmentLedgerPayment(
 
 /** @deprecated Prefer PaymentModal + addInvestmentLedgerPayment (writes ledger). */
 export async function addPayment(investmentId: string, amount: number): Promise<ActionResult> {
-  return addInvestmentLedgerPayment(investmentId, amount, undefined, null, null, "incoming");
+  return addInvestmentLedgerPayment(investmentId, amount, undefined, null, null, "outgoing");
 }
 
 /** Updates core investment fields (item details, quantity, cost, dates, notes). */

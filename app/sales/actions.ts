@@ -31,7 +31,7 @@ const positiveQuantity = z.coerce
   .refine((n) => Number.isFinite(n) && n >= 1, { message: "כמות חייבת להיות ≥ 1" })
   .transform((n) => Math.floor(n));
 
-export const UpdateSaleDetailsSchema = z
+const UpdateSaleDetailsSchema = z
   .object({
     buyer_id: z.string().nullable().optional(),
     seller_id: z.string().nullable().optional(),
@@ -43,7 +43,7 @@ export const UpdateSaleDetailsSchema = z
   })
   .strict();
 
-export const UpdateSaleCoreDetailsSchema = z
+const UpdateSaleCoreDetailsSchema = z
   .object({
     sale_price: nonNegativeNumber.optional(),
     quantity: positiveQuantity.optional(),
