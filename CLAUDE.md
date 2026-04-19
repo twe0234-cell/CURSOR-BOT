@@ -28,6 +28,51 @@ Source of truth for Claude Code. Read before touching any file.
 
 ---
 
+## 0.1 כללי בטיחות לסוכן AI (INFRA & DATA SAFETY — חובה מוחלטת)
+
+הכללים האלה נכתבו אחרי תקרית אמיתית שבה סוכן אישר `vercel` CLI בעיניים עצומות אחרי branch-switch שאיבד את `.vercel/project.json`, וכתוצאה נוצר פרויקט Vercel ריק חדש במקום deploy לקיים. אלה הכללים שמונעים נזק כזה:
+
+### 0.1.1 NO BLIND CLI CONFIRMATIONS
+**אסור** לאשר אוטומטית (`y`, `Enter`, `--yes`, `--force`) כל prompt של CLI שנוגע ל:
+- deployments (Vercel / Netlify / Railway / Cloudflare)
+- databases (Supabase / Postgres — כולל migrations)
+- infrastructure / cloud providers (AWS / GCP / Azure)
+- package registries (npm publish / brew / docker push)
+
+אם כלי שואל "Create new project?" / "Start from scratch?" / "Drop tables?" / "Overwrite?" / "Link to existing project?" — **עצור ושאל את המשתמש**, גם אם זה מוריד מהירות.
+
+### 0.1.2 MISSING CONFIG → RESTORE, NEVER REGENERATE
+אם קובץ קונפיג נראה חסר אחרי `git checkout` / `git switch` / `git clean`:
+- `.vercel/project.json`, `.env`, `.env.local`, `.supabase/config.toml`, `tsconfig.json`...
+
+**הנחת היסוד:** הקובץ נמחק מ־working directory אך קיים מקומית או צריך re-link. **אסור** להריץ קומנד שיצור מבנה חדש (`vercel link`, `supabase init`, `npm init`) בלי לשאול קודם. הנוהל: (א) לדווח מה חסר, (ב) להציע re-link / שחזור, (ג) לחכות לאישור.
+
+### 0.1.3 FINANCIAL / BUSINESS LOGIC → PREVIEW-FIRST
+כל שינוי ב:
+- `src/services/crm.logic.ts` (חישובי רווח, מכירות, עמלות)
+- `src/services/crm.service.ts`
+- `app/**/actions.ts` שמזיזים כסף
+- מיגרציות DB שנוגעות ל־`erp_sales` / `erp_payments` / `erp_profit_ledger` / `erp_investments`
+- חישובי שכר / תמחור / תיווך
+
+**חייב לעבור דרך ענף `claude/...` → Preview deploy → אישור כתוב של המשתמש → merge ל־main.**
+אין shortcuts. אין "כבר בדקתי". אין merge ל־main בלי `✅` מפורש ממני (המשתמש).
+
+### 0.1.4 DESTRUCTIVE ACTIONS → EXPLICIT PERMISSION
+**אסור בלי אישור מפורש במשפט ישיר:**
+- `DROP TABLE`, `DELETE FROM`, `TRUNCATE`, `rm -rf` בתוך repo
+- מחיקת user records / audit logs / system logs
+- מחיקת branches מרוחקים (`git push --delete`, `git push -f`)
+- מחיקת buckets / migrations שכבר רצו ב־production
+- שינוי RLS policies בלי ליידע
+
+**"תיקון" באג לא יכלול אי־פעם מחיקה שקטה של הארכיטקטורה שמתחתיו.** אם bug נובע משכבה תחתונה, מדווחים — לא חופרים.
+
+### 0.1.5 אם בספק — שואלים
+עלות שאלה = שנייה. עלות טעות אינפרה = שעות / $. תמיד לכיוון השאלה.
+
+---
+
 ## 2. מזהים קריטיים (MCP חי)
 
 | שירות | מזהה |
