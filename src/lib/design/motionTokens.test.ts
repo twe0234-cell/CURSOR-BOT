@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import type { Transition } from "framer-motion";
 import {
   EASE_OUT_QUART,
   DURATION,
@@ -118,7 +119,9 @@ describe("withReducedMotion", () => {
   });
 
   it("handles a bundle with no transition field gracefully", () => {
-    const bare = { variants: fadeUpVariants };
+    const bare: { variants: typeof fadeUpVariants; transition?: Transition } = {
+      variants: fadeUpVariants,
+    };
     const result = withReducedMotion(bare, true);
     expect(result.transition?.duration).toBe(0);
   });

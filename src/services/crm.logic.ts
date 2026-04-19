@@ -476,6 +476,83 @@ export function computeSaleRowDisplay(sale: SaleRowInput): SaleRowDisplay {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// computeSaleFinancialPatch — canonical financial-field derivation for erp_sales.
+// Used by createSale / updateSaleDetails / updateSaleCoreDetails so every write
+// site agrees on how sale_price / profit / commission_* mirror total_price.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SaleFinancialInput = {
+  /** Deal classification (after normalizeDealType). */
+  deal_type: DealType;
+  /** Canonical total deal value (pre-resolved by caller). */
+  total_price: number;
+  /** Quantity; floored to ≥ 1. Only relevant for per-unit price derivation. */
+  quantity?: number | null;
+  /** Underlying cost for profit calculation. Null → profit is null (unknown). */
+  cost_price?: number | null;
+};
+
+export type SaleFinancialPatch = {
+  total_price: number;
+  sale_price: number;
+  profit: number | null;
+  commission_profit: number | null;
+  commission_received: number | null;
+  actual_commission_received: number | null;
+};
+
+/**
+ * Produce the canonical financial-field patch for an erp_sales row.
+ *
+ * Per deal type:
+ *   brokerage_direct  → every commission_* field mirrors total_price, profit
+ *                       also = total_price (brokerage has no underlying cost).
+ *   brokerage_managed → sale_price = total_price / qty, profit = total_price
+ *                       − cost (null when cost unknown), commissions null.
+ *   inventory_sale    → same as brokerage_managed.
+ *   long_term_project → same as brokerage_managed.
+ *
+ * SAFE TYPES: non-finite inputs collapse to 0; quantity ≤ 0 is clamped to 1.
+ * Callers remain responsible for writing non-math fields (buyer_id, notes…).
+ */
+export function computeSaleFinancialPatch(
+  input: SaleFinancialInput
+): SaleFinancialPatch {
+  const safe = (v: number | null | undefined): number => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : n;
+  };
+
+  const total = Math.max(0, safe(input.total_price));
+  const qty = Math.max(1, Math.floor(safe(input.quantity ?? 1)));
+  const cost =
+    input.cost_price != null && Number.isFinite(Number(input.cost_price))
+      ? Number(input.cost_price)
+      : null;
+
+  if (input.deal_type === "brokerage_direct") {
+    return {
+      total_price: total,
+      sale_price: total,
+      profit: total,
+      commission_profit: total,
+      commission_received: total,
+      actual_commission_received: total,
+    };
+  }
+
+  // brokerage_managed / inventory_sale / long_term_project
+  return {
+    total_price: total,
+    sale_price: qty > 0 ? total / qty : total,
+    profit: cost != null ? total - cost : null,
+    commission_profit: null,
+    commission_received: null,
+    actual_commission_received: null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // validatePaymentAmount — Zod-backed ledger overpayment guard
 // ─────────────────────────────────────────────────────────────────────────────
 

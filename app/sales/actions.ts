@@ -2,6 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { buildInventorySaleLabelSkuPrecise } from "@/lib/sales/inventoryDisplay";
 import {
   INVENTORY_ACTIVE_STATUSES,
@@ -9,7 +10,47 @@ import {
   isInventorySoldStatus,
 } from "@/lib/inventory/status";
 import { recordLedgerPayment, type LedgerDirection } from "@/app/payments/actions";
-import { computeSaleProfit } from "@/src/services/crm.logic";
+import {
+  computeSaleProfit,
+  computeSaleFinancialPatch,
+  normalizeDealType,
+} from "@/src/services/crm.logic";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zod schemas — runtime validation at the Server-Action boundary.
+// UI submits strings/unknowns; these schemas coerce + clamp before DB writes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const nonNegativeNumber = z.coerce
+  .number()
+  .refine((n) => Number.isFinite(n), { message: "ערך לא תקין" })
+  .refine((n) => n >= 0, { message: "חייב להיות ≥ 0" });
+
+const positiveQuantity = z.coerce
+  .number()
+  .refine((n) => Number.isFinite(n) && n >= 1, { message: "כמות חייבת להיות ≥ 1" })
+  .transform((n) => Math.floor(n));
+
+export const UpdateSaleDetailsSchema = z
+  .object({
+    buyer_id: z.string().nullable().optional(),
+    seller_id: z.string().nullable().optional(),
+    sale_date: z.string().optional(),
+    total_price: nonNegativeNumber.optional(),
+    status: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    item_description: z.string().nullable().optional(),
+  })
+  .strict();
+
+export const UpdateSaleCoreDetailsSchema = z
+  .object({
+    sale_price: nonNegativeNumber.optional(),
+    quantity: positiveQuantity.optional(),
+    notes: z.string().optional(),
+    sale_date: z.string().optional(),
+  })
+  .strict();
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -267,6 +308,12 @@ export async function updateSaleDetails(
   payload: UpdateSaleDetailsPayload
 ): Promise<ActionResult> {
   try {
+    const parsed = UpdateSaleDetailsSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+    }
+    const input = parsed.data;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
@@ -283,9 +330,9 @@ export async function updateSaleDetails(
     if (fetchErr || !sale) return { success: false, error: "מכירה לא נמצאה" };
 
     const buyerId =
-      payload.buyer_id !== undefined ? payload.buyer_id || null : (sale.buyer_id as string | null);
+      input.buyer_id !== undefined ? input.buyer_id || null : (sale.buyer_id as string | null);
     const sellerId =
-      payload.seller_id !== undefined ? payload.seller_id || null : (sale.seller_id as string | null);
+      input.seller_id !== undefined ? input.seller_id || null : (sale.seller_id as string | null);
 
     if (!(await assertContactOwned(supabase, user.id, buyerId))) {
       return { success: false, error: "קונה לא תקין" };
@@ -295,43 +342,23 @@ export async function updateSaleDetails(
     }
 
     const patch: Record<string, unknown> = {};
-    if (payload.buyer_id !== undefined) patch.buyer_id = payload.buyer_id || null;
-    if (payload.seller_id !== undefined) patch.seller_id = payload.seller_id || null;
-    if (payload.sale_date !== undefined) patch.sale_date = payload.sale_date;
-    if (payload.notes !== undefined) patch.notes = payload.notes?.trim() || null;
-    if (payload.status !== undefined) patch.status = payload.status?.trim() || null;
-    if (payload.item_description !== undefined) {
-      patch.item_description = payload.item_description?.trim() || null;
+    if (input.buyer_id !== undefined) patch.buyer_id = input.buyer_id || null;
+    if (input.seller_id !== undefined) patch.seller_id = input.seller_id || null;
+    if (input.sale_date !== undefined) patch.sale_date = input.sale_date;
+    if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+    if (input.status !== undefined) patch.status = input.status?.trim() || null;
+    if (input.item_description !== undefined) {
+      patch.item_description = input.item_description?.trim() || null;
     }
 
-    const saleType = (sale.sale_type as string) ?? "ממלאי";
-    const qty = Math.max(1, Math.floor(Number(sale.quantity ?? 1)));
-
-    if (payload.total_price !== undefined) {
-      const newTotal = Number(payload.total_price);
-      if (Number.isNaN(newTotal) || newTotal < 0) {
-        return { success: false, error: "מחיר כולל לא תקין" };
-      }
-
-      if (saleType === "תיווך") {
-        patch.total_price = newTotal;
-        patch.sale_price = newTotal;
-        patch.profit = newTotal;
-        patch.commission_profit = newTotal;
-        patch.commission_received = newTotal;
-        patch.actual_commission_received = newTotal;
-      } else if (saleType === "פרויקט חדש") {
-        patch.total_price = newTotal;
-        patch.sale_price = newTotal;
-        const cost = sale.cost_price != null ? Number(sale.cost_price) : 0;
-        patch.profit = newTotal - cost;
-      } else {
-        patch.total_price = newTotal;
-        const unit = qty > 0 ? newTotal / qty : newTotal;
-        patch.sale_price = unit;
-        const cost = sale.cost_price != null ? Number(sale.cost_price) : null;
-        patch.profit = cost != null ? newTotal - cost : null;
-      }
+    if (input.total_price !== undefined) {
+      const fin = computeSaleFinancialPatch({
+        deal_type: normalizeDealType(sale.sale_type as string | null),
+        total_price: input.total_price,
+        quantity: Number(sale.quantity ?? 1),
+        cost_price: sale.cost_price as number | null,
+      });
+      Object.assign(patch, fin);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -358,6 +385,12 @@ export async function updateSaleCoreDetails(
   updates: { sale_price?: number; quantity?: number; notes?: string; sale_date?: string }
 ): Promise<ActionResult> {
   try {
+    const parsed = UpdateSaleCoreDetailsSchema.safeParse(updates);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+    }
+    const input = parsed.data;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
@@ -372,35 +405,23 @@ export async function updateSaleCoreDetails(
     if (fetchErr || !sale) return { success: false, error: "מכירה לא נמצאה" };
 
     const patch: Record<string, unknown> = {};
-    if (updates.notes !== undefined) patch.notes = updates.notes.trim() || null;
-    if (updates.sale_date !== undefined) patch.sale_date = updates.sale_date;
+    if (input.notes !== undefined) patch.notes = input.notes.trim() || null;
+    if (input.sale_date !== undefined) patch.sale_date = input.sale_date;
 
-    const newPrice = updates.sale_price !== undefined ? Number(updates.sale_price) : null;
-    const newQty   = updates.quantity   !== undefined ? Math.max(1, Math.floor(Number(updates.quantity))) : null;
+    if (input.sale_price !== undefined || input.quantity !== undefined) {
+      const resolvedPrice =
+        input.sale_price ?? Number(sale.sale_price ?? 0);
+      const resolvedQty =
+        input.quantity ?? Math.max(1, Math.floor(Number(sale.quantity ?? 1)));
 
-    if (newPrice !== null && (Number.isNaN(newPrice) || newPrice < 0)) {
-      return { success: false, error: "מחיר ליחידה לא תקין" };
-    }
-
-    const resolvedPrice = newPrice  ?? Number(sale.sale_price ?? 0);
-    const resolvedQty   = newQty    ?? Math.max(1, Math.floor(Number(sale.quantity ?? 1)));
-
-    if (newPrice !== null || newQty !== null) {
-      patch.sale_price  = resolvedPrice;
-      patch.quantity    = resolvedQty;
-      const newTotal    = resolvedPrice * resolvedQty;
-      patch.total_price = newTotal;
-
-      const saleType = (sale.sale_type as string) ?? "ממלאי";
-      if (saleType === "תיווך") {
-        patch.profit = newTotal;
-        patch.commission_profit = newTotal;
-        patch.commission_received = newTotal;
-        patch.actual_commission_received = newTotal;
-      } else {
-        const cost = sale.cost_price != null ? Number(sale.cost_price) : null;
-        patch.profit = cost != null ? newTotal - cost : null;
-      }
+      patch.quantity = resolvedQty;
+      const fin = computeSaleFinancialPatch({
+        deal_type: normalizeDealType(sale.sale_type as string | null),
+        total_price: resolvedPrice * resolvedQty,
+        quantity: resolvedQty,
+        cost_price: sale.cost_price as number | null,
+      });
+      Object.assign(patch, fin);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -490,7 +511,12 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
       const cpu = item.cost_price != null ? Number(item.cost_price) : null;
       const tpu = item.target_price != null ? Number(item.target_price) : null;
       const costPrice = cpu != null ? cpu * qty : null;
-      const profit = costPrice != null ? totalPrice - costPrice : null;
+      const fin = computeSaleFinancialPatch({
+        deal_type: "inventory_sale",
+        total_price: totalPrice,
+        quantity: qty,
+        cost_price: costPrice,
+      });
 
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
@@ -498,11 +524,9 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         item_id: params.item_id,
         buyer_id: params.buyer_id || null,
         quantity: qty,
-        sale_price: params.sale_price,
-        total_price: totalPrice,
+        ...fin,
         amount_paid: amountPaid,
         cost_price: costPrice,
-        profit,
         notes: params.notes?.trim() || null,
       });
 
@@ -527,6 +551,10 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
       if (invErr) return { success: false, error: invErr.message };
     } else if (params.sale_type === "תיווך") {
       const cr = params.actual_commission_received;
+      const fin = computeSaleFinancialPatch({
+        deal_type: "brokerage_direct",
+        total_price: cr,
+      });
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
         sale_type: "תיווך",
@@ -535,14 +563,9 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         buyer_id: params.buyer_id || null,
         seller_id: params.seller_id || null,
         quantity: 1,
-        sale_price: cr,
-        total_price: cr,
+        ...fin,
         amount_paid: 0,
         cost_price: null,
-        profit: cr,
-        commission_profit: cr,
-        commission_received: cr,
-        actual_commission_received: cr,
         notes: params.notes?.trim() || null,
       });
       if (saleErr) return { success: false, error: saleErr.message };
@@ -558,7 +581,12 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
       const totalPrice = params.sale_price;
       const amountPaid = params.amount_paid ?? 0;
       const costPrice = Number(inv.total_agreed_price ?? 0);
-      const profit = totalPrice - costPrice;
+      const fin = computeSaleFinancialPatch({
+        deal_type: "long_term_project",
+        total_price: totalPrice,
+        quantity: 1,
+        cost_price: costPrice,
+      });
 
       const { error: saleErr } = await supabase.from("erp_sales").insert({
         user_id: user.id,
@@ -567,11 +595,9 @@ export async function createSale(params: CreateSaleParams): Promise<ActionResult
         investment_id: params.investment_id,
         buyer_id: params.buyer_id || null,
         quantity: 1,
-        sale_price: totalPrice,
-        total_price: totalPrice,
+        ...fin,
         amount_paid: amountPaid,
         cost_price: costPrice,
-        profit,
         notes: params.notes?.trim() || null,
       });
       if (saleErr) return { success: false, error: saleErr.message };

@@ -18,6 +18,7 @@ import {
   getDealFinancials,
   computeSaleProfit,
   computeSaleRowDisplay,
+  computeSaleFinancialPatch,
   isDealDelivered,
   classifyDealBalance,
   normalizeDealType,
@@ -1111,5 +1112,95 @@ describe("computeSaleRowDisplay", () => {
     expect(r.totalDeal).toBeGreaterThanOrEqual(0);
     expect(r.paid).toBeGreaterThanOrEqual(0);
     expect(r.balance).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeSaleFinancialPatch — canonical DB-field derivation shared by all
+// erp_sales write sites (createSale, updateSaleDetails, updateSaleCoreDetails).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computeSaleFinancialPatch", () => {
+  it("brokerage_direct mirrors total_price across all commission fields", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "brokerage_direct",
+      total_price: 1200,
+    });
+    expect(p.total_price).toBe(1200);
+    expect(p.sale_price).toBe(1200);
+    expect(p.profit).toBe(1200);
+    expect(p.commission_profit).toBe(1200);
+    expect(p.commission_received).toBe(1200);
+    expect(p.actual_commission_received).toBe(1200);
+  });
+
+  it("inventory_sale derives sale_price = total / qty and profit = total − cost", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "inventory_sale",
+      total_price: 1000,
+      quantity: 4,
+      cost_price: 600,
+    });
+    expect(p.total_price).toBe(1000);
+    expect(p.sale_price).toBe(250);
+    expect(p.profit).toBe(400);
+    expect(p.commission_profit).toBeNull();
+    expect(p.commission_received).toBeNull();
+    expect(p.actual_commission_received).toBeNull();
+  });
+
+  it("long_term_project returns null profit when cost_price is null", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "long_term_project",
+      total_price: 900,
+      quantity: 1,
+      cost_price: null,
+    });
+    expect(p.profit).toBeNull();
+  });
+
+  it("brokerage_managed follows inventory rules (cost-aware profit, no commissions)", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "brokerage_managed",
+      total_price: 500,
+      quantity: 2,
+      cost_price: 300,
+    });
+    expect(p.sale_price).toBe(250);
+    expect(p.profit).toBe(200);
+    expect(p.commission_profit).toBeNull();
+  });
+
+  it("clamps qty ≤ 0 to 1 to avoid division-by-zero", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "inventory_sale",
+      total_price: 500,
+      quantity: 0,
+      cost_price: 100,
+    });
+    expect(p.sale_price).toBe(500);
+    expect(p.profit).toBe(400);
+  });
+
+  it("SAFE TYPES: NaN / Infinity / null collapse to 0", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "inventory_sale",
+      total_price: Number.NaN,
+      quantity: null,
+      cost_price: Number.POSITIVE_INFINITY,
+    });
+    expect(p.total_price).toBe(0);
+    expect(p.sale_price).toBe(0);
+    expect(p.profit).toBeNull(); // cost was non-finite → null
+  });
+
+  it("total_price is clamped to ≥ 0", () => {
+    const p = computeSaleFinancialPatch({
+      deal_type: "inventory_sale",
+      total_price: -50,
+      quantity: 1,
+      cost_price: 10,
+    });
+    expect(p.total_price).toBe(0);
   });
 });
