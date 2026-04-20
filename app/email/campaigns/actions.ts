@@ -15,6 +15,17 @@ import {
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+function encodeMimeWord(value: string): string {
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+function formatFromHeader(fromEmail: string, fromName?: string): string {
+  if (!fromName) return fromEmail;
+  const needsEncoding = /[^\x20-\x7E]/.test(fromName);
+  const encodedName = needsEncoding ? encodeMimeWord(fromName) : `"${fromName}"`;
+  return `${encodedName} <${fromEmail}>`;
+}
+
 function buildMimeMessage(
   to: string,
   subject: string,
@@ -24,12 +35,12 @@ function buildMimeMessage(
   attachments: { filename: string; content: Buffer }[]
 ): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const fromHeader = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+  const fromHeader = formatFromHeader(fromEmail, fromName);
 
   let mime = [
     `From: ${fromHeader}`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    `Subject: ${encodeMimeWord(subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",

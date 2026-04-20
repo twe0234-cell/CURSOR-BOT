@@ -1,12 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { wrapAiEmailHtml } from "@/lib/email/wrapAiEmailHtml";
 
 export type AiDraftKind = "html_body" | "subject";
 
 export async function POST(req: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return Response.json({ error: "ANTHROPIC_API_KEY לא מוגדר בסביבה" }, { status: 503 });
+    return Response.json({ error: "GEMINI_API_KEY לא מוגדר בסביבה" }, { status: 503 });
   }
 
   let context = "";
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "יש להזין הקשר" }, { status: 400 });
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = new GoogleGenerativeAI(apiKey);
 
   if (kind === "subject") {
     const systemPrompt = `אתה עוזר שיווק ל"הידור הסת"ם". כתוב שורת נושא קצרה ומושכת למייל בעברית.
@@ -39,13 +39,15 @@ ${context}
 ${style ? `\nטון: ${style}` : ""}`;
 
     try {
-      const message = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 120,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+      const model = client.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        systemInstruction: systemPrompt,
       });
-      const text = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { maxOutputTokens: 120 },
+      });
+      const text = result.response.text().trim();
       const oneLine = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] ?? "";
       return Response.json({ subject: oneLine.slice(0, 200) });
     } catch (err) {
@@ -67,14 +69,15 @@ ${context}
 החזר HTML גוף בלבד. התחל מ-<div dir="rtl" style="text-align:right"> ... </div> או מקטעים עם dir="rtl".`;
 
   try {
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+    const model = client.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: systemPrompt,
     });
-
-    const text = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      generationConfig: { maxOutputTokens: 1024 },
+    });
+    const text = result.response.text().trim();
     if (!text) {
       return Response.json({ error: "המודל החזיר תוצאה ריקה — נסה שוב" }, { status: 502 });
     }

@@ -5,6 +5,17 @@
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
+function encodeMimeWord(value: string): string {
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+function formatFromHeader(fromEmail: string, fromName?: string): string {
+  if (!fromName) return fromEmail;
+  const needsEncoding = /[^\x20-\x7E]/.test(fromName);
+  const encodedName = needsEncoding ? encodeMimeWord(fromName) : `"${fromName}"`;
+  return `${encodedName} <${fromEmail}>`;
+}
+
 export class GmailAuthRevokedError extends Error {
   code = "GMAIL_AUTH_REVOKED" as const;
   constructor(public readonly googleError: string) {
@@ -68,13 +79,11 @@ export async function sendEmail(
   fromEmail: string,
   fromName?: string
 ): Promise<void> {
-  const fromHeader = fromName
-    ? `"${fromName}" <${fromEmail}>`
-    : fromEmail;
+  const fromHeader = formatFromHeader(fromEmail, fromName);
   const lines: string[] = [
     `From: ${fromHeader}`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    `Subject: ${encodeMimeWord(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/html; charset=UTF-8",
     "Content-Transfer-Encoding: base64",

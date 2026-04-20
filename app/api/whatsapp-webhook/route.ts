@@ -174,6 +174,9 @@ export async function POST(req: NextRequest) {
 
     const instanceWid = normalizeWaId(String(instanceData?.wid ?? ""));
     const senderId = normalizeWaId(String(senderData?.sender ?? ""));
+    // outgoingMessageReceived may miss senderData.sender; fall back to instance WID
+    // so image->text messages sent by the same account can still be merged.
+    const senderMergeId = senderId || (isOutgoing ? instanceWid : "");
 
     if (!senderId && isIncoming) {
       await dbg("skip: incoming with no sender", { typeWebhook });
@@ -210,7 +213,7 @@ export async function POST(req: NextRequest) {
         user_id: userId,
         sku: skuImg,
         source_message_id: idMessage,
-        sender_wa_id: senderId || null,
+        sender_wa_id: senderMergeId || null,
         sofer_id: null, dealer_id: null, external_sofer_name: null,
         script_type: null, torah_size: null, parchment_type: null, influencer_style: null,
         asking_price: null, target_brokerage_price: null, currency: "ILS",
@@ -250,12 +253,12 @@ export async function POST(req: NextRequest) {
         : null;
 
     // טקסט אחרי תמונה מאותו שולח — ממזגים לרשומת image_pending במקום שורה כפולה
-    if (isIncoming && senderId) {
+    if (senderMergeId) {
       const { data: pending } = await admin
         .from("market_torah_books")
         .select("id, handwriting_image_url")
         .eq("user_id", userId)
-        .eq("sender_wa_id", senderId)
+        .eq("sender_wa_id", senderMergeId)
         .eq("market_stage", "image_pending")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -292,7 +295,7 @@ export async function POST(req: NextRequest) {
       user_id: userId,
       sku,
       source_message_id: idMessage,
-      sender_wa_id: senderId || null,
+      sender_wa_id: senderMergeId || null,
       sofer_id: null,
       dealer_id: null,
       external_sofer_name: parsed.owner_name ?? null,
