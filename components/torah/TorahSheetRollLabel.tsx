@@ -1,6 +1,7 @@
 "use client";
 
-import Barcode from "react-barcode";
+import { LabelCode } from "@/components/labels/LabelCode";
+import { buildLabelCodePayload } from "@/src/lib/labels/codePayload";
 
 export type TorahSheetRollLabelProps = {
   projectTitle: string;
@@ -23,7 +24,12 @@ export function TorahSheetRollLabel({
   sheetNumber,
   sku,
 }: TorahSheetRollLabelProps) {
-  const val = barcodeValue(projectId, sheetNumber, sku);
+  const barcode = barcodeValue(projectId, sheetNumber, sku);
+  const qrPayload = buildLabelCodePayload("torah-sheet", {
+    projectId,
+    sheet: sheetNumber,
+    sku: sku ?? undefined,
+  });
   const title =
     projectTitle.length > 36 ? `${projectTitle.slice(0, 34)}…` : projectTitle;
 
@@ -39,24 +45,14 @@ export function TorahSheetRollLabel({
         {title || "—"}
       </p>
 
-      <div className="nimbot-b1-label-barcode mx-auto flex max-h-[10mm] items-center justify-center overflow-hidden [&_svg]:max-h-[9mm]">
-        <Barcode
-          value={val}
-          format="CODE128"
-          displayValue={false}
-          width={0.75}
-          height={22}
-          margin={0}
-          background="#ffffff"
-          lineColor="#000000"
-          renderer="svg"
-        />
+      <div className="nimbot-b1-label-barcode mx-auto flex max-h-[10mm] w-full items-center justify-center overflow-hidden">
+        <LabelCode value={barcode} qrValue={qrPayload} showQr />
       </div>
 
       <div className="nimbot-b1-label-footer space-y-0.5 text-center text-[7px] leading-tight text-black sm:text-[8px]">
         <p className="font-semibold">יריעה {sheetNumber} / 62</p>
-        <p className="truncate font-mono text-[6px]" title={val}>
-          {val}
+        <p className="truncate font-mono text-[6px]" title={barcode}>
+          {barcode}
         </p>
       </div>
     </div>

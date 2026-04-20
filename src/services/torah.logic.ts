@@ -70,7 +70,9 @@ export function canResolveQaFromInQa(outcome: QaResolution): boolean {
   return outcome === "approved" || outcome === "needs_fixing";
 }
 
-/** After fix — back to QA or straight approve */
-export function canCompleteFixToSheetStatus(target: "in_qa" | "approved"): boolean {
-  return target === "in_qa" || target === "approved";
+/** After fix — back to QA, return to sofer queue, or straight approve */
+export function canCompleteFixToSheetStatus(
+  target: "in_qa" | "approved" | "reported_written"
+): boolean {
+  return target === "in_qa" || target === "approved" || target === "reported_written";
 }

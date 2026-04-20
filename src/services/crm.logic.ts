@@ -687,10 +687,12 @@ export function sumTorahLedgerPayments(transactions: TorahLedgerLine[]): {
 export function summarizeTorahLedger(transactions: TorahLedgerLine[]): {
   totalFixDeduction: number;
   totalQaExpense: number;
+  totalParchmentExpense: number;
   totalOtherExpense: number;
 } {
   let fix = 0;
   let qa = 0;
+  let parchment = 0;
   let other = 0;
   for (const t of transactions) {
     const a = Number(t.amount);
@@ -702,6 +704,9 @@ export function summarizeTorahLedger(transactions: TorahLedgerLine[]): {
       case "qa_expense":
         qa += a;
         break;
+      case "parchment_expense":
+        parchment += a;
+        break;
       case "other_expense":
         other += a;
         break;
@@ -712,8 +717,154 @@ export function summarizeTorahLedger(transactions: TorahLedgerLine[]): {
   return {
     totalFixDeduction: fix,
     totalQaExpense: qa,
+    totalParchmentExpense: parchment,
     totalOtherExpense: other,
   };
+}
+
+/** מחפש בצילום המחשבון ערכים מספריים לתקציב קלף מתוכנן (אם קיימים). */
+export function extractPlannedParchmentBudgetFromSnapshot(
+  snapshot: Record<string, unknown> | null | undefined
+): number {
+  if (!snapshot || typeof snapshot !== "object") return 0;
+  const keys = [
+    "planned_parchment",
+    "parchment_budget",
+    "parchment_planned",
+    "expected_parchment_cost",
+    "parchment_cost_planned",
+    "parchment_total",
+  ];
+  for (const k of keys) {
+    const v = snapshot[k];
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(String(v).replace(",", ".")) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  for (const [k, v] of Object.entries(snapshot)) {
+    if (!/parchment|קלף/i.test(k)) continue;
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(String(v).replace(",", ".")) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+function readPositiveNumberFromSnapshotValue(v: unknown): number {
+  const n =
+    typeof v === "number"
+      ? v
+      : typeof v === "string"
+        ? Number(String(v).replace(",", "."))
+        : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** סכום תקציבים מתוכננים מהצילום (סופר / הגהות / שונות) בנוסף לקלף — לפי מפתחות נפוצים. */
+export function extractPlannedOperationalBudgetFromSnapshot(
+  snapshot: Record<string, unknown> | null | undefined
+): { parchment: number; scribe: number; proofreading: number; misc: number; total: number } {
+  const parchment = extractPlannedParchmentBudgetFromSnapshot(snapshot);
+  if (!snapshot || typeof snapshot !== "object") {
+    const base = parchment;
+    return { parchment, scribe: 0, proofreading: 0, misc: 0, total: base };
+  }
+
+  const scribeKeys = [
+    "planned_scribe",
+    "scribe_budget",
+    "sofer_budget",
+    "scribe_planned",
+    "planned_sofer",
+  ];
+  const proofKeys = [
+    "planned_proofreading",
+    "proofreading_budget",
+    "qa_budget",
+    "planned_qa",
+    "magiah_budget",
+    "הגהות",
+  ];
+  const miscKeys = ["planned_misc", "misc_budget", "overhead_planned", "other_planned"];
+
+  let scribe = 0;
+  for (const k of scribeKeys) {
+    scribe = Math.max(scribe, readPositiveNumberFromSnapshotValue(snapshot[k]));
+  }
+  let proofreading = 0;
+  for (const k of proofKeys) {
+    proofreading = Math.max(proofreading, readPositiveNumberFromSnapshotValue(snapshot[k]));
+  }
+  let misc = 0;
+  for (const k of miscKeys) {
+    misc = Math.max(misc, readPositiveNumberFromSnapshotValue(snapshot[k]));
+  }
+
+  for (const [k, v] of Object.entries(snapshot)) {
+    if (/scribe|sofer|סופר/i.test(k) && !/parchment|קלף/i.test(k)) {
+      scribe = Math.max(scribe, readPositiveNumberFromSnapshotValue(v));
+    }
+    if (/proof|qa|magiah|הגהה|מגיה/i.test(k) && !/computer_qa|gavra/i.test(k)) {
+      proofreading = Math.max(proofreading, readPositiveNumberFromSnapshotValue(v));
+    }
+  }
+
+  const total = parchment + scribe + proofreading + misc;
+  return { parchment, scribe, proofreading, misc, total };
+}
+
+/** תקציב קלף מתוכנן: עמודה בפרויקט אם הוגדרה, אחרת צילום מחשבון. */
+export function resolveTorahPlannedParchmentBudget(input: {
+  plannedParchmentBudgetColumn: number | null | undefined;
+  calculatorSnapshot: Record<string, unknown> | null | undefined;
+}): number {
+  const col = Number(input.plannedParchmentBudgetColumn);
+  if (Number.isFinite(col) && col > 0) return col;
+  return extractPlannedParchmentBudgetFromSnapshot(input.calculatorSnapshot);
+}
+
+/**
+ * רווח תיאורטי לפי חוזה: ערך מוסכם פחות `estimated_expenses_total` כשמוגדר,
+ * אחרת סכום שורות מתוכננות מהצילום (קלף, סופר, הגהות, שונות).
+ */
+export function computeTorahTheoreticalContractMargin(input: {
+  totalAgreedPrice: number;
+  calculatorSnapshot: Record<string, unknown> | null | undefined;
+  estimatedExpensesTotal?: number | null;
+}): { theoreticalMargin: number; plannedCostOffset: number } {
+  const gross = Number(input.totalAgreedPrice) || 0;
+  const col = Number(input.estimatedExpensesTotal);
+  if (Number.isFinite(col) && col >= 0) {
+    return { plannedCostOffset: col, theoreticalMargin: gross - col };
+  }
+  const ops = extractPlannedOperationalBudgetFromSnapshot(input.calculatorSnapshot);
+  const plannedCostOffset = ops.total;
+  return {
+    plannedCostOffset,
+    theoreticalMargin: gross - plannedCostOffset,
+  };
+}
+
+/** יחס גבייה: כמה מהרווח התיאורטי הוחזר כתזרים נטו מהיומן (0–100). */
+export function computeTorahCollectionProgressPercent(input: {
+  theoreticalProfitTotal: number;
+  actualCashflowNet: number;
+}): number | null {
+  const th = Number(input.theoreticalProfitTotal);
+  if (!Number.isFinite(th) || th <= 0) return null;
+  const net = Number(input.actualCashflowNet);
+  if (!Number.isFinite(net)) return null;
+  return Math.max(0, Math.min(100, (net / th) * 100));
+}
+
+/** התראת תקציב קלף: בפועל מעל 10% מהמתוכנן */
+export function isTorahParchmentBudgetOverThreshold(input: {
+  plannedParchment: number;
+  actualParchmentExpense: number;
+  thresholdRatio?: number;
+}): boolean {
+  const planned = Number(input.plannedParchment) || 0;
+  if (planned <= 0) return false;
+  const ratio = input.thresholdRatio ?? 1.1;
+  return Number(input.actualParchmentExpense) > planned * ratio;
 }
 
 /**
@@ -724,13 +875,13 @@ export function estimateTorahProjectProfitability(input: {
   amountPaidToScribe: number;
   ledgerLines: TorahLedgerLine[];
 }): number {
-  const { totalFixDeduction, totalQaExpense, totalOtherExpense } = summarizeTorahLedger(
+  const { totalFixDeduction, totalQaExpense, totalParchmentExpense, totalOtherExpense } = summarizeTorahLedger(
     input.ledgerLines
   );
   const client = Number(input.amountPaidByClient) || 0;
   const scribe = Number(input.amountPaidToScribe) || 0;
   const effectiveScribe = Math.max(0, scribe - totalFixDeduction);
-  return client - effectiveScribe - totalQaExpense - totalOtherExpense;
+  return client - effectiveScribe - totalQaExpense - totalParchmentExpense - totalOtherExpense;
 }
 
 /**
@@ -754,6 +905,7 @@ export function computeTorahProjectNetCashflowFromLedger(transactions: TorahLedg
       case "scribe_payment":
       case "fix_deduction":
       case "qa_expense":
+      case "parchment_expense":
       case "other_expense":
         totalCashOut += a;
         break;

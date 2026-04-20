@@ -1,6 +1,7 @@
 "use client";
 
-import Barcode from "react-barcode";
+import { LabelCode } from "@/components/labels/LabelCode";
+import { buildLabelCodePayload } from "@/src/lib/labels/codePayload";
 
 export type QaBatchLabelProps = {
   projectTitle: string;
@@ -17,6 +18,10 @@ export function QaBatchLabel({
   sentDateIso,
 }: QaBatchLabelProps) {
   const barcodeValue = batchId.replace(/-/g, "").toUpperCase();
+  const qrPayload = buildLabelCodePayload("qa-batch", {
+    batchId,
+    sheets: sheetNumbers.length,
+  });
   const dateStr = new Date(sentDateIso).toLocaleDateString("he-IL", {
     day: "2-digit",
     month: "2-digit",
@@ -39,18 +44,8 @@ export function QaBatchLabel({
         {title || "—"}
       </p>
 
-      <div className="nimbot-b1-label-barcode mx-auto flex max-h-[10mm] items-center justify-center overflow-hidden [&_svg]:max-h-[9mm]">
-        <Barcode
-          value={barcodeValue}
-          format="CODE128"
-          displayValue={false}
-          width={0.75}
-          height={22}
-          margin={0}
-          background="#ffffff"
-          lineColor="#000000"
-          renderer="svg"
-        />
+      <div className="nimbot-b1-label-barcode mx-auto flex max-h-[10mm] w-full items-center justify-center overflow-hidden">
+        <LabelCode value={barcodeValue} qrValue={qrPayload} showQr />
       </div>
 
       <div className="nimbot-b1-label-footer space-y-0.5 text-center text-[7px] leading-tight text-black sm:text-[8px]">

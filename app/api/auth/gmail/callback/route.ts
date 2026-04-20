@@ -68,7 +68,15 @@ export async function GET(req: Request) {
     access_token?: string;
   };
 
-  const refreshToken = tokens.refresh_token;
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("user_settings")
+    .select("gmail_refresh_token, gmail_email")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const refreshToken =
+    tokens.refresh_token ?? (existing?.gmail_refresh_token as string | null) ?? null;
   if (!refreshToken) {
     settingsUrl.searchParams.set("gmail_error", "no_refresh");
     return NextResponse.redirect(settingsUrl);
@@ -87,12 +95,11 @@ export async function GET(req: Request) {
     gmailEmail = userInfo.email ?? null;
   }
 
-  const supabase = await createClient();
   await supabase.from("user_settings").upsert(
     {
       user_id: userId,
       gmail_refresh_token: refreshToken,
-      gmail_email: gmailEmail,
+      gmail_email: gmailEmail ?? (existing?.gmail_email as string | null) ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }

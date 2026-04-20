@@ -20,6 +20,7 @@ import {
   notifyScribePayment,
 } from "@/src/services/notification.service";
 import {
+  appendTorahSysEvent,
   engineBatchTransitionSheets,
   engineTransitionTorahSheet,
   engineUpdateTorahSheetColumns,
@@ -142,6 +143,26 @@ export async function fetchProjectWithSheets(
       snapshot_locked_at:
         ((row as { snapshot_locked_at?: string | null }).snapshot_locked_at as string | null) ??
         null,
+      planned_parchment_budget:
+        (row as { planned_parchment_budget?: unknown }).planned_parchment_budget != null &&
+        (row as { planned_parchment_budget?: unknown }).planned_parchment_budget !== ""
+          ? Number((row as { planned_parchment_budget: unknown }).planned_parchment_budget)
+          : null,
+      planned_scribe_budget:
+        (row as { planned_scribe_budget?: unknown }).planned_scribe_budget != null &&
+        (row as { planned_scribe_budget?: unknown }).planned_scribe_budget !== ""
+          ? Number((row as { planned_scribe_budget: unknown }).planned_scribe_budget)
+          : null,
+      planned_proofreading_budget:
+        (row as { planned_proofreading_budget?: unknown }).planned_proofreading_budget != null &&
+        (row as { planned_proofreading_budget?: unknown }).planned_proofreading_budget !== ""
+          ? Number((row as { planned_proofreading_budget: unknown }).planned_proofreading_budget)
+          : null,
+      estimated_expenses_total:
+        (row as { estimated_expenses_total?: unknown }).estimated_expenses_total != null &&
+        (row as { estimated_expenses_total?: unknown }).estimated_expenses_total !== ""
+          ? Number((row as { estimated_expenses_total: unknown }).estimated_expenses_total)
+          : null,
       created_at: row.created_at as string,
       scribe_name: nameMap.get(row.scribe_id as string) ?? null,
       client_name: row.client_id ? (nameMap.get(row.client_id as string) ?? null) : null,
@@ -452,6 +473,15 @@ export async function markTorahSheetsReceived(
   }
 }
 
+const optionalTorahMoney = z
+  .union([z.string(), z.number(), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === "" || v === undefined || v === null) return null;
+    const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
+  });
+
 const updateTorahProjectSchema = z.object({
   title: z.string().min(1, "שם חובה").max(200),
   target_date: z
@@ -468,6 +498,10 @@ const updateTorahProjectSchema = z.object({
   parchment_type: optTorahParchmentText,
   client_contract_url: optContractLink,
   scribe_contract_url: optContractLink,
+  planned_parchment_budget: optionalTorahMoney.optional(),
+  planned_scribe_budget: optionalTorahMoney.optional(),
+  planned_proofreading_budget: optionalTorahMoney.optional(),
+  estimated_expenses_total: optionalTorahMoney.optional(),
 });
 
 export type UpdateTorahProjectInput = z.infer<typeof updateTorahProjectSchema>;
@@ -506,6 +540,10 @@ export async function updateTorahProject(
         parchment_type: v.parchment_type,
         client_contract_url: v.client_contract_url,
         scribe_contract_url: v.scribe_contract_url,
+        planned_parchment_budget: v.planned_parchment_budget ?? null,
+        planned_scribe_budget: v.planned_scribe_budget ?? null,
+        planned_proofreading_budget: v.planned_proofreading_budget ?? null,
+        estimated_expenses_total: v.estimated_expenses_total ?? null,
         qa_agreed_types: {
           gavra: Math.max(0, Math.floor(v.gavra_qa_count)),
           computer: Math.max(0, Math.floor(v.computer_qa_count)),
@@ -735,6 +773,15 @@ function transactionDateToIso(date: z.infer<typeof createTorahTransactionSchema>
   return new Date().toISOString();
 }
 
+type InsertTorahLedgerRowResult =
+  | {
+      ok: true;
+      transactionId: string;
+      proj: { client_id: string | null; scribe_id: string | null };
+    }
+  | { ok: false; error: string };
+
+/** DB insert only — notifications run after `sys_events` in `createTorahProjectTransaction`. */
 async function insertTorahProjectTransactionRow(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
@@ -747,7 +794,7 @@ async function insertTorahProjectTransactionRow(
     attachment_url: string | null;
     receipt_sent: boolean;
   }
-): Promise<CreateTorahTransactionResult> {
+): Promise<InsertTorahLedgerRowResult> {
   const { data: proj, error: pErr } = await supabase
     .from("torah_projects")
     .select("id, client_id, scribe_id")
@@ -755,28 +802,32 @@ async function insertTorahProjectTransactionRow(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (pErr || !proj) return { success: false, error: "הפרויקט לא נמצא" };
+  if (pErr || !proj) return { ok: false, error: "הפרויקט לא נמצא" };
 
-  const { error: insErr } = await supabase.from("torah_project_transactions").insert({
-    project_id: args.projectId,
-    transaction_type: args.transaction_type,
-    amount: args.amount,
-    date: args.dateIso,
-    notes: args.notes,
-    attachment_url: args.attachment_url,
-    receipt_sent: args.receipt_sent,
-  });
+  const { data: row, error: insErr } = await supabase
+    .from("torah_project_transactions")
+    .insert({
+      project_id: args.projectId,
+      transaction_type: args.transaction_type,
+      amount: args.amount,
+      date: args.dateIso,
+      notes: args.notes,
+      attachment_url: args.attachment_url,
+      receipt_sent: args.receipt_sent,
+    })
+    .select("id")
+    .single();
 
-  if (insErr) return { success: false, error: insErr.message };
+  if (insErr || !row?.id) return { ok: false, error: insErr?.message ?? "שגיאת הוספה" };
 
-  if (args.transaction_type === "scribe_payment" && proj.scribe_id) {
-    await notifyScribePayment(proj.scribe_id as string, args.amount, args.projectId);
-  }
-  if (args.transaction_type === "client_payment" && proj.client_id) {
-    await notifyClientPayment(proj.client_id as string, args.amount, args.projectId);
-  }
-
-  return { success: true };
+  return {
+    ok: true,
+    transactionId: row.id as string,
+    proj: {
+      client_id: (proj.client_id as string | null) ?? null,
+      scribe_id: (proj.scribe_id as string | null) ?? null,
+    },
+  };
 }
 
 export async function createTorahProjectTransaction(
@@ -806,10 +857,38 @@ export async function createTorahProjectTransaction(
       attachment_url: v.attachment_url ?? null,
       receipt_sent: v.receipt_sent ?? false,
     });
-    if (!ins.success) return ins;
+    if (!ins.ok) return { success: false, error: ins.error };
+
+    const ev = await appendTorahSysEvent({
+      projectId: v.projectId,
+      entityType: "torah_project_transaction",
+      entityId: ins.transactionId,
+      action: "ledger_transaction_created",
+      metadata: {
+        transaction_type: v.transaction_type,
+        amount: v.amount,
+        notes: v.notes ?? null,
+      },
+    });
+    if (!ev.success) {
+      await supabase
+        .from("torah_project_transactions")
+        .delete()
+        .eq("id", ins.transactionId)
+        .eq("project_id", v.projectId);
+      return { success: false, error: ev.error };
+    }
+
+    if (v.transaction_type === "scribe_payment" && ins.proj.scribe_id) {
+      await notifyScribePayment(ins.proj.scribe_id, v.amount, v.projectId);
+    }
+    if (v.transaction_type === "client_payment" && ins.proj.client_id) {
+      await notifyClientPayment(ins.proj.client_id, v.amount, v.projectId);
+    }
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${v.projectId}`);
+    revalidatePath("/torah/quick-entry");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
@@ -1047,57 +1126,42 @@ export async function markTorahPaymentSchedulePaid(
     } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data: sched, error: sErr } = await supabase
-      .from("torah_payment_schedules")
-      .select("id, project_id, party, amount, status")
-      .eq("id", scheduleId)
-      .maybeSingle();
-
-    if (sErr || !sched) return { success: false, error: "המועד לא נמצא" };
-
-    const projectId = sched.project_id as string;
-
-    const { data: proj } = await supabase
-      .from("torah_projects")
-      .select("id")
-      .eq("id", projectId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!proj) return { success: false, error: "אין הרשאה" };
-
-    if (sched.status !== "pending") {
-      return { success: false, error: "המועד כבר סומן כשולם" };
-    }
-
-    const party = sched.party as string;
-    const transaction_type: TorahLedgerTransactionType =
-      party === "scribe" ? "scribe_payment" : "client_payment";
-
-    const amount = Number(sched.amount ?? 0);
-    if (!Number.isFinite(amount) || amount < 0) {
-      return { success: false, error: "סכום המועד לא תקין" };
-    }
-
-    const notes = `מועד תשלום · ${(sched.id as string).slice(0, 8)}`;
-
-    const ins = await insertTorahProjectTransactionRow(supabase, user.id, {
-      projectId,
-      transaction_type,
-      amount,
-      dateIso: new Date().toISOString(),
-      notes,
-      attachment_url: null,
-      receipt_sent: false,
+    const { data, error: rpcErr } = await supabase.rpc("torah_mark_payment_schedule_paid", {
+      p_schedule_id: scheduleId,
     });
-    if (!ins.success) return ins;
 
-    const { error: upErr } = await supabase
-      .from("torah_payment_schedules")
-      .update({ status: "paid" })
-      .eq("id", scheduleId);
+    if (rpcErr) return { success: false, error: rpcErr.message };
 
-    if (upErr) return { success: false, error: upErr.message };
+    const payload = data as {
+      ok?: boolean;
+      error?: string;
+      project_id?: string;
+      party?: string;
+      amount?: number;
+      client_id?: string | null;
+      scribe_id?: string | null;
+    } | null;
+
+    if (!payload || payload.ok !== true) {
+      const msg =
+        typeof payload?.error === "string" && payload.error.trim() !== ""
+          ? payload.error
+          : "שגיאה";
+      return { success: false, error: msg };
+    }
+
+    const projectId = payload.project_id as string;
+    const party = String(payload.party ?? "");
+    const amount = Number(payload.amount ?? 0);
+    const clientId = (payload.client_id as string | null) ?? null;
+    const scribeId = (payload.scribe_id as string | null) ?? null;
+
+    if (party === "scribe" && scribeId) {
+      await notifyScribePayment(scribeId, amount, projectId);
+    }
+    if (party === "client" && clientId) {
+      await notifyClientPayment(clientId, amount, projectId);
+    }
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);

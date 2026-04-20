@@ -2,8 +2,16 @@
  * Gmail API helpers - OAuth token refresh and send
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+
+type GoogleTokenJson = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+};
 
 function encodeMimeWord(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
@@ -35,7 +43,13 @@ export async function clearRevokedGmailRefreshToken(client: any, userId: string)
   }
 }
 
-export async function getAccessToken(refreshToken: string): Promise<string> {
+/**
+ * Refreshes an access token. If Google returns a rotated `refresh_token`, callers should persist it.
+ */
+export async function exchangeRefreshForAccess(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token?: string;
+}> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -63,9 +77,42 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
     throw new Error(`רענון token נכשל: ${err.slice(0, 200)}`);
   }
 
-  const data = (await res.json()) as { access_token?: string };
+  const data = (await res.json()) as GoogleTokenJson;
   if (!data.access_token) throw new Error("לא התקבל access_token");
-  return data.access_token;
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+  };
+}
+
+export async function getAccessToken(refreshToken: string): Promise<string> {
+  const { access_token } = await exchangeRefreshForAccess(refreshToken);
+  return access_token;
+}
+
+/**
+ * Refresh access token and persist rotated refresh_token to `user_settings` when Google returns one.
+ */
+export async function getAccessTokenForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  refreshToken: string
+): Promise<string> {
+  const { access_token, refresh_token: rotated } = await exchangeRefreshForAccess(refreshToken);
+  if (rotated && rotated !== refreshToken) {
+    try {
+      await supabase
+        .from("user_settings")
+        .update({
+          gmail_refresh_token: rotated,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+    } catch {
+      // Non-fatal: access_token is still valid for this request.
+    }
+  }
+  return access_token;
 }
 
 /**

@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logWarn } from "@/lib/logger";
-import { getAccessToken } from "@/src/lib/gmail";
+import { getAccessTokenForUser } from "@/src/lib/gmail";
 
 const CAL = "https://www.googleapis.com/calendar/v3";
 
@@ -183,7 +183,7 @@ export async function runTorahCalendarSync(
 
   let accessToken: string;
   try {
-    accessToken = await getAccessToken(data.gmail_refresh_token);
+    accessToken = await getAccessTokenForUser(supabase, userId, data.gmail_refresh_token);
   } catch (e) {
     logWarn("GoogleCalendar", "Torah calendar sync skipped — token refresh failed", {
       userId,

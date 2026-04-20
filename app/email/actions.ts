@@ -2,7 +2,11 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { getAccessToken, GmailAuthRevokedError, clearRevokedGmailRefreshToken } from "@/src/lib/gmail";
+import {
+  getAccessTokenForUser,
+  GmailAuthRevokedError,
+  clearRevokedGmailRefreshToken,
+} from "@/src/lib/gmail";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -82,6 +86,7 @@ export async function importEmailContacts(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -102,6 +107,7 @@ export async function deleteEmailContact(id: string): Promise<ActionResult> {
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאה לא צפויה";
@@ -129,6 +135,7 @@ export async function bulkDeleteEmailContacts(ids: string[]): Promise<ActionResu
       if (error) return { success: false, error: error.message };
     }
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -152,6 +159,7 @@ export async function updateEmailContactTags(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -191,6 +199,7 @@ export async function bulkAddTagsToEmailContacts(
       }
     }
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -230,6 +239,7 @@ export async function bulkRemoveTagFromEmailContacts(
       }
     }
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -256,11 +266,14 @@ export async function importGmailContactsForEmail(): Promise<
 
     let accessToken: string;
     try {
-      accessToken = await getAccessToken(settings.gmail_refresh_token);
+      accessToken = await getAccessTokenForUser(supabase, user.id, settings.gmail_refresh_token);
     } catch (e) {
       if (e instanceof GmailAuthRevokedError) {
         await clearRevokedGmailRefreshToken(supabase, user.id);
-        return { success: false, error: e.message };
+        return {
+          success: false,
+          error: `${e.message} התחבר מחדש דרך /api/auth/gmail (הגדרות → Gmail).`,
+        };
       }
       throw e;
     }
@@ -315,6 +328,7 @@ export async function importGmailContactsForEmail(): Promise<
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true, imported: toUpsert.length };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
@@ -404,6 +418,7 @@ export async function importCrmContactsToEmail(): Promise<
 
     const added = toInsert.filter((r) => !existingSet.has(r.email)).length;
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true, added, total: toInsert.length };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
@@ -448,6 +463,7 @@ export async function addCrmContactToEmailList(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     revalidatePath("/email/campaigns");
     return { success: true, emailContactId: row?.id as string | undefined };
   } catch (err) {
@@ -476,6 +492,7 @@ export async function saveEmailCampaignTagPresets(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     revalidatePath("/email/campaigns");
     return { success: true };
   } catch (err) {

@@ -55,6 +55,7 @@ import {
   calculateTorahProjectFinancials,
   computeTorahScribePace,
 } from "@/src/services/crm.logic";
+import { estimateTorahScrollWritingCompletionDate } from "@/src/services/torahCompletionForecast";
 import {
   getTorahColumnsForSheet,
   uniqueParshiyotOnSheet,
@@ -77,6 +78,7 @@ import {
   fetchQaBatches,
   fetchQaBatchSheetRows,
   resolveTorahSheetQa,
+  bulkResolveOpenQaBatchSheets,
   fetchTorahFixTasks,
   createTorahFixTaskAction,
   completeTorahFixTaskAction,
@@ -113,6 +115,12 @@ const QA_KIND_LABELS: Record<"gavra" | "computer" | "repair" | "other", string> 
   repair: "תיקון",
   other: "אחר",
 };
+
+type FixCompletionRoute =
+  | "computer_review"
+  | "gavra_review"
+  | "return_to_sofer"
+  | "approve";
 
 const SHEET_CELL_STYLES: Record<TorahSheetStatus, string> = {
   not_started: "bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300/70",
@@ -223,18 +231,17 @@ export default function TorahDetailClient({
   const [resolveRows, setResolveRows] = useState<QaBatchSheetRow[]>([]);
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolvingSheetId, setResolvingSheetId] = useState<string | null>(null);
+  const [resolvingBatchId, setResolvingBatchId] = useState<string | null>(null);
 
   const [fixTaskTarget, setFixTaskTarget] = useState<{
     sheet: QaBatchSheetRow;
     qaBatchId: string;
   } | null>(null);
-  const [fixTaskDesc, setFixTaskDesc] = useState("");
-  const [fixTaskCostEstimate, setFixTaskCostEstimate] = useState("");
   const [fixTaskSaving, setFixTaskSaving] = useState(false);
 
   const [completeFixTarget, setCompleteFixTarget] = useState<TorahFixTaskRow | null>(null);
   const [completeActualCost, setCompleteActualCost] = useState("");
-  const [completeNextStatus, setCompleteNextStatus] = useState<"in_qa" | "approved">("in_qa");
+  const [completeRoute, setCompleteRoute] = useState<FixCompletionRoute>("computer_review");
   const [completeSaving, setCompleteSaving] = useState(false);
 
   const [warehouseSaving, setWarehouseSaving] = useState(false);
@@ -257,6 +264,18 @@ export default function TorahDetailClient({
   );
   const [editScribeContractUrl, setEditScribeContractUrl] = useState(
     project.scribe_contract_url ?? ""
+  );
+  const [editPlannedParchment, setEditPlannedParchment] = useState(
+    project.planned_parchment_budget != null ? String(project.planned_parchment_budget) : ""
+  );
+  const [editPlannedScribe, setEditPlannedScribe] = useState(
+    project.planned_scribe_budget != null ? String(project.planned_scribe_budget) : ""
+  );
+  const [editPlannedProofreading, setEditPlannedProofreading] = useState(
+    project.planned_proofreading_budget != null ? String(project.planned_proofreading_budget) : ""
+  );
+  const [editEstimatedExpensesTotal, setEditEstimatedExpensesTotal] = useState(
+    project.estimated_expenses_total != null ? String(project.estimated_expenses_total) : ""
   );
   const [editIncludesAccessories, setEditIncludesAccessories] = useState(
     project.includes_accessories
@@ -284,6 +303,20 @@ export default function TorahDetailClient({
     setEditParchmentType(project.parchment_type ?? "");
     setEditClientContractUrl(project.client_contract_url ?? "");
     setEditScribeContractUrl(project.scribe_contract_url ?? "");
+    setEditPlannedParchment(
+      project.planned_parchment_budget != null ? String(project.planned_parchment_budget) : ""
+    );
+    setEditPlannedScribe(
+      project.planned_scribe_budget != null ? String(project.planned_scribe_budget) : ""
+    );
+    setEditPlannedProofreading(
+      project.planned_proofreading_budget != null
+        ? String(project.planned_proofreading_budget)
+        : ""
+    );
+    setEditEstimatedExpensesTotal(
+      project.estimated_expenses_total != null ? String(project.estimated_expenses_total) : ""
+    );
     setEditIncludesAccessories(project.includes_accessories);
   }, [project]);
 
@@ -360,6 +393,43 @@ export default function TorahDetailClient({
       }),
     [project.start_date, project.target_date, project.columns_per_day, sheets]
   );
+
+  const writingCompletionForecast = useMemo(
+    () =>
+      estimateTorahScrollWritingCompletionDate({
+        sheets,
+        columnsPerDay: project.columns_per_day,
+        startDate: project.start_date,
+      }),
+    [sheets, project.columns_per_day, project.start_date]
+  );
+
+  const [openBatchResolving, setOpenBatchResolving] = useState<string | null>(null);
+
+  async function handleBulkOpenBatch(batchId: string, outcome: "approved" | "needs_fixing") {
+    setOpenBatchResolving(batchId);
+    try {
+      const res = await bulkResolveOpenQaBatchSheets(projectId, batchId, outcome);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      const next = outcome === "approved" ? ("approved" as const) : ("needs_fixing" as const);
+      const nums = new Set(batches.find((b) => b.id === batchId)?.sheet_numbers ?? []);
+      setSheets((prev) =>
+        prev.map((s) =>
+          nums.has(s.sheet_number) && s.status === "in_qa" ? { ...s, status: next } : s
+        )
+      );
+      toast.success(
+        outcome === "approved" ? "כל יריעות השקית אושרו" : "כל יריעות השקית סומנו לתיקון"
+      );
+      await loadBatches();
+      router.refresh();
+    } finally {
+      setOpenBatchResolving(null);
+    }
+  }
 
   const eligibleSheets = useMemo(
     () => sheets.filter((s) => QA_ELIGIBLE.includes(s.status)),
@@ -586,22 +656,52 @@ export default function TorahDetailClient({
     }
   }
 
-  async function handleSubmitCreateFixTask() {
-    if (!fixTaskTarget) return;
-    const raw = fixTaskCostEstimate.trim().replace(",", ".");
-    const cost = raw === "" ? 0 : Number(raw);
-    if (!Number.isFinite(cost) || cost < 0) {
-      toast.error("עלות משוערת לא תקינה");
+  async function handleResolveBatchQa(
+    batchId: string,
+    outcome: "approved" | "needs_fixing"
+  ) {
+    const rows = resolveRows.filter((r) => r.status === "in_qa");
+    if (rows.length === 0) {
+      toast.message("אין יריעות פתוחות להחלטה בסבב הזה");
       return;
     }
+    setResolvingBatchId(batchId);
+    try {
+      for (const row of rows) {
+        const res = await resolveTorahSheetQa(projectId, row.id, outcome);
+        if (!res.success) {
+          toast.error(`יריעה ${row.sheet_number}: ${res.error}`);
+          return;
+        }
+      }
+      const nextStatus = outcome === "approved" ? ("approved" as const) : ("needs_fixing" as const);
+      const idSet = new Set(rows.map((r) => r.id));
+      setSheets((prev) => prev.map((s) => (idSet.has(s.id) ? { ...s, status: nextStatus } : s)));
+      setResolveRows((prev) =>
+        prev.map((r) => (idSet.has(r.id) ? { ...r, status: nextStatus } : r))
+      );
+      await loadFixTasks();
+      toast.success(
+        outcome === "approved"
+          ? `אושרו ${rows.length} יריעות בסבב`
+          : `סומנו ${rows.length} יריעות לתיקון`
+      );
+      router.refresh();
+    } finally {
+      setResolvingBatchId(null);
+    }
+  }
+
+  async function handleSubmitCreateFixTask() {
+    if (!fixTaskTarget) return;
     setFixTaskSaving(true);
     try {
       const res = await createTorahFixTaskAction({
         projectId,
         sheetId: fixTaskTarget.sheet.id,
         qaBatchId: fixTaskTarget.qaBatchId,
-        description: fixTaskDesc.trim() || null,
-        costAmount: cost,
+        description: null,
+        costAmount: 0,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -609,8 +709,6 @@ export default function TorahDetailClient({
       }
       toast.success("משימת תיקון נוצרה");
       setFixTaskTarget(null);
-      setFixTaskDesc("");
-      setFixTaskCostEstimate("");
       await loadFixTasks();
       router.refresh();
     } finally {
@@ -630,13 +728,19 @@ export default function TorahDetailClient({
       }
       ac = n;
     }
+    const nextSheetStatus =
+      completeRoute === "approve"
+        ? "approved"
+        : completeRoute === "return_to_sofer"
+          ? "reported_written"
+          : "in_qa";
     setCompleteSaving(true);
     try {
       const res = await completeTorahFixTaskAction({
         projectId,
         fixTaskId: completeFixTarget.id,
         actualCost: ac,
-        nextSheetStatus: completeNextStatus,
+        nextSheetStatus,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -645,10 +749,11 @@ export default function TorahDetailClient({
       toast.success("משימת התיקון נסגרה");
       setCompleteFixTarget(null);
       setCompleteActualCost("");
+      setCompleteRoute("computer_review");
       setSheets((prev) =>
         prev.map((s) =>
           s.id === completeFixTarget.sheet_id
-            ? { ...s, status: completeNextStatus }
+            ? { ...s, status: nextSheetStatus }
             : s
         )
       );
@@ -664,6 +769,26 @@ export default function TorahDetailClient({
   }
 
   async function handleSaveProjectEdit() {
+    const optMoney = (s: string): number | null => {
+      const t = s.trim().replace(/,/g, ".");
+      if (t === "") return null;
+      const n = Number(t);
+      if (!Number.isFinite(n) || n < 0) return null;
+      return n;
+    };
+    const pp = optMoney(editPlannedParchment);
+    const ps = optMoney(editPlannedScribe);
+    const pr = optMoney(editPlannedProofreading);
+    const et = optMoney(editEstimatedExpensesTotal);
+    if (
+      (editPlannedParchment.trim() !== "" && pp === null) ||
+      (editPlannedScribe.trim() !== "" && ps === null) ||
+      (editPlannedProofreading.trim() !== "" && pr === null) ||
+      (editEstimatedExpensesTotal.trim() !== "" && et === null)
+    ) {
+      toast.error("ערכי תקציב לא תקינים");
+      return;
+    }
     setEditSaving(true);
     try {
       const res = await updateTorahProject(projectId, {
@@ -683,6 +808,10 @@ export default function TorahDetailClient({
         parchment_type: editParchmentType.trim() || null,
         client_contract_url: editClientContractUrl.trim() || null,
         scribe_contract_url: editScribeContractUrl.trim() || null,
+        planned_parchment_budget: pp,
+        planned_scribe_budget: ps,
+        planned_proofreading_budget: pr,
+        estimated_expenses_total: et,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -907,6 +1036,20 @@ export default function TorahDetailClient({
               </CardContent>
             </Card>
           ))}
+          <Card className="rounded-xl border-sky-200 bg-sky-50/40 sm:col-span-2 lg:col-span-2">
+            <CardContent className="p-4 text-sm">
+              <p className="text-xs text-sky-900 font-medium mb-0.5">תחזית סיום כתיבה (ימי עבודה עבריים)</p>
+              {writingCompletionForecast.ok ? (
+                <p className="font-medium text-slate-900">
+                  {writingCompletionForecast.workDaysRemaining === 0
+                    ? "כל היריעות בקצב כתיבה — אין יתרה לפי הסטטוסים"
+                    : `סיום משוער: ${formatDate(writingCompletionForecast.completionDateIso)} · ימי עבודה נדרשים: ${writingCompletionForecast.workDaysRemaining}`}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">{writingCompletionForecast.reason}</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Financials */}
@@ -1069,7 +1212,7 @@ export default function TorahDetailClient({
                             setCompleteActualCost(
                               t.cost_amount > 0 ? String(t.cost_amount) : ""
                             );
-                            setCompleteNextStatus("in_qa");
+                            setCompleteRoute("computer_review");
                           }}
                         >
                           <ClipboardList className="size-3.5 ml-1" />
@@ -1182,17 +1325,39 @@ export default function TorahDetailClient({
                             🖨️ הדפס מדבקה
                           </Button>
                           {b.status === "sent" && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                              disabled={returningId === b.id}
-                              onClick={() => void handleReturnBatch(b.id)}
-                            >
-                              <RotateCcw className="size-3.5 ml-1" />
-                              {returningId === b.id ? "מעדכן..." : "החזר שקית (סגירת סבב)"}
-                            </Button>
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                disabled={returningId === b.id}
+                                onClick={() => void handleReturnBatch(b.id)}
+                              >
+                                <RotateCcw className="size-3.5 ml-1" />
+                                {returningId === b.id ? "מעדכן..." : "החזר שקית (סגירת סבב)"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg border-sky-300 text-sky-900"
+                                disabled={openBatchResolving === b.id}
+                                onClick={() => void handleBulkOpenBatch(b.id, "approved")}
+                              >
+                                {openBatchResolving === b.id ? "מעדכן..." : "אשר כל השקית (נשלח)"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg border-amber-300 text-amber-950"
+                                disabled={openBatchResolving === b.id}
+                                onClick={() => void handleBulkOpenBatch(b.id, "needs_fixing")}
+                              >
+                                {openBatchResolving === b.id ? "מעדכן..." : "כל השקית לתיקון"}
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1215,6 +1380,28 @@ export default function TorahDetailClient({
 
                           {resolvePanelBatchId === b.id && (
                             <div className="rounded-lg border border-slate-200 bg-white p-3">
+                              <div className="mb-3 flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs border-emerald-300 text-emerald-800"
+                                  disabled={resolvingBatchId === b.id || resolveLoading}
+                                  onClick={() => void handleResolveBatchQa(b.id, "approved")}
+                                >
+                                  אשר את כל השקית
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs border-amber-300 text-amber-900"
+                                  disabled={resolvingBatchId === b.id || resolveLoading}
+                                  onClick={() => void handleResolveBatchQa(b.id, "needs_fixing")}
+                                >
+                                  העבר את כל השקית לתיקון
+                                </Button>
+                              </div>
                               {resolveLoading ? (
                                 <p className="text-sm text-muted-foreground py-4 text-center">
                                   טוען יריעות...
@@ -1311,7 +1498,7 @@ export default function TorahDetailClient({
                                                           ? String(openTask.cost_amount)
                                                           : ""
                                                       );
-                                                      setCompleteNextStatus("in_qa");
+                                                      setCompleteRoute("computer_review");
                                                     }}
                                                   >
                                                     סגור תיקון
@@ -1338,7 +1525,7 @@ export default function TorahDetailClient({
           </TabsContent>
 
           <TabsContent value="financials">
-            <TorahFinancialsTab projectId={projectId} project={project} />
+            <TorahFinancialsTab projectId={projectId} project={project} sheets={sheets} />
           </TabsContent>
         </Tabs>
       </div>
@@ -1492,6 +1679,51 @@ export default function TorahDetailClient({
                   )}
                 </div>
               </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3">
+                <p className="text-xs font-semibold text-slate-700">תקציבים מתוכננים (דשבורד פיננסי)</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">תקציב קלף מתוכנן (₪)</p>
+                    <Input
+                      inputMode="decimal"
+                      value={editPlannedParchment}
+                      onChange={(e) => setEditPlannedParchment(applyNumericTransform(e.target.value))}
+                      placeholder="ריק = לפי צילום מחשבון"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">תקציב סופר מתוכנן (₪)</p>
+                    <Input
+                      inputMode="decimal"
+                      value={editPlannedScribe}
+                      onChange={(e) => setEditPlannedScribe(applyNumericTransform(e.target.value))}
+                      placeholder="אופציונלי"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">תקציב הגהות מתוכנן (₪)</p>
+                    <Input
+                      inputMode="decimal"
+                      value={editPlannedProofreading}
+                      onChange={(e) => setEditPlannedProofreading(applyNumericTransform(e.target.value))}
+                      placeholder="אופציונלי"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">סה״כ עלויות מתוכננות (₪)</p>
+                    <Input
+                      inputMode="decimal"
+                      value={editEstimatedExpensesTotal}
+                      onChange={(e) =>
+                        setEditEstimatedExpensesTotal(applyNumericTransform(e.target.value))
+                      }
+                      placeholder="דוחף על סכום מהצילום"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">מספר הגהות גברא שסוכמו</p>
@@ -1913,8 +2145,6 @@ export default function TorahDetailClient({
         onOpenChange={(o) => {
           if (!o) {
             setFixTaskTarget(null);
-            setFixTaskDesc("");
-            setFixTaskCostEstimate("");
           }
         }}
       >
@@ -1926,25 +2156,9 @@ export default function TorahDetailClient({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-1">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">תיאור (אופציונלי)</p>
-              <textarea
-                value={fixTaskDesc}
-                onChange={(e) => setFixTaskDesc(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-                placeholder="מה לתקן..."
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">עלות משוערת (₪)</p>
-              <Input
-                inputMode="decimal"
-                value={fixTaskCostEstimate}
-                onChange={(e) => setFixTaskCostEstimate(e.target.value)}
-                placeholder="0"
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              משימה זו תסמן את היריעה לתיקון כשלב עבודה בלבד. את העלות בפועל מזינים בסגירת המשימה.
+            </p>
             <div className="flex gap-2 justify-end pt-2">
               <Button type="button" variant="outline" onClick={() => setFixTaskTarget(null)}>
                 ביטול
@@ -1968,6 +2182,7 @@ export default function TorahDetailClient({
           if (!o) {
             setCompleteFixTarget(null);
             setCompleteActualCost("");
+            setCompleteRoute("computer_review");
           }
         }}
       >
@@ -1992,16 +2207,16 @@ export default function TorahDetailClient({
               />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">סטטוס יריעה אחרי סגירה</p>
+              <p className="text-xs text-muted-foreground mb-1">יעד המשך אחרי סגירת התיקון</p>
               <select
-                value={completeNextStatus}
-                onChange={(e) =>
-                  setCompleteNextStatus(e.target.value as "in_qa" | "approved")
-                }
+                value={completeRoute}
+                onChange={(e) => setCompleteRoute(e.target.value as FixCompletionRoute)}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="in_qa">חזרה להגהה ({TORAH_SHEET_STATUS_LABELS.in_qa})</option>
-                <option value="approved">אושר ({TORAH_SHEET_STATUS_LABELS.approved})</option>
+                <option value="computer_review">שליחה להגהת מחשב נוספת</option>
+                <option value="gavra_review">שליחה להגהת גברא</option>
+                <option value="return_to_sofer">החזרה לסופר להשלמה</option>
+                <option value="approve">סימון כאושר</option>
               </select>
             </div>
             <div className="flex gap-2 justify-end pt-2">

@@ -591,9 +591,29 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               {editingId ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-2">
                   <p className="text-xs font-medium text-slate-500">מק״ט והדפסת תווית (Nimbot B1)</p>
+                  {(() => {
+                    const currentItem = items.find((i) => i.id === editingId);
+                    const title =
+                      currentItem?.megillah_type?.trim() ||
+                      currentItem?.product_category?.trim() ||
+                      "פריט מלאי";
+                    const subtitle =
+                      currentItem?.description?.trim() ||
+                      currentItem?.script_type?.trim() ||
+                      undefined;
+                    const priceText =
+                      currentItem?.target_price != null
+                        ? `מחיר צרכן: ${currentItem.target_price.toLocaleString("he-IL")} ₪`
+                        : undefined;
+                    return (
                   <BarcodePrint
-                    value={items.find((i) => i.id === editingId)?.sku ?? editingId.slice(0, 8)}
+                        value={currentItem?.sku ?? editingId.slice(0, 8)}
+                        title={title}
+                        subtitle={subtitle}
+                        priceText={priceText}
                   />
+                    );
+                  })()}
                 </div>
               ) : null}
               <Card className="shadow-sm rounded-xl border-border bg-card">

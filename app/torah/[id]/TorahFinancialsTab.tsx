@@ -13,12 +13,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { TorahProjectDetailView } from "@/src/lib/types/torah";
+import type { TorahProjectDetailView, TorahSheetGridRow } from "@/src/lib/types/torah";
 import {
   estimateTorahProjectProfitability,
   summarizeTorahLedger,
   computeTorahProjectNetCashflowFromLedger,
+  sumTorahLedgerPayments,
 } from "@/src/services/crm.logic";
+import { estimateTorahScrollWritingCompletionDate } from "@/src/services/torahCompletionForecast";
 import {
   TORAH_LEDGER_TRANSACTION_TYPES,
   type TorahLedgerTransactionType,
@@ -29,10 +31,12 @@ import {
   deleteTorahPaymentSchedule,
   fetchTorahPaymentSchedules,
   fetchTorahProjectTransactions,
+  fetchTorahProjectSysEvents,
   markTorahPaymentSchedulePaid,
   updateTorahPaymentSchedule,
   type TorahPaymentScheduleRow,
   type TorahProjectTransactionRow,
+  type TorahSysEventView,
 } from "./actions";
 import { applyNumericTransform } from "@/lib/numericInput";
 import { Paperclip } from "lucide-react";
@@ -43,6 +47,7 @@ const TX_LABELS: Record<string, string> = {
   scribe_payment: "תשלום לסופר",
   fix_deduction: "ניכוי תיקון",
   qa_expense: "הוצאת הגהה",
+  parchment_expense: "הוצאת קלף",
   other_expense: "הוצאה אחרת",
 };
 
@@ -99,9 +104,10 @@ function LedgerNotesCell({ notes }: { notes: string | null }) {
 type Props = {
   projectId: string;
   project: TorahProjectDetailView;
+  sheets: TorahSheetGridRow[];
 };
 
-export function TorahFinancialsTab({ projectId, project }: Props) {
+export function TorahFinancialsTab({ projectId, project, sheets }: Props) {
   const router = useRouter();
   const [transactions, setTransactions] = useState<TorahProjectTransactionRow[]>([]);
   const [schedules, setSchedules] = useState<TorahPaymentScheduleRow[]>([]);
@@ -129,12 +135,14 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
 
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sysEvents, setSysEvents] = useState<TorahSysEventView[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [txRes, schRes] = await Promise.all([
+    const [txRes, schRes, evRes] = await Promise.all([
       fetchTorahProjectTransactions(projectId),
       fetchTorahPaymentSchedules(projectId),
+      fetchTorahProjectSysEvents(projectId),
     ]);
     if (!txRes.success) {
       toast.error(txRes.error);
@@ -148,6 +156,11 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
     } else {
       setSchedules(schRes.schedules);
     }
+    if (!evRes.success) {
+      setSysEvents([]);
+    } else {
+      setSysEvents(evRes.events);
+    }
     setLoading(false);
   }, [projectId]);
 
@@ -160,7 +173,7 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
     [transactions]
   );
 
-  const { totalFixDeduction, totalQaExpense, totalOtherExpense } = useMemo(
+  const { totalFixDeduction, totalQaExpense, totalParchmentExpense, totalOtherExpense } = useMemo(
     () => summarizeTorahLedger(ledgerLines),
     [ledgerLines]
   );
@@ -179,6 +192,41 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
     () => computeTorahProjectNetCashflowFromLedger(ledgerLines),
     [ledgerLines]
   );
+
+  const eventByTxId = useMemo(() => {
+    const m = new Map<string, TorahSysEventView>();
+    for (const e of sysEvents) {
+      if (e.entity_type === "torah_project_transaction") m.set(e.entity_id, e);
+    }
+    return m;
+  }, [sysEvents]);
+
+  const writingCompletionForecast = useMemo(
+    () =>
+      estimateTorahScrollWritingCompletionDate({
+        sheets,
+        columnsPerDay: project.columns_per_day,
+        startDate: project.start_date,
+      }),
+    [sheets, project.columns_per_day, project.start_date]
+  );
+
+  const projectedFinalClientPaymentDate = useMemo(() => {
+    const pending = schedules.filter((s) => s.party === "client" && s.status === "pending");
+    if (pending.length === 0) return null;
+    return pending.reduce((a, b) => (a.due_date >= b.due_date ? a : b)).due_date;
+  }, [schedules]);
+
+  const scribeLedgerSummary = useMemo(() => {
+    const { totalScribePayments } = sumTorahLedgerPayments(ledgerLines);
+    const { totalFixDeduction, totalQaExpense } = summarizeTorahLedger(ledgerLines);
+    return {
+      totalScribePayments,
+      totalFixDeduction,
+      netScribeFromLedger: Math.max(0, totalScribePayments - totalFixDeduction),
+      totalQaExpense,
+    };
+  }, [ledgerLines]);
 
   const resetTxForm = () => {
     setTxType("client_payment");
@@ -368,8 +416,8 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
             <p className="text-xs text-violet-900/80 mb-1">הערכת רווחיות נוכחית</p>
             <p className="text-xl font-bold tabular-nums text-violet-900">{formatShekels(profitability)}</p>
             <p className="text-[10px] text-muted-foreground mt-1">
-              לקוח פחות סופר (אחרי ניכוי תיקונים) פחות הוצאות הגהה ({formatShekels(totalQaExpense)}) ואחרות (
-              {formatShekels(totalOtherExpense)})
+              לקוח פחות סופר (אחרי ניכוי תיקונים) פחות הגהה ({formatShekels(totalQaExpense)}), קלף (
+              {formatShekels(totalParchmentExpense)}) ואחרות ({formatShekels(totalOtherExpense)})
             </p>
           </CardContent>
         </Card>
@@ -382,6 +430,67 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
             <p className="text-[10px] text-muted-foreground mt-1">
               כניסות (תשלומי לקוח) {formatShekels(netCashflow.totalCashIn)} · יציאות (סופר, תיקונים, הגהה וכו׳){" "}
               {formatShekels(netCashflow.totalCashOut)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card className="rounded-xl border-slate-200 lg:col-span-1">
+          <CardContent className="p-4 text-sm space-y-2">
+            <p className="text-xs font-semibold text-slate-800">תחזית סיום כתיבה</p>
+            {writingCompletionForecast.ok ? (
+              <p className="text-lg font-bold tabular-nums text-slate-900">
+                {new Date(writingCompletionForecast.completionDateIso).toLocaleDateString("he-IL")}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">{writingCompletionForecast.reason}</p>
+            )}
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              לפי קצב עמודות ליום וימי עבודה (ללא שבת וי״ט)
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border-amber-100 bg-amber-50/30 lg:col-span-1">
+          <CardContent className="p-4 text-sm space-y-2">
+            <p className="text-xs font-semibold text-amber-950">תאריך תשלום לקוח אחרון (מתוכנן)</p>
+            {projectedFinalClientPaymentDate ? (
+              <p className="text-lg font-bold tabular-nums text-amber-950">
+                {formatDueDate(projectedFinalClientPaymentDate)}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">אין מועדי לקוח ממתינים</p>
+            )}
+            <p className="text-[10px] text-amber-900/80 leading-relaxed">
+              לפי מועדי תשלום לקוח בסטטוס «ממתין» בלבד
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border-slate-200 lg:col-span-1">
+          <CardContent className="p-4 text-sm space-y-2">
+            <p className="text-xs font-semibold text-slate-800">יומן סופר והגהות</p>
+            <ul className="space-y-1 text-xs text-slate-700 tabular-nums">
+              <li className="flex justify-between gap-2">
+                <span>תשלומי סופר (יומן)</span>
+                <span className="font-medium">{formatShekels(scribeLedgerSummary.totalScribePayments)}</span>
+              </li>
+              <li className="flex justify-between gap-2">
+                <span>ניכויי תיקון (יומן)</span>
+                <span className="font-medium">{formatShekels(scribeLedgerSummary.totalFixDeduction)}</span>
+              </li>
+              <li className="flex justify-between gap-2 border-t border-slate-100 pt-1">
+                <span>נטו לסופר (שולם − ניכוי)</span>
+                <span className="font-semibold text-slate-900">
+                  {formatShekels(scribeLedgerSummary.netScribeFromLedger)}
+                </span>
+              </li>
+              <li className="flex justify-between gap-2">
+                <span>הוצאות הגהה (יומן)</span>
+                <span className="font-medium">{formatShekels(scribeLedgerSummary.totalQaExpense)}</span>
+              </li>
+            </ul>
+            <p className="text-[10px] text-muted-foreground leading-relaxed pt-1">
+              תשלומים דרך <span className="font-mono">erp_payments</span> יוצגו כשנקשרת עסקת מכירה לפרויקט.
             </p>
           </CardContent>
         </Card>
@@ -508,6 +617,7 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
                       <th className="p-3 font-medium">תאריך</th>
                       <th className="p-3 font-medium">סוג</th>
                       <th className="p-3 font-medium">סכום</th>
+                      <th className="p-3 font-medium">אירוע מערכת</th>
                       <th className="p-3 font-medium">קבלה נשלחה</th>
                       <th className="p-3 font-medium w-[1%]">אסמכתא</th>
                       <th className="p-3 font-medium min-w-[8rem]">פירוט / הערות</th>
@@ -519,6 +629,22 @@ export function TorahFinancialsTab({ projectId, project }: Props) {
                         <td className="p-3 tabular-nums whitespace-nowrap">{formatDateTime(t.date)}</td>
                         <td className="p-3">{TX_LABELS[t.transaction_type] ?? t.transaction_type}</td>
                         <td className="p-3 tabular-nums font-medium">{formatShekels(t.amount)}</td>
+                        <td className="p-3 align-top text-[11px] text-slate-600">
+                          {(() => {
+                            const ev = eventByTxId.get(t.id);
+                            if (!ev) return <span className="text-muted-foreground">—</span>;
+                            return (
+                              <div className="space-y-0.5">
+                                <div className="tabular-nums whitespace-nowrap">
+                                  {formatDateTime(ev.created_at)}
+                                </div>
+                                <div className="text-muted-foreground break-words max-w-[10rem]">
+                                  {ev.action}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td className="p-3">{t.receipt_sent ? "כן" : "לא"}</td>
                         <td className="p-3 align-top">
                           {t.attachment_url ? (

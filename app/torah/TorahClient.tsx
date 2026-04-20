@@ -27,6 +27,8 @@ import {
 import { cn } from "@/lib/utils";
 import { applyNumericTransform } from "@/lib/numericInput";
 import { TORAH_CONTRACT_PARCHMENT_TYPES } from "@/src/lib/stam/catalog";
+import { TorahFinancialHealthSection } from "./TorahFinancialHealthSection";
+import type { TorahFinancialHealthPayload } from "./financial-health-data";
 
 // ── Status badge ──────────────────────────────────────────────
 
@@ -554,9 +556,17 @@ type Props = {
   initialProjects: TorahProjectWithNames[];
   parchmentLabels: string[];
   fetchError?: string;
+  financialHealth?: TorahFinancialHealthPayload | null;
+  financialHealthError?: string | null;
 };
 
-export default function TorahClient({ initialProjects, parchmentLabels, fetchError }: Props) {
+export default function TorahClient({
+  initialProjects,
+  parchmentLabels,
+  fetchError,
+  financialHealth,
+  financialHealthError,
+}: Props) {
   const router = useRouter();
   const [projects] = useState(initialProjects);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -597,6 +607,13 @@ export default function TorahClient({ initialProjects, parchmentLabels, fetchErr
           פרויקט חדש
         </Button>
       </div>
+
+      {!fetchError && (
+        <TorahFinancialHealthSection
+          data={financialHealth ?? null}
+          error={financialHealthError ?? null}
+        />
+      )}
 
       {/* Summary cards */}
       {total > 0 && (

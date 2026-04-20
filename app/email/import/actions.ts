@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/src/lib/supabase/server";
-import { getAccessToken } from "@/src/lib/gmail";
+import {
+  getAccessTokenForUser,
+  GmailAuthRevokedError,
+  clearRevokedGmailRefreshToken,
+} from "@/src/lib/gmail";
 import { revalidatePath } from "next/cache";
 import { parseMarketTorahMessage, parsedMessageIsActionable, listMissingParseFields } from "@/src/lib/market/parseWhatsAppMarketMessage";
 import { marketDbToK, marketKToDb } from "@/lib/market/kPricing";
@@ -33,7 +37,16 @@ export async function fetchGmailTriageContacts(): Promise<
       return { success: false, error: "חבר Gmail בהגדרות" };
     }
 
-    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessTokenForUser(supabase, user.id, settings.gmail_refresh_token);
+    } catch (e) {
+      if (e instanceof GmailAuthRevokedError) {
+        await clearRevokedGmailRefreshToken(supabase, user.id);
+        return { success: false, error: `${e.message} התחבר מחדש ב-/api/auth/gmail` };
+      }
+      throw e;
+    }
     const res = await fetch(
       "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
       { headers: { Authorization: `Bearer ${accessToken}` } }

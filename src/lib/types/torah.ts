@@ -7,6 +7,7 @@
 // 052 — contract: price_per_column, qa_agreed_types (jsonb), includes_accessories, parchment_type
 // 057 — client_contract_url, scribe_contract_url; parchment_type unrestricted (calculator-driven)
 // 069 — calculator_snapshot, snapshot_locked_at; sheet statuses reported_written/received; torah_fix_tasks; checker_id on QA batches
+// 075 — planned_* budgets, estimated_expenses_total (financial health dashboard)
 // ============================================================
 
 /** Parse qa_agreed_types JSON from DB */
@@ -95,6 +96,14 @@ export interface TorahProject {
   calculator_snapshot: Record<string, unknown> | null;
   /** מתי ננעל צילום המחירים */
   snapshot_locked_at: string | null;
+  /** תקציב קלף מתוכנן (₪) — עדיפות על ערכים בצילום המחשבון */
+  planned_parchment_budget: number | null;
+  /** תקציב סופר מתוכנן (₪) */
+  planned_scribe_budget: number | null;
+  /** תקציב הגהות מתוכנן (₪) */
+  planned_proofreading_budget: number | null;
+  /** סה״כ עלויות מתוכננות לרווח תיאורטי (דוחף על סכימת צילום) */
+  estimated_expenses_total: number | null;
   created_at: string;           // ISO timestamptz
 }
 

@@ -18,7 +18,11 @@ import { TORAH_SHEET_STATUS_LABELS } from "@/src/lib/types/torah";
 import {
   calculateTorahProjectFinancials,
   computeTorahProjectNetCashflowFromLedger,
+  computeTorahTheoreticalContractMargin,
   estimateTorahProjectProfitability,
+  extractPlannedOperationalBudgetFromSnapshot,
+  isTorahParchmentBudgetOverThreshold,
+  resolveTorahPlannedParchmentBudget,
   sumTorahLedgerPayments,
   summarizeTorahLedger,
   type TorahLedgerLine,
@@ -119,6 +123,29 @@ function describeSysEvent(ev: TorahSysEventView): { title: string; subtitle?: st
         subtitle: Number.isFinite(n) && n >= 0 ? `סכום בפועל: ${formatShekels(n)}` : undefined,
       };
     }
+    case "ledger_transaction_created": {
+      const tt = typeof meta.transaction_type === "string" ? meta.transaction_type : "";
+      const amt = typeof meta.amount === "number" ? meta.amount : Number(meta.amount ?? 0);
+      return {
+        title: "תנועה ביומן הפרויקט",
+        subtitle: `${tt || "סוג"}${Number.isFinite(amt) ? ` · ${formatShekels(amt)}` : ""}`,
+      };
+    }
+    case "payment_schedule_marked_paid":
+      return {
+        title: "מועד תשלום סומן כשולם",
+        subtitle: undefined,
+      };
+    case "qa_batch_bulk_resolved_while_sent":
+      return {
+        title: "החלטה מהירה על שקית (במצב נשלח)",
+        subtitle:
+          ev.to_state === "approved"
+            ? "כל היריעות אושרו"
+            : ev.to_state === "needs_fixing"
+              ? "כל היריעות סומנו לתיקון"
+              : undefined,
+      };
     default:
       return {
         title: ev.action,
@@ -188,7 +215,7 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
     [ledgerLines]
   );
 
-  const { totalFixDeduction, totalQaExpense, totalOtherExpense } = useMemo(
+  const { totalFixDeduction, totalQaExpense, totalParchmentExpense, totalOtherExpense } = useMemo(
     () => summarizeTorahLedger(ledgerLines),
     [ledgerLines]
   );
@@ -208,9 +235,65 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
     [ledgerLines]
   );
 
+  const theoretical = useMemo(
+    () =>
+      computeTorahTheoreticalContractMargin({
+        totalAgreedPrice: project.total_agreed_price,
+        calculatorSnapshot: project.calculator_snapshot,
+        estimatedExpensesTotal: project.estimated_expenses_total,
+      }),
+    [project.total_agreed_price, project.calculator_snapshot, project.estimated_expenses_total]
+  );
+
+  const plannedParchment = useMemo(
+    () =>
+      resolveTorahPlannedParchmentBudget({
+        plannedParchmentBudgetColumn: project.planned_parchment_budget,
+        calculatorSnapshot: project.calculator_snapshot,
+      }),
+    [project.planned_parchment_budget, project.calculator_snapshot]
+  );
+
+  const plannedScribeBudget = useMemo(() => {
+    const c = Number(project.planned_scribe_budget);
+    if (Number.isFinite(c) && c > 0) return c;
+    return extractPlannedOperationalBudgetFromSnapshot(project.calculator_snapshot).scribe;
+  }, [project.planned_scribe_budget, project.calculator_snapshot]);
+
+  const plannedProofreadingBudget = useMemo(() => {
+    const c = Number(project.planned_proofreading_budget);
+    if (Number.isFinite(c) && c > 0) return c;
+    return extractPlannedOperationalBudgetFromSnapshot(project.calculator_snapshot).proofreading;
+  }, [project.planned_proofreading_budget, project.calculator_snapshot]);
+
+  const parchmentBudgetBreached = useMemo(
+    () =>
+      isTorahParchmentBudgetOverThreshold({
+        plannedParchment,
+        actualParchmentExpense: totalParchmentExpense,
+      }),
+    [plannedParchment, totalParchmentExpense]
+  );
+
+  const scribeBudgetBreached = useMemo(() => {
+    if (!(plannedScribeBudget > 0)) return false;
+    return totalScribePayments > plannedScribeBudget * 1.1;
+  }, [plannedScribeBudget, totalScribePayments]);
+
+  const proofreadingBudgetBreached = useMemo(() => {
+    if (!(plannedProofreadingBudget > 0)) return false;
+    return totalQaExpense > plannedProofreadingBudget * 1.1;
+  }, [plannedProofreadingBudget, totalQaExpense]);
+
+  const parchmentOverShekels = useMemo(() => {
+    if (!parchmentBudgetBreached || !(plannedParchment > 0)) return null;
+    const over = totalParchmentExpense - plannedParchment * 1.1;
+    return Math.max(0, over);
+  }, [parchmentBudgetBreached, plannedParchment, totalParchmentExpense]);
+
   const scribePlusMaterials = useMemo(
-    () => totalScribePayments + totalOtherExpense,
-    [totalScribePayments, totalOtherExpense]
+    () => totalScribePayments + totalParchmentExpense + totalOtherExpense,
+    [totalScribePayments, totalParchmentExpense, totalOtherExpense]
   );
 
   const alertScribeNoApproved =
@@ -232,8 +315,56 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
         </p>
       </div>
 
-      {(alertScribeNoApproved || alertNegativeCashflow || alertNegativeExpectedProfit) && (
+      {(alertScribeNoApproved ||
+        alertNegativeCashflow ||
+        alertNegativeExpectedProfit ||
+        parchmentBudgetBreached ||
+        scribeBudgetBreached ||
+        proofreadingBudgetBreached) && (
         <div className="space-y-2">
+          {parchmentBudgetBreached && parchmentOverShekels != null && (
+            <div
+              className={cn(
+                "flex gap-2 rounded-xl border px-3 py-2.5 text-sm",
+                "border-red-700 bg-red-100 text-red-950"
+              )}
+            >
+              <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+              <span>
+                חריגת תקציב קלף:{" "}
+                {parchmentOverShekels.toLocaleString("he-IL", { maximumFractionDigits: 0 })} ש״ח מעל
+                המתוכנן
+              </span>
+            </div>
+          )}
+          {scribeBudgetBreached && (
+            <div
+              className={cn(
+                "flex gap-2 rounded-xl border px-3 py-2.5 text-sm",
+                "border-red-700 bg-red-100 text-red-950"
+              )}
+            >
+              <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+              <span>
+                חריגת תקציב סופר: תשלומי סופר ביומן ({formatShekels(totalScribePayments)}) עולים על יותר
+                מ־10% מהמתוכנן ({formatShekels(plannedScribeBudget)}).
+              </span>
+            </div>
+          )}
+          {proofreadingBudgetBreached && (
+            <div
+              className={cn(
+                "flex gap-2 rounded-xl border px-3 py-2.5 text-sm",
+                "border-red-700 bg-red-100 text-red-950"
+              )}
+            >
+              <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+              <span>
+                חריגת תקציב הגהות: הוצאות הגהה ביומן ({formatShekels(totalQaExpense)}) עולות על יותר
+                מ־10% מהמתוכנן ({formatShekels(plannedProofreadingBudget)}).
+              </span>
+            </div>
+          )}
           {alertScribeNoApproved && (
             <div
               className={cn(
@@ -290,7 +421,7 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
               {formatShekels(scribePlusMaterials)}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              סופר: {formatShekels(totalScribePayments)} · אחר:{" "}
+              סופר: {formatShekels(totalScribePayments)} · קלף: {formatShekels(totalParchmentExpense)} · אחר:{" "}
               {formatShekels(totalOtherExpense)}
             </p>
           </CardContent>
@@ -311,9 +442,21 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
             </p>
           </CardContent>
         </Card>
+        <Card className="rounded-xl border-indigo-100 bg-indigo-50/40">
+          <CardContent className="p-4">
+            <p className="text-xs text-indigo-900 mb-1">רווח תיאורטי (חוזה וצילום מחשבון)</p>
+            <p className="text-xl font-bold tabular-nums text-indigo-950">
+              {formatShekels(theoretical.theoreticalMargin)}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              ערך מוסכם פחות עלויות מתוכננות (שדה כולל או צילום מחשבון) · קלף:{" "}
+              {plannedParchment > 0 ? formatShekels(plannedParchment) : "לא הוגדר"}
+            </p>
+          </CardContent>
+        </Card>
         <Card className="rounded-xl border-emerald-100 bg-emerald-50/30">
           <CardContent className="p-4 space-y-2">
-            <p className="text-xs text-emerald-900 font-medium">תזרים נוכחי (יומן)</p>
+            <p className="text-xs text-emerald-900 font-medium">תזרים מזומנים בפועל (יומן)</p>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="inline-flex items-center gap-1 text-emerald-800">
                 <ArrowDownLeft className="size-4" />
@@ -340,7 +483,7 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
         </Card>
         <Card className="rounded-xl border-sky-100 bg-sky-50/30">
           <CardContent className="p-4">
-            <p className="text-xs text-sky-900 mb-1">רווח נטו משוער</p>
+            <p className="text-xs text-sky-900 mb-1">רווח נטו לפי תשלומים ויומן</p>
             <p
               className={cn(
                 "text-xl font-bold tabular-nums",
@@ -350,8 +493,8 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
               {formatShekels(netProfitEstimate)}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-              לקוח (שדה) פחות סופר אחרי ניכויי תיקון, פחות הוצאות QA/אחרות — לפי חישוב מרכזי
-              בפרויקט.
+              שדות «שולם מלקוח/לסופר» ותנועות היומן (כולל ניכוי תיקון, QA, קלף) — לא זהה לתזרים
+              מזומנים גולמי.
             </p>
           </CardContent>
         </Card>

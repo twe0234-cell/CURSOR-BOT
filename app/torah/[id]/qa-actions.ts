@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/src/lib/supabase/server";
 import type { TorahQaBatchSummary } from "@/src/lib/types/torah";
 import {
+  appendTorahSysEvent,
   engineCreateQaBatch,
   engineReturnQaBatch,
   engineSetSheetQaOutcome,
@@ -135,6 +136,84 @@ const resolveSchema = z.object({
   outcome: z.enum(["approved", "needs_fixing"]),
 });
 
+/**
+ * פתרון מהיר לכל יריעות השקית בזמן שהשקית עדיין «נשלחה» (למשל החלטה מרחוק).
+ * כל יריעה ב־in_qa מקבלת approved / needs_fixing; נרשם sys_events לרמת השקית.
+ */
+export async function bulkResolveOpenQaBatchSheets(
+  projectId: string,
+  batchId: string,
+  outcome: "approved" | "needs_fixing"
+): Promise<ActionResult> {
+  if (!projectId || !batchId) return { success: false, error: "מזהים חסרים" };
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data: batch, error: bErr } = await supabase
+      .from("torah_qa_batches")
+      .select("id, status, project_id")
+      .eq("id", batchId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (bErr || !batch) return { success: false, error: "השקית לא נמצאה" };
+    if (batch.status !== "sent") {
+      return { success: false, error: 'רק שקית במצב «נשלח» ניתנת לפתרון מהיר מהכרטיס הזה' };
+    }
+
+    const { data: links, error: lErr } = await supabase
+      .from("torah_batch_sheets")
+      .select("sheet_id")
+      .eq("batch_id", batchId);
+
+    if (lErr) return { success: false, error: lErr.message };
+    const sheetIds = [...new Set((links ?? []).map((r) => r.sheet_id as string).filter(Boolean))];
+    if (sheetIds.length === 0) return { success: false, error: "אין יריעות מקושרות לשקית" };
+
+    const { data: sheetRows, error: sErr } = await supabase
+      .from("torah_sheets")
+      .select("id, status")
+      .eq("project_id", projectId)
+      .in("id", sheetIds);
+
+    if (sErr) return { success: false, error: sErr.message };
+    const inQaIds = (sheetRows ?? [])
+      .filter((s) => String(s.status) === "in_qa")
+      .map((s) => s.id as string);
+    if (inQaIds.length === 0) {
+      return { success: false, error: "אין יריעות בסטטוס «בהגהה» לשקית זו" };
+    }
+
+    for (const sid of inQaIds) {
+      const r = await engineSetSheetQaOutcome({ projectId, sheetId: sid, outcome });
+      if (!r.success) return { success: false, error: r.error };
+    }
+
+    const ev = await appendTorahSysEvent({
+      projectId,
+      entityType: "torah_qa_batch",
+      entityId: batchId,
+      action: "qa_batch_bulk_resolved_while_sent",
+      fromState: "sent",
+      toState: outcome,
+      metadata: { sheet_count: inQaIds.length },
+    });
+    if (!ev.success) {
+      return { success: false, error: ev.error };
+    }
+
+    revalidatePath(`/torah/${projectId}`);
+    revalidatePath("/torah");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 export async function resolveTorahSheetQa(
   projectId: string,
   sheetId: string,
@@ -200,7 +279,7 @@ const completeFixSchema = z.object({
   projectId: z.string().uuid(),
   fixTaskId: z.string().uuid(),
   actualCost: z.coerce.number().nonnegative().optional().nullable(),
-  nextSheetStatus: z.enum(["in_qa", "approved"]),
+  nextSheetStatus: z.enum(["in_qa", "approved", "reported_written"]),
 });
 
 export async function completeTorahFixTaskAction(
