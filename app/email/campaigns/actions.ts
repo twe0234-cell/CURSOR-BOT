@@ -2,7 +2,7 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
-import { getAccessToken } from "@/src/lib/gmail";
+import { getAccessToken, GmailAuthRevokedError, clearRevokedGmailRefreshToken } from "@/src/lib/gmail";
 import { logInfo, logError } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
 import {
@@ -134,7 +134,16 @@ export async function sendGmailCampaignAction(
       return { success: false, error: "חבר Gmail בהגדרות" };
     }
 
-    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessToken(settings.gmail_refresh_token);
+    } catch (e) {
+      if (e instanceof GmailAuthRevokedError) {
+        await clearRevokedGmailRefreshToken(supabase, user.id);
+        return { success: false, error: e.message };
+      }
+      throw e;
+    }
     const fromEmail = settings.gmail_email ?? "noreply@example.com";
     const signature = sysSettings?.email_signature ?? "";
     const signatureHtml = signature

@@ -5,6 +5,25 @@
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
+export class GmailAuthRevokedError extends Error {
+  code = "GMAIL_AUTH_REVOKED" as const;
+  constructor(public readonly googleError: string) {
+    super("חיבור Gmail פג או נשלל. יש לחבר מחדש בהגדרות.");
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function clearRevokedGmailRefreshToken(client: any, userId: string): Promise<void> {
+  try {
+    await client
+      .from("user_settings")
+      .update({ gmail_refresh_token: null })
+      .eq("user_id", userId);
+  } catch {
+    // Best-effort cleanup — surface the original auth error, not the cleanup failure.
+  }
+}
+
 export async function getAccessToken(refreshToken: string): Promise<string> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -27,6 +46,9 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
 
   if (!res.ok) {
     const err = await res.text();
+    if (res.status === 400 && err.includes("invalid_grant")) {
+      throw new GmailAuthRevokedError(err.slice(0, 200));
+    }
     throw new Error(`רענון token נכשל: ${err.slice(0, 200)}`);
   }
 
