@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { wrapAiEmailHtml } from "@/lib/email/wrapAiEmailHtml";
 
 export type AiDraftKind = "html_body" | "subject";
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -40,7 +41,7 @@ ${style ? `\nטון: ${style}` : ""}`;
 
     try {
       const model = client.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: GEMINI_MODEL,
         systemInstruction: systemPrompt,
       });
       const result = await model.generateContent({
@@ -70,7 +71,7 @@ ${context}
 
   try {
     const model = client.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: GEMINI_MODEL,
       systemInstruction: systemPrompt,
     });
     const result = await model.generateContent({
