@@ -32,6 +32,8 @@ export default async function RecurringPage() {
       frequency: fd.get('frequency') as string,
       start_date: fd.get('start_date') as string,
       end_date: (fd.get('end_date') as string) || null,
+      payment_day: (fd.get('payment_day') as string) ? parseInt(fd.get('payment_day') as string) : null,
+      payment_method: (fd.get('payment_method') as string) || 'manual',
       notes: (fd.get('notes') as string) || null,
     })
     revalidatePath('/recurring')
@@ -49,6 +51,12 @@ export default async function RecurringPage() {
   }
 
   const FREQ = { monthly: 'חודשי', quarterly: 'רבעוני', yearly: 'שנתי' }
+  const METHODS = {
+    visa: 'כרטיס אשראי',
+    direct_debit: 'הוראת קבע',
+    transfer: 'העברה',
+    manual: 'ידני'
+  }
 
   return (
     <div className="space-y-6">
@@ -77,6 +85,8 @@ export default async function RecurringPage() {
                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                       {FREQ[r.frequency as keyof typeof FREQ]} · מ-{new Date(r.start_date).toLocaleDateString('he-IL')}
                       {r.end_date && ` עד ${new Date(r.end_date).toLocaleDateString('he-IL')}`}
+                      {r.payment_method && ` · ${METHODS[r.payment_method as keyof typeof METHODS] || r.payment_method}`}
+                      {r.payment_day ? ` · ב-${r.payment_day} לחודש` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -133,6 +143,19 @@ export default async function RecurringPage() {
             <div>
               <label className="label">תאריך סיום (אופציונלי)</label>
               <input className="input" type="date" name="end_date" />
+            </div>
+            <div>
+              <label className="label">יום בחודש לחיוב</label>
+              <input className="input" type="number" name="payment_day" placeholder="1-31 (אופציונלי)" min="1" max="31" />
+            </div>
+            <div>
+              <label className="label">אמצעי תשלום</label>
+              <select className="input" name="payment_method">
+                <option value="manual">ידני</option>
+                <option value="visa">כרטיס אשראי</option>
+                <option value="direct_debit">הוראת קבע</option>
+                <option value="transfer">העברה</option>
+              </select>
             </div>
           </div>
           <div>
