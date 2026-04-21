@@ -37,55 +37,55 @@ export default function BankConnectButton({ bankId, bankName }: { bankId: string
     }
   }
 
-  if (!open) {
-    return (
+  return (
+    <>
       <button className="btn-primary text-xs py-1.5 px-3" onClick={() => setOpen(true)}>
         חבר
       </button>
-    )
-  }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="card w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-base">חיבור ל{bankName}</h2>
-          <button className="btn-ghost text-sm py-1 px-2" onClick={() => { setOpen(false); setStatus(null) }}>✕</button>
-        </div>
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in-up"
+          style={{ background: 'rgba(15, 23, 42, 0.8)' }}>
+          <div className="card w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-base">חיבור ל{bankName}</h2>
+              <button className="btn-ghost text-sm py-1 px-2" onClick={() => { setOpen(false); setStatus(null) }}>✕</button>
+            </div>
 
-        <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
-          הפרטים שלך מוצפנים ומשמשים רק למשיכת תנועות. לא נשמרים בטקסט רגיל.
-        </div>
+            <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+              הפרטים שלך מוצפנים ומשמשים רק למשיכת תנועות. לא נשמרים בטקסט רגיל.
+            </div>
 
-        <form onSubmit={handleConnect} className="space-y-3">
-          <div>
-            <label className="label">שם משתמש / מספר לקוח</label>
-            <input className="input" type="text" value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="שם משתמש באינטרנט בנקאי" required autoComplete="username" />
+            <form onSubmit={handleConnect} className="space-y-3">
+              <div>
+                <label className="label">שם משתמש / מספר לקוח</label>
+                <input className="input" type="text" value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  placeholder="שם משתמש באינטרנט בנקאי" required autoComplete="username" />
+              </div>
+              <div>
+                <label className="label">סיסמה</label>
+                <input className="input" type="password" value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="סיסמה" required autoComplete="current-password" />
+              </div>
+
+              {status && (
+                <p className="text-sm p-2 rounded-lg" style={{
+                  background: status.startsWith('✓') ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)',
+                  color: status.startsWith('✓') ? '#10b981' : status.startsWith('מ') ? '#6366f1' : '#f43f5e'
+                }}>
+                  {status}
+                </p>
+              )}
+
+              <button type="submit" className="btn-primary w-full" disabled={loading}>
+                {loading ? 'מתחבר...' : 'חבר בנק'}
+              </button>
+            </form>
           </div>
-          <div>
-            <label className="label">סיסמה</label>
-            <input className="input" type="password" value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="סיסמה" required autoComplete="current-password" />
-          </div>
-
-          {status && (
-            <p className="text-sm p-2 rounded-lg" style={{
-              background: status.startsWith('✓') ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)',
-              color: status.startsWith('✓') ? '#10b981' : status.startsWith('מ') ? '#a5b4fc' : '#f43f5e'
-            }}>
-              {status}
-            </p>
-          )}
-
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? 'מתחבר...' : 'חבר בנק'}
-          </button>
-        </form>
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   )
 }

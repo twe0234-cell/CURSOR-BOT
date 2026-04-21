@@ -250,8 +250,6 @@ const batchStatusSchema = z.object({
   status: sheetStatusEnum,
 });
 
-const RECEIVABLE_SHEET_STATUSES = new Set<TorahSheetStatus>(["not_started", "needs_fixing"]);
-
 const receiveSheetsSchema = z.object({
   sheetIds: z.array(z.string().uuid()).min(1, "בחר לפחות יריעה אחת"),
 });
@@ -289,33 +287,24 @@ export async function receiveSheetsFromScribe(
 
     if (pErr || !proj) return { success: false, error: "הפרויקט לא נמצא" };
 
-    const { data: selectedRows, error: selErr } = await supabase
-      .from("torah_sheets")
-      .select("id, status, sheet_number")
-      .in("id", parsed.data.sheetIds)
-      .eq("project_id", projectId);
-
-    if (selErr) return { success: false, error: selErr.message };
-    if (!selectedRows || selectedRows.length !== parsed.data.sheetIds.length) {
-      return { success: false, error: "לא כל היריעות שייכות לפרויקט" };
-    }
-
-    for (const row of selectedRows) {
-      const st = row.status as TorahSheetStatus;
-      if (!RECEIVABLE_SHEET_STATUSES.has(st)) {
-        return {
-          success: false,
-          error: "ניתן לקלוט רק יריעות בסטטוס «טרם התחיל» או «לתיקון»",
-        };
+    const { data: rpcData, error: rpcErr } = await supabase.rpc(
+      "torah_receive_sheets_from_scribe_atomic",
+      {
+        p_project_id: projectId,
+        p_sheet_ids: parsed.data.sheetIds,
       }
+    );
+    if (rpcErr) return { success: false, error: rpcErr.message };
+
+    const payload = rpcData as { ok?: boolean; error?: string; updated?: number } | null;
+    if (!payload || payload.ok !== true) {
+      return { success: false, error: payload?.error ?? "שגיאה" };
     }
 
-    const batchTr = await engineBatchTransitionSheets({
-      projectId,
-      sheetIds: parsed.data.sheetIds,
-      toStatus: "reported_written",
-    });
-    if (!batchTr.success) return { success: false, error: batchTr.error };
+    const updatedCount = Number(payload.updated ?? parsed.data.sheetIds.length);
+    if (updatedCount <= 0) {
+      return { success: false, error: "לא עודכנו יריעות" };
+    }
 
     const { data: allSheetRows, error: allErr } = await supabase
       .from("torah_sheets")
@@ -337,36 +326,11 @@ export async function receiveSheetsFromScribe(
       sheets: sheetsForPace,
     });
 
-    const nums = [...selectedRows]
-      .map((r) => Number(r.sheet_number))
-      .sort((a, b) => a - b);
-    const paceHe =
-      pace.status === "on_track"
-        ? "בעקבות היעד"
-        : pace.status === "delayed"
-          ? `באיחור (בערך ${Math.max(1, Math.ceil(pace.delayDays))} ימי עבודה)`
-          : "לא מחושב (חסר תאריך התחלה או קצב עמודות/יום)";
-
-    const historyBody = `קליטת יריעות מהסופר — יריעות: ${nums.join(", ")}\nסטטוס קצב: ${paceHe}`;
-
-    const { error: histErr } = await supabase.from("crm_contact_history").insert({
-      user_id: user.id,
-      contact_id: proj.scribe_id as string,
-      body: historyBody,
-      direction: "internal",
-      source: "system",
-      metadata: { kind: "torah_receive_sheets", project_id: projectId } as Record<string, unknown>,
-    });
-
-    if (histErr) {
-      return { success: false, error: `היריעות עודכנו אך יומן CRM נכשל: ${histErr.message}` };
-    }
-
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);
     revalidatePath(`/crm/${proj.scribe_id as string}`);
 
-    return { success: true, updated: parsed.data.sheetIds.length, pace };
+    return { success: true, updated: updatedCount, pace };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }

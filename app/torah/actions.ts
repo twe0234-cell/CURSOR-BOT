@@ -5,10 +5,8 @@ import { createClient } from "@/src/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type {
   TorahProjectWithNames,
-  TorahSheetStatus,
 } from "@/src/lib/types/torah";
 import {
-  columnsCountForTorahSheetNumber,
   normalizeQaAgreed,
 } from "@/src/lib/types/torah";
 import { runTorahCalendarSync } from "@/src/lib/google/calendar";
@@ -110,62 +108,28 @@ export async function createTorahProject(
       if (!clientOk) return { success: false, error: "הלקוח שנבחר לא נמצא" };
     }
 
-    // Insert project
-    const { data: project, error: projErr } = await supabase
-      .from("torah_projects")
-      .insert({
-        user_id: user.id,
-        scribe_id: v.scribe_id,
-        client_id: v.client_id ?? null,
-        title: v.title.trim(),
-        status: "writing",
-        start_date: new Date().toISOString().slice(0, 10),
-        target_date: v.target_date ?? null,
-        total_agreed_price: v.total_agreed_price ?? 0,
-        columns_per_day: v.columns_per_day ?? 0,
-        qa_weeks_buffer: Math.max(0, Math.floor(v.qa_weeks_buffer ?? 3)),
-        gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
-        computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
-        requires_tagging: v.requires_tagging ?? false,
-        price_per_column: v.price_per_column ?? 0,
-        includes_accessories: v.includes_accessories ?? false,
-        parchment_type: v.parchment_type ?? null,
-        qa_agreed_types: {
-          gavra: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
-          computer: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
-        },
-      })
-      .select("id")
-      .single();
-
-    if (projErr || !project) {
-      return { success: false, error: projErr?.message ?? "שגיאה ביצירת הפרויקט" };
-    }
-
-    const projectId = project.id;
-    const prefix = projectId.replace(/-/g, "").slice(0, 6);
-
-    // Batch-insert 62 sheets
-    const sheetsPayload = Array.from({ length: 62 }, (_, i) => {
-      const num = i + 1;
-      return {
-        project_id: projectId,
-        sheet_number: num,
-        columns_count: columnsCountForTorahSheetNumber(num),
-        sku: `${prefix}-S${String(num).padStart(2, "0")}`,
-        status: "not_started" as TorahSheetStatus,
-      };
+    const { data: rpcData, error: rpcErr } = await supabase.rpc("torah_create_project_with_sheets", {
+      p_title: v.title.trim(),
+      p_scribe_id: v.scribe_id,
+      p_client_id: v.client_id ?? null,
+      p_target_date: v.target_date ?? null,
+      p_total_agreed_price: v.total_agreed_price ?? 0,
+      p_columns_per_day: v.columns_per_day ?? 0,
+      p_qa_weeks_buffer: Math.max(0, Math.floor(v.qa_weeks_buffer ?? 3)),
+      p_gavra_qa_count: Math.max(0, Math.floor(v.gavra_qa_count ?? 1)),
+      p_computer_qa_count: Math.max(0, Math.floor(v.computer_qa_count ?? 1)),
+      p_requires_tagging: v.requires_tagging ?? false,
+      p_price_per_column: v.price_per_column ?? 0,
+      p_includes_accessories: v.includes_accessories ?? false,
+      p_parchment_type: v.parchment_type ?? null,
     });
+    if (rpcErr) return { success: false, error: rpcErr.message };
 
-    const { error: sheetsErr } = await supabase
-      .from("torah_sheets")
-      .insert(sheetsPayload);
-
-    if (sheetsErr) {
-      // Project was created; log but still return success so user can retry sheets
-      console.error("[createTorahProject] sheets insert error:", sheetsErr.message);
-      return { success: false, error: `פרויקט נוצר אך יריעות נכשלו: ${sheetsErr.message}` };
+    const payload = rpcData as { ok?: boolean; error?: string; project_id?: string } | null;
+    if (!payload || payload.ok !== true || !payload.project_id) {
+      return { success: false, error: payload?.error ?? "שגיאה ביצירת הפרויקט" };
     }
+    const projectId = payload.project_id;
 
     revalidatePath("/torah");
     revalidatePath(`/torah/${projectId}`);

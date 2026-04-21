@@ -193,17 +193,29 @@ export async function engineBatchTransitionSheets(input: {
   sheetIds: string[];
   toStatus: string;
 }): Promise<ServiceResult<{ updated: number }>> {
-  let n = 0;
-  for (const sid of input.sheetIds) {
-    const r = await engineTransitionTorahSheet({
-      sheetId: sid,
-      projectId: input.projectId,
-      toStatus: input.toStatus,
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const { data, error } = await supabase.rpc("torah_batch_transition_sheets", {
+      p_project_id: input.projectId,
+      p_sheet_ids: input.sheetIds,
+      p_to_status: input.toStatus,
     });
-    if (!r.success) return r;
-    n++;
+    if (error) return { success: false, error: error.message };
+
+    const payload = data as { ok?: boolean; error?: string; updated?: number } | null;
+    if (!payload || payload.ok !== true) {
+      return { success: false, error: payload?.error ?? "שגיאה" };
+    }
+
+    return { success: true, data: { updated: Number(payload.updated ?? 0) } };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
-  return { success: true, data: { updated: n } };
 }
 
 /** מסיום QA על יריעה ב-in_qa */

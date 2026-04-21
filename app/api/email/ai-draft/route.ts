@@ -3,6 +3,12 @@ import { wrapAiEmailHtml } from "@/lib/email/wrapAiEmailHtml";
 import { assertGeminiApiKeyConfigured, pingGeminiModel } from "@/src/lib/aiProvider";
 
 export type AiDraftKind = "html_body" | "subject";
+type AiDraftBrief = {
+  audience?: string;
+  goal?: string;
+  offer?: string;
+  cta?: string;
+};
 const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 const MAX_CONTEXT_CHARS = 8000;
 const DEFAULT_BODY_MAX_TOKENS = 2200;
@@ -32,6 +38,7 @@ export async function POST(req: Request) {
   let kind: AiDraftKind = "html_body";
   let bodyMaxTokens = DEFAULT_BODY_MAX_TOKENS;
   let requestedLength: "קצר" | "בינוני" | "ארוך" = "בינוני";
+  let brief: AiDraftBrief = {};
   try {
     const body = await req.json() as {
       context?: string;
@@ -39,6 +46,7 @@ export async function POST(req: Request) {
       kind?: AiDraftKind;
       maxOutputTokens?: number;
       lengthHint?: "קצר" | "בינוני" | "ארוך";
+      brief?: AiDraftBrief;
     };
     context = (body.context ?? "").trim().slice(0, MAX_CONTEXT_CHARS);
     style = (body.style ?? "").trim();
@@ -53,6 +61,12 @@ export async function POST(req: Request) {
     } else if (requestedLength === "ארוך") {
       bodyMaxTokens = 3200;
     }
+    brief = {
+      audience: body.brief?.audience?.trim(),
+      goal: body.brief?.goal?.trim(),
+      offer: body.brief?.offer?.trim(),
+      cta: body.brief?.cta?.trim(),
+    };
   } catch {
     return Response.json({ error: "בקשה לא תקינה" }, { status: 400 });
   }
@@ -108,6 +122,10 @@ ${context}
 
 טון וסגנון רצוי: ${style || "מקצועי, אנושי, אמין"}.
 אורך רצוי: ${requestedLength}.
+קהל יעד: ${brief.audience || "לא צוין"}.
+מטרה עסקית: ${brief.goal || "לא צוין"}.
+הצעה מרכזית: ${brief.offer || "לא צוין"}.
+קריאה לפעולה: ${brief.cta || "השב למייל / וואטסאפ לשיחת המשך"}.
 אם המידע חלקי, בצע השלמה סבירה אבל לא תמציא עובדות ספציפיות שלא ניתנו.
 דאג שהטקסט יהיה קריא, עם פסקאות קצרות או בולטים כשצריך.
 החזר HTML גוף בלבד לפי הכללים.`;

@@ -101,6 +101,10 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
   const [aiOpen, setAiOpen] = useState(false);
   const [aiContext, setAiContext] = useState("");
   const [aiStyle, setAiStyle] = useState("");
+  const [aiAudience, setAiAudience] = useState("");
+  const [aiGoal, setAiGoal] = useState("");
+  const [aiOffer, setAiOffer] = useState("");
+  const [aiCta, setAiCta] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [subjectAiLoading, setSubjectAiLoading] = useState(false);
 
@@ -350,7 +354,17 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
       const res = await fetch("/api/email/ai-draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: aiContext, style: aiStyle, kind: "html_body" }),
+        body: JSON.stringify({
+          context: aiContext,
+          style: aiStyle,
+          kind: "html_body",
+          brief: {
+            audience: aiAudience,
+            goal: aiGoal,
+            offer: aiOffer,
+            cta: aiCta,
+          },
+        }),
       });
       const data = (await res.json()) as { html?: string; error?: string };
       if (!res.ok || data.error) {
@@ -892,6 +906,32 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
                 value={aiStyle}
                 onChange={(e) => setAiStyle(e.target.value)}
                 rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Input
+                dir="rtl"
+                placeholder="קהל יעד"
+                value={aiAudience}
+                onChange={(e) => setAiAudience(e.target.value)}
+              />
+              <Input
+                dir="rtl"
+                placeholder="מטרה עסקית"
+                value={aiGoal}
+                onChange={(e) => setAiGoal(e.target.value)}
+              />
+              <Input
+                dir="rtl"
+                placeholder="הצעה מרכזית"
+                value={aiOffer}
+                onChange={(e) => setAiOffer(e.target.value)}
+              />
+              <Input
+                dir="rtl"
+                placeholder="קריאה לפעולה"
+                value={aiCta}
+                onChange={(e) => setAiCta(e.target.value)}
               />
             </div>
             <p className="text-xs text-muted-foreground">

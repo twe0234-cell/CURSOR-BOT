@@ -50,11 +50,14 @@ export default function CsvImport() {
         return
       }
 
-      // Scan up to first 20 rows to find headers (usually contains date/amount/credit/debit)
+      // Scan up to first 20 rows to find headers (usually contains exact date & amount columns)
       let headerIdx = 0
       for (let i = 0; i < Math.min(20, rawRows.length); i++) {
-        const rowString = (rawRows[i] as unknown[] || []).join(' ')
-        if (/תאריך|זכות|חובה|סכום עסקה|סכום חיוב/.test(rowString)) {
+        const rowArray = (rawRows[i] as unknown[] || []).map(c => String(c ?? '').trim())
+        const hasDateCol = rowArray.some(c => /^(תאריך|תאריך עסקה|תאריך פעולה|תאריך הפעולה)$/.test(c))
+        const hasAmountCol = rowArray.some(c => /^(זכות|חובה|סכום|סכום עסקה|סכום חיוב)$/.test(c))
+        
+        if (hasDateCol && hasAmountCol) {
           headerIdx = i
           break
         }

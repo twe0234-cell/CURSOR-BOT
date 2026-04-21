@@ -43,7 +43,7 @@ export default async function BanksPage() {
   const connectedIds = new Set((connections ?? []).filter(c => c.is_active).map(c => c.bank_id))
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-extrabold">חיבור בנקים</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>

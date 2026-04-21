@@ -12,7 +12,9 @@ type Insight = {
 export default function AiInsightsPanel() {
   const [insights, setInsights] = useState<Insight[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [classifying, setClassifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [autoClassifyResult, setAutoClassifyResult] = useState<{ classified_count: number; rules_added: number } | null>(null)
 
   const fetchInsights = async () => {
     setLoading(true)
@@ -26,6 +28,31 @@ export default function AiInsightsPanel() {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAutoClassify = async () => {
+    setClassifying(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ai/auto-classify', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'שגיאה בסיווג')
+      setAutoClassifyResult({ classified_count: data.classified_count, rules_added: data.rules_added })
+      
+      // If it suggested recurring, add them to insights array so the user sees them
+      if (data.recurring_suggestions?.length > 0) {
+        const newInsights = data.recurring_suggestions.map((r: any) => ({
+          type: 'positive',
+          message: `זיהיתי הוצאה קבועה אפשרית: ${r.name}`,
+          amount: r.amount
+        }))
+        setInsights(prev => [...(prev || []), ...newInsights])
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClassifying(false)
     }
   }
 
@@ -44,9 +71,14 @@ export default function AiInsightsPanel() {
         <p className="text-sm text-slate-500 max-w-sm">
           הסוכן החכם שלנו יסרוק את התנועות שלך, יזהה חריגות, כפילויות, והוצאות קבועות, ויציג לך תובנות ממוקדות.
         </p>
-        <button onClick={fetchInsights} className="btn-primary mt-2">
-          <Sparkles size={16} /> נתח נתונים עכשיו
-        </button>
+        <div className="flex gap-3 mt-2">
+          <button onClick={fetchInsights} disabled={loading} className="btn-primary">
+            <Sparkles size={16} /> נתח נתונים
+          </button>
+          <button onClick={handleAutoClassify} disabled={classifying} className="btn-ghost shadow-sm bg-white" style={{ border: '1px solid var(--color-border)' }}>
+            🤖 סיווג אוטומטי
+          </button>
+        </div>
       </div>
     )
   }
@@ -58,9 +90,14 @@ export default function AiInsightsPanel() {
           <Sparkles size={18} style={{ color: 'var(--color-accent)' }} />
           <span>תובנות AI</span>
         </h2>
-        <button onClick={fetchInsights} disabled={loading} className="btn-ghost text-xs py-1 px-2">
-          {loading ? 'מנתח...' : 'רענן'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleAutoClassify} disabled={classifying} className="btn-ghost text-xs py-1 px-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {classifying ? 'מסווג...' : '🤖 סווג תנועות'}
+          </button>
+          <button onClick={fetchInsights} disabled={loading} className="btn-ghost text-xs py-1 px-2">
+            {loading ? 'מנתח...' : 'רענן'}
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -80,6 +117,13 @@ export default function AiInsightsPanel() {
       {insights && !loading && insights.length === 0 && (
         <div className="text-center p-4 text-sm text-slate-500">
           לא נמצאו חריגות מיוחדות. הכל נראה תקין! 🎉
+        </div>
+      )}
+
+      {autoClassifyResult && (
+        <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm border border-emerald-100 animate-fade-in-up">
+          <span className="font-bold">סיווג אוטומטי הושלם! </span>
+          סווגו {autoClassifyResult.classified_count} תנועות חדשות ונוצרו {autoClassifyResult.rules_added} כללים חכמים.
         </div>
       )}
 
