@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { summarizeMonth, getLatestAssetValues, calcNetWorth } from '@/lib/finance.logic'
 import DashboardCharts from '@/components/dashboard/DashboardCharts'
+import AiInsightsPanel from '@/components/dashboard/AiInsightsPanel'
 import { TrendingUp, TrendingDown, Wallet, Landmark } from 'lucide-react'
 
 function fmt(n: number) {
@@ -138,13 +139,20 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      {/* Charts */}
-      <div className="card">
-        <h2 className="text-base font-bold mb-5 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-          <TrendingUp size={18} style={{ color: 'var(--color-accent)' }} />
-          <span>6 חודשים אחרונים</span>
-        </h2>
-        <DashboardCharts monthlyData={monthlyData} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Charts - takes up 2 columns on desktop */}
+        <div className="lg:col-span-2 card">
+          <h2 className="text-base font-bold mb-5 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <TrendingUp size={18} style={{ color: 'var(--color-accent)' }} />
+            <span>6 חודשים אחרונים</span>
+          </h2>
+          <DashboardCharts monthlyData={monthlyData} />
+        </div>
+
+        {/* AI Insights - takes up 1 column on desktop */}
+        <div className="lg:col-span-1">
+          <AiInsightsPanel />
+        </div>
       </div>
 
       {/* Assets summary */}
