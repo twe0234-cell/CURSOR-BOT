@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { buildHash, classifyTransaction } from '@/lib/finance.logic'
 import { detectSource, parseBySource, SOURCE_META } from '@/lib/parsers'
+import * as XLSX from 'xlsx'
 
 /**
  * Universal file importer — supports CSV, XLS, XLSX, ODS, TXT
@@ -27,10 +28,6 @@ export default function CsvImport() {
     setRawTextCache(null)
 
     try {
-      // Dynamic import — xlsx is a CommonJS module, .default may be undefined
-      const xlsxMod = await import('xlsx')
-      const XLSX = xlsxMod.default ?? xlsxMod
-
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, {
         type: 'array',
