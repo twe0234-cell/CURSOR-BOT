@@ -2,7 +2,11 @@
 
 import { createClient } from "@/src/lib/supabase/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
-import { getAccessToken } from "@/src/lib/gmail";
+import {
+  getAccessTokenForUser,
+  GmailAuthRevokedError,
+  clearRevokedGmailRefreshToken,
+} from "@/src/lib/gmail";
 import { logInfo, logError } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
 import {
@@ -15,6 +19,17 @@ import {
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+function encodeMimeWord(value: string): string {
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+function formatFromHeader(fromEmail: string, fromName?: string): string {
+  if (!fromName) return fromEmail;
+  const needsEncoding = /[^\x20-\x7E]/.test(fromName);
+  const encodedName = needsEncoding ? encodeMimeWord(fromName) : `"${fromName}"`;
+  return `${encodedName} <${fromEmail}>`;
+}
+
 function buildMimeMessage(
   to: string,
   subject: string,
@@ -24,12 +39,12 @@ function buildMimeMessage(
   attachments: { filename: string; content: Buffer }[]
 ): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const fromHeader = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+  const fromHeader = formatFromHeader(fromEmail, fromName);
 
   let mime = [
     `From: ${fromHeader}`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    `Subject: ${encodeMimeWord(subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",
@@ -79,6 +94,17 @@ export type CampaignStat = {
   tablet_count: number;
 };
 
+function isMissingColumnError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    m.includes("42703") ||
+    m.includes("schema cache") ||
+    m.includes("could not find")
+  );
+}
+
 export async function saveCampaignSignatureAction(
   signature: string
 ): Promise<{ success: true } | { success: false; error: string }> {
@@ -96,6 +122,7 @@ export async function saveCampaignSignatureAction(
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/email");
+    revalidatePath("/communications");
     revalidatePath("/email/campaigns");
     revalidatePath("/settings");
     return { success: true };
@@ -134,7 +161,19 @@ export async function sendGmailCampaignAction(
       return { success: false, error: "חבר Gmail בהגדרות" };
     }
 
-    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessTokenForUser(supabase, user.id, settings.gmail_refresh_token);
+    } catch (e) {
+      if (e instanceof GmailAuthRevokedError) {
+        await clearRevokedGmailRefreshToken(supabase, user.id);
+        return {
+          success: false,
+          error: `${e.message} חבר מחדש ב-Gmail: הגדרות → חיבורי API, או פתח /api/auth/gmail`,
+        };
+      }
+      throw e;
+    }
     const fromEmail = settings.gmail_email ?? "noreply@example.com";
     const signature = sysSettings?.email_signature ?? "";
     const signatureHtml = signature
@@ -254,13 +293,20 @@ export async function sendGmailCampaignAction(
     }
 
     // Update campaign stats
-    await supabase
+    const { error: campaignStatsErr } = await supabase
       .from("email_campaigns")
       .update({ sent_count: sent, failed_count: failed })
       .eq("id", campaignId);
+    if (campaignStatsErr && !isMissingColumnError(campaignStatsErr.message)) {
+      logError("EmailCampaign", "Failed to update campaign counters", {
+        campaignId,
+        error: campaignStatsErr.message,
+      });
+    }
 
     logInfo("EmailCampaign", "Campaign completed", { userId: user.id, sent, failed, campaignId });
     revalidatePath("/email");
+    revalidatePath("/communications");
     revalidatePath("/email/campaigns");
     return { success: true, sent, failed, campaignId };
   } catch (err) {
@@ -280,25 +326,65 @@ export async function fetchCampaignStats(): Promise<
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
 
-    const { data: campaigns, error } = await supabase
+    type CampaignRow = {
+      id: string;
+      subject: string;
+      created_at: string;
+      sent_at?: string | null;
+      sent_count?: number | null;
+      failed_count?: number | null;
+    };
+    const withCounters = await supabase
       .from("email_campaigns")
-      .select("id, subject, created_at, sent_at, sent_count, failed_count")
+      .select(
+      "id, subject, created_at, sent_at, sent_count, failed_count"
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
-
+    let campaigns: CampaignRow[] | null = (withCounters.data as CampaignRow[] | null) ?? null;
+    let error = withCounters.error;
+    if (error && isMissingColumnError(error.message)) {
+      const fallback = await supabase
+        .from("email_campaigns")
+        .select("id, subject, created_at, sent_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      campaigns = ((fallback.data ?? []) as CampaignRow[]).map((c) => ({
+        ...c,
+        sent_count: null,
+        failed_count: null,
+      }));
+      error = fallback.error;
+    }
     if (error) return { success: false, error: error.message };
 
     // For each campaign get log aggregates via email_logs
     const adminSupa = createAdminClient();
     const enriched: CampaignStat[] = await Promise.all(
-      (campaigns ?? []).map(async (c) => {
+      (campaigns ?? []).map(async (c: {
+        id: string;
+        subject: string;
+        created_at: string;
+        sent_at?: string | null;
+        sent_count?: number | null;
+        failed_count?: number | null;
+      }) => {
         let open_count = 0, mobile_count = 0, desktop_count = 0, tablet_count = 0;
+        let sent_count = Number(c.sent_count ?? 0);
+        let failed_count = Number(c.failed_count ?? 0);
         if (adminSupa) {
           const { data: logs } = await adminSupa
             .from("email_logs")
             .select("status, device_type")
             .eq("campaign_id", c.id);
+          if (c.sent_count == null) {
+            sent_count = (logs ?? []).length;
+          }
+          if (c.failed_count == null) {
+            failed_count = (logs ?? []).filter((l) => l.status === "failed").length;
+          }
           for (const l of logs ?? []) {
             if (l.status === "open") open_count++;
             if (l.device_type === "mobile") mobile_count++;
@@ -311,8 +397,8 @@ export async function fetchCampaignStats(): Promise<
           subject: c.subject,
           created_at: c.created_at,
           sent_at: c.sent_at ?? null,
-          sent_count: c.sent_count ?? 0,
-          failed_count: c.failed_count ?? 0,
+          sent_count,
+          failed_count,
           open_count,
           mobile_count,
           desktop_count,

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { QaBatchLabel } from "@/components/torah/QaBatchLabel";
 import { Button } from "@/components/ui/button";
 
@@ -17,19 +16,6 @@ export function PrintBatchClient({
   sheetNumbers,
   sentDateIso,
 }: Props) {
-  const [allowAutoPrint, setAllowAutoPrint] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setAllowAutoPrint(true), 150);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (!allowAutoPrint) return;
-    const t = setTimeout(() => window.print(), 300);
-    return () => clearTimeout(t);
-  }, [allowAutoPrint]);
-
   return (
     <div className="print-batch-page flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-100 p-6">
       <div className="print-batch-toolbar flex flex-wrap items-center gap-3">
@@ -37,7 +23,7 @@ export function PrintBatchClient({
           הדפס מדבקה
         </Button>
         <p className="text-xs text-muted-foreground max-w-md">
-          ניימבוט B1 — 50×30 מ״מ. ודאו שהמדפסת מוגדרת ללא שוליים ולמדבקה בודדת.
+          ניימבוט B1 — 50×30 מ״מ. ודאו שהמדפסת מוגדרת ללא שוליים ולמדבקה בודדת. ההדפסה ידנית בלבד כדי למנוע כפילות.
         </p>
       </div>
 

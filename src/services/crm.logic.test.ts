@@ -33,6 +33,12 @@ import {
   estimateTorahProjectProfitability,
   sumTorahLedgerPayments,
   computeTorahProjectNetCashflowFromLedger,
+  extractPlannedParchmentBudgetFromSnapshot,
+  extractPlannedOperationalBudgetFromSnapshot,
+  isTorahParchmentBudgetOverThreshold,
+  computeTorahTheoreticalContractMargin,
+  computeTorahCollectionProgressPercent,
+  resolveTorahPlannedParchmentBudget,
   type TorahLedgerLine,
 } from "./crm.logic";
 import {
@@ -1202,5 +1208,92 @@ describe("computeSaleFinancialPatch", () => {
       cost_price: 10,
     });
     expect(p.total_price).toBe(0);
+  });
+});
+
+describe("Torah parchment budget & theoretical margin", () => {
+  it("extractPlannedParchmentBudgetFromSnapshot reads known keys", () => {
+    expect(extractPlannedParchmentBudgetFromSnapshot({ planned_parchment: 4000 })).toBe(4000);
+    expect(extractPlannedParchmentBudgetFromSnapshot(null)).toBe(0);
+  });
+
+  it("isTorahParchmentBudgetOverThreshold is 10% over planned", () => {
+    expect(
+      isTorahParchmentBudgetOverThreshold({
+        plannedParchment: 1000,
+        actualParchmentExpense: 1100.01,
+      })
+    ).toBe(true);
+    expect(
+      isTorahParchmentBudgetOverThreshold({
+        plannedParchment: 1000,
+        actualParchmentExpense: 1100,
+      })
+    ).toBe(false);
+    expect(
+      isTorahParchmentBudgetOverThreshold({ plannedParchment: 0, actualParchmentExpense: 9999 })
+    ).toBe(false);
+  });
+
+  it("computeTorahTheoreticalContractMargin subtracts planned parchment from gross", () => {
+    const m = computeTorahTheoreticalContractMargin({
+      totalAgreedPrice: 50000,
+      calculatorSnapshot: { parchment_budget: 8000 },
+    });
+    expect(m.plannedCostOffset).toBe(8000);
+    expect(m.theoreticalMargin).toBe(42000);
+  });
+
+  it("computeTorahTheoreticalContractMargin prefers estimated_expenses_total column", () => {
+    const m = computeTorahTheoreticalContractMargin({
+      totalAgreedPrice: 50000,
+      calculatorSnapshot: { parchment_budget: 8000 },
+      estimatedExpensesTotal: 12000,
+    });
+    expect(m.plannedCostOffset).toBe(12000);
+    expect(m.theoreticalMargin).toBe(38000);
+  });
+
+  it("extractPlannedOperationalBudgetFromSnapshot sums parchment + scribe + proof lines", () => {
+    const o = extractPlannedOperationalBudgetFromSnapshot({
+      parchment_budget: 1000,
+      planned_scribe: 5000,
+      planned_proofreading: 2000,
+    });
+    expect(o.parchment).toBe(1000);
+    expect(o.scribe).toBe(5000);
+    expect(o.proofreading).toBe(2000);
+    expect(o.total).toBe(8000);
+  });
+
+  it("resolveTorahPlannedParchmentBudget prefers DB column over snapshot", () => {
+    expect(
+      resolveTorahPlannedParchmentBudget({
+        plannedParchmentBudgetColumn: 3000,
+        calculatorSnapshot: { parchment_budget: 1000 },
+      })
+    ).toBe(3000);
+    expect(
+      resolveTorahPlannedParchmentBudget({
+        plannedParchmentBudgetColumn: null,
+        calculatorSnapshot: { parchment_budget: 1000 },
+      })
+    ).toBe(1000);
+  });
+
+  it("computeTorahCollectionProgressPercent caps at 100", () => {
+    expect(
+      computeTorahCollectionProgressPercent({
+        theoreticalProfitTotal: 10000,
+        actualCashflowNet: 25000,
+      })
+    ).toBe(100);
+    expect(
+      computeTorahCollectionProgressPercent({
+        theoreticalProfitTotal: 10000,
+        actualCashflowNet: 2500,
+      })
+    ).toBe(25);
+    expect(computeTorahCollectionProgressPercent({ theoreticalProfitTotal: 0, actualCashflowNet: 1 })).toBeNull();
   });
 });

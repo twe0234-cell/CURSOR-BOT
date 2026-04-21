@@ -2,10 +2,54 @@
  * Gmail API helpers - OAuth token refresh and send
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
-export async function getAccessToken(refreshToken: string): Promise<string> {
+type GoogleTokenJson = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+};
+
+function encodeMimeWord(value: string): string {
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+function formatFromHeader(fromEmail: string, fromName?: string): string {
+  if (!fromName) return fromEmail;
+  const needsEncoding = /[^\x20-\x7E]/.test(fromName);
+  const encodedName = needsEncoding ? encodeMimeWord(fromName) : `"${fromName}"`;
+  return `${encodedName} <${fromEmail}>`;
+}
+
+export class GmailAuthRevokedError extends Error {
+  code = "GMAIL_AUTH_REVOKED" as const;
+  constructor(public readonly googleError: string) {
+    super("חיבור Gmail פג או נשלל. יש לחבר מחדש בהגדרות.");
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function clearRevokedGmailRefreshToken(client: any, userId: string): Promise<void> {
+  try {
+    await client
+      .from("user_settings")
+      .update({ gmail_refresh_token: null })
+      .eq("user_id", userId);
+  } catch {
+    // Best-effort cleanup — surface the original auth error, not the cleanup failure.
+  }
+}
+
+/**
+ * Refreshes an access token. If Google returns a rotated `refresh_token`, callers should persist it.
+ */
+export async function exchangeRefreshForAccess(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token?: string;
+}> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -27,12 +71,48 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
 
   if (!res.ok) {
     const err = await res.text();
+    if (res.status === 400 && err.includes("invalid_grant")) {
+      throw new GmailAuthRevokedError(err.slice(0, 200));
+    }
     throw new Error(`רענון token נכשל: ${err.slice(0, 200)}`);
   }
 
-  const data = (await res.json()) as { access_token?: string };
+  const data = (await res.json()) as GoogleTokenJson;
   if (!data.access_token) throw new Error("לא התקבל access_token");
-  return data.access_token;
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+  };
+}
+
+export async function getAccessToken(refreshToken: string): Promise<string> {
+  const { access_token } = await exchangeRefreshForAccess(refreshToken);
+  return access_token;
+}
+
+/**
+ * Refresh access token and persist rotated refresh_token to `user_settings` when Google returns one.
+ */
+export async function getAccessTokenForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  refreshToken: string
+): Promise<string> {
+  const { access_token, refresh_token: rotated } = await exchangeRefreshForAccess(refreshToken);
+  if (rotated && rotated !== refreshToken) {
+    try {
+      await supabase
+        .from("user_settings")
+        .update({
+          gmail_refresh_token: rotated,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+    } catch {
+      // Non-fatal: access_token is still valid for this request.
+    }
+  }
+  return access_token;
 }
 
 /**
@@ -46,13 +126,11 @@ export async function sendEmail(
   fromEmail: string,
   fromName?: string
 ): Promise<void> {
-  const fromHeader = fromName
-    ? `"${fromName}" <${fromEmail}>`
-    : fromEmail;
+  const fromHeader = formatFromHeader(fromEmail, fromName);
   const lines: string[] = [
     `From: ${fromHeader}`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    `Subject: ${encodeMimeWord(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/html; charset=UTF-8",
     "Content-Transfer-Encoding: base64",

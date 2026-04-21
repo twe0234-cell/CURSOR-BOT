@@ -9,7 +9,11 @@
  */
 
 import { createClient } from "@/src/lib/supabase/server";
-import { getAccessToken } from "@/src/lib/gmail";
+import {
+  getAccessTokenForUser,
+  GmailAuthRevokedError,
+  clearRevokedGmailRefreshToken,
+} from "@/src/lib/gmail";
 import { generateSku, crmSkuPrefix } from "@/lib/sku";
 import { logError, logInfo } from "@/lib/logger";
 import { toErrorMessage, handleSupabaseError } from "@/src/lib/errors";
@@ -218,7 +222,16 @@ export async function importGmailContacts(): Promise<
       return { success: false, error: "חבר Gmail בהגדרות" };
     }
 
-    const accessToken = await getAccessToken(settings.gmail_refresh_token);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessTokenForUser(supabase, user.id, settings.gmail_refresh_token);
+    } catch (e) {
+      if (e instanceof GmailAuthRevokedError) {
+        await clearRevokedGmailRefreshToken(supabase, user.id);
+        return { success: false, error: e.message };
+      }
+      throw e;
+    }
     const res = await fetch(
       "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
       { headers: { Authorization: `Bearer ${accessToken}` } }

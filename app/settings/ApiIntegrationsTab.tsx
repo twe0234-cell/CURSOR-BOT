@@ -63,7 +63,8 @@ export default function ApiIntegrationsTab({
     } else if (err) {
       const errMsg: Record<string, string> = {
         config: "חסרים GOOGLE_CLIENT_ID או GOOGLE_CLIENT_SECRET",
-        no_refresh: "לא התקבל refresh token – נסה שוב",
+        no_refresh:
+          "לא התקבל refresh token. אם כבר חיברת בעבר — נסה שוב; אחרת ב-Google Cloud הסר את החיבור לאפליקציה ואז פתח מחדש /api/auth/gmail",
         token_exchange: "שגיאה בהחלפת קוד",
         invalid_state: "פג תוקף – נסה שוב",
       };

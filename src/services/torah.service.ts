@@ -518,7 +518,7 @@ export async function engineCompleteFixTask(input: {
   projectId: string;
   /** סכום בפועל לניכוי (₪); אם לא מסופק — נלקח מ-cost_amount של המשימה */
   actualCost?: number | null;
-  nextSheetStatus: "in_qa" | "approved";
+  nextSheetStatus: "in_qa" | "approved" | "reported_written";
 }): Promise<ServiceResult> {
   try {
     const supabase = await createClient();

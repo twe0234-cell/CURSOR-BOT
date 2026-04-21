@@ -4,7 +4,12 @@
  */
 
 import { createClient } from "@/src/lib/supabase/server";
-import { getAccessToken, sendEmail } from "@/src/lib/gmail";
+import {
+  getAccessTokenForUser,
+  GmailAuthRevokedError,
+  clearRevokedGmailRefreshToken,
+  sendEmail,
+} from "@/src/lib/gmail";
 import { logError, logInfo, logWarn } from "@/lib/logger";
 import {
   buildTorahScribeDelayWhatsAppMessage,
@@ -273,7 +278,20 @@ export async function notifyClientPayment(
 </body>
 </html>`;
 
-    const accessToken = await getAccessToken(refreshToken);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessTokenForUser(supabase, user.id, refreshToken);
+    } catch (e) {
+      if (e instanceof GmailAuthRevokedError) {
+        await clearRevokedGmailRefreshToken(supabase, user.id);
+        logWarn("Notification", "notifyClientPayment: Gmail session revoked — reconnect", {
+          clientId,
+          projectId,
+        });
+        return;
+      }
+      throw e;
+    }
     await sendEmail(accessToken, clientEmail, `קבלת תשלום — ${title}`, html, fromEmail, businessName);
 
     logInfo("Notification", "notifyClientPayment: email sent", {

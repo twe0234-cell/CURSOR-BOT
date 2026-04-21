@@ -7,8 +7,8 @@ import { createClient } from "@/src/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  Radio,
-  Mail,
+  MessageSquare,
+  NotebookPen,
   HandshakeIcon,
   Wallet,
   Package,
@@ -40,9 +40,9 @@ export default function NavBar() {
   const navItems = [
     { href: "/", label: "לוח בקרה", icon: Home },
     { href: "/transactions", label: "תנועות", icon: ArrowLeftRight },
+    { href: "/torah/quick-entry", label: "יומן ס״ת", icon: NotebookPen },
     { href: "/audience", label: "נמענים", icon: Users },
-    { href: "/whatsapp", label: "WhatsApp", icon: Radio },
-    { href: "/email", label: "אימייל", icon: Mail },
+    { href: "/communications", label: "תקשורת", icon: MessageSquare },
     { href: "/calculator", label: "מחשבון", icon: Calculator },
     { href: "/crm", label: "CRM", icon: HandshakeIcon },
     { href: "/sales", label: "מכירות ותזרים", icon: Wallet },

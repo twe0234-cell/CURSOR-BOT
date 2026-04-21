@@ -82,6 +82,20 @@ export function isWorkingDay(date: Date, config: CalendarConfig = {}): boolean {
 }
 
 /**
+ * תואם sofer-vmone `isAssurBemelacha` — יום שאסורה בו מלאכה (שבת / י״ט / חה״מ לפי config).
+ */
+export function isAssurBemelacha(date: Date, config: CalendarConfig = {}): boolean {
+  return !isWorkingDay(date, config);
+}
+
+/**
+ * תואם sofer-vmone `workDayValue` — 1.0 אם ניתן לעבוד, אחרת 0 (קלט מספרי בלבד).
+ */
+export function workDayValue(date: Date, config: CalendarConfig = {}): 0 | 1 {
+  return isWorkingDay(date, config) ? 1 : 0;
+}
+
+/**
  * סופר ימי עבודה בין שני תאריכים (כולל שני הקצוות).
  */
 export function getWorkingDays(

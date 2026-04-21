@@ -288,6 +288,26 @@ export async function fetchTorahProjects(): Promise<
         snapshot_locked_at:
           ((r as { snapshot_locked_at?: string | null }).snapshot_locked_at as string | null) ??
           null,
+        planned_parchment_budget:
+          (r as { planned_parchment_budget?: unknown }).planned_parchment_budget != null &&
+          (r as { planned_parchment_budget?: unknown }).planned_parchment_budget !== ""
+            ? Number((r as { planned_parchment_budget: unknown }).planned_parchment_budget)
+            : null,
+        planned_scribe_budget:
+          (r as { planned_scribe_budget?: unknown }).planned_scribe_budget != null &&
+          (r as { planned_scribe_budget?: unknown }).planned_scribe_budget !== ""
+            ? Number((r as { planned_scribe_budget: unknown }).planned_scribe_budget)
+            : null,
+        planned_proofreading_budget:
+          (r as { planned_proofreading_budget?: unknown }).planned_proofreading_budget != null &&
+          (r as { planned_proofreading_budget?: unknown }).planned_proofreading_budget !== ""
+            ? Number((r as { planned_proofreading_budget: unknown }).planned_proofreading_budget)
+            : null,
+        estimated_expenses_total:
+          (r as { estimated_expenses_total?: unknown }).estimated_expenses_total != null &&
+          (r as { estimated_expenses_total?: unknown }).estimated_expenses_total !== ""
+            ? Number((r as { estimated_expenses_total: unknown }).estimated_expenses_total)
+            : null,
         created_at: r.created_at as string,
         scribe_name: nameMap.get(r.scribe_id as string) ?? null,
         client_name: r.client_id ? (nameMap.get(r.client_id as string) ?? null) : null,

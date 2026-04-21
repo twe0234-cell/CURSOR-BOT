@@ -57,6 +57,7 @@ export async function saveUserSettings(
     if (Array.isArray(allowedTags)) {
       revalidatePath("/audience");
       revalidatePath("/whatsapp");
+      revalidatePath("/communications");
     }
     return { success: true };
   } catch (err) {
@@ -83,6 +84,7 @@ export async function disconnectGmail(): Promise<SettingsActionResult> {
     if (error) return { success: false, error: error.message };
     revalidatePath("/settings");
     revalidatePath("/email");
+    revalidatePath("/communications");
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא צפויה" };
@@ -127,6 +129,7 @@ export async function saveEmailSignature(signature: string): Promise<SettingsAct
     if (error) return { success: false, error: error.message };
     revalidatePath("/settings");
     revalidatePath("/email");
+    revalidatePath("/communications");
     revalidatePath("/email/campaigns");
     return { success: true };
   } catch (err) {

@@ -1,12 +1,16 @@
 "use client";
 
 import { useRef } from "react";
-import Barcode from "react-barcode";
 import { Button } from "@/components/ui/button";
 import { PrinterIcon } from "lucide-react";
+import { LabelCode } from "@/components/labels/LabelCode";
+import { buildLabelCodePayload } from "@/src/lib/labels/codePayload";
 
 type Props = {
   value: string;
+  title?: string;
+  subtitle?: string;
+  priceText?: string;
   /** Barcode module width (react-barcode) */
   width?: number;
   height?: number;
@@ -16,8 +20,16 @@ type Props = {
  * Opens a print window sized for Nimbot B1 landscape labels (50mm × 30mm),
  * matching Torah QA batch print CSS.
  */
-export function BarcodePrint({ value, width = 1.4, height = 0.9 }: Props) {
+export function BarcodePrint({
+  value,
+  title,
+  subtitle,
+  priceText,
+  width = 1.15,
+  height = 28,
+}: Props) {
   const printRef = useRef<HTMLDivElement>(null);
+  const qrPayload = buildLabelCodePayload("inventory", { sku: value });
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -50,18 +62,55 @@ export function BarcodePrint({ value, width = 1.4, height = 0.9 }: Props) {
               overflow: hidden;
               font-family: system-ui, sans-serif;
             }
-            .barcode-wrap {
+            .label-wrap {
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              align-items: stretch;
+              width: 100%;
+              height: 100%;
+              gap: 1mm;
+            }
+            .title {
+              text-align: center;
+              font-weight: 700;
+              font-size: 8pt;
+              line-height: 1.2;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .subtitle {
+              text-align: center;
+              font-size: 7pt;
+              line-height: 1.1;
+            }
+            .price {
+              text-align: center;
+              font-size: 8pt;
+              font-weight: 700;
+              line-height: 1.1;
+            }
+            .code-wrap {
               display: flex;
               justify-content: center;
               align-items: center;
               width: 100%;
-              height: 100%;
+              min-height: 12mm;
             }
-            .barcode-wrap svg { max-width: 100%; height: auto; }
+            .code-wrap svg { max-width: 100%; height: auto; }
+            .sku {
+              text-align: center;
+              font-size: 6.5pt;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
           </style>
         </head>
         <body>
-          <div class="barcode-wrap">${inner}</div>
+          <div class="label-wrap">${inner}</div>
         </body>
       </html>
     `);
@@ -75,14 +124,24 @@ export function BarcodePrint({ value, width = 1.4, height = 0.9 }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div ref={printRef} className="nimbot-b1-label flex items-center justify-center [&>svg]:max-w-full [&>svg]:h-auto">
-        <Barcode
-          value={value}
-          width={width}
-          height={height}
-          displayValue={true}
-          fontSize={8}
-        />
+      <div ref={printRef} className="nimbot-b1-label flex flex-col justify-between bg-white text-black">
+        {title ? (
+          <p className="title" title={title}>
+            {title}
+          </p>
+        ) : null}
+        {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+        <div className="code-wrap">
+          <LabelCode
+            value={value}
+            qrValue={qrPayload}
+            showQr
+            barcodeWidth={width}
+            barcodeHeight={height}
+          />
+        </div>
+        {priceText ? <p className="price">{priceText}</p> : null}
+        <p className="sku" title={value}>{value}</p>
       </div>
       <Button
         type="button"
