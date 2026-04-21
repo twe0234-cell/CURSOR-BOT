@@ -24,10 +24,20 @@ export default async function RecurringPage() {
     const sb = await createClient()
     const { data: { user } } = await sb.auth.getUser()
     if (!user) return
+
+    let categoryId = fd.get('category_id') as string || null
+    const newCategoryName = fd.get('new_category') as string
+    if (newCategoryName?.trim()) {
+      const { data: newCat } = await sb.from('categories').insert({
+        user_id: user.id, name: newCategoryName.trim(), type: 'expense'
+      }).select().single()
+      if (newCat) categoryId = newCat.id
+    }
+
     await sb.from('recurring_expenses').insert({
       user_id: user.id,
       name: fd.get('name') as string,
-      category_id: (fd.get('category_id') as string) || null,
+      category_id: categoryId,
       amount: parseFloat(fd.get('amount') as string),
       frequency: fd.get('frequency') as string,
       start_date: fd.get('start_date') as string,
@@ -47,6 +57,16 @@ export default async function RecurringPage() {
     await sb.from('recurring_expenses').update({
       end_date: fd.get('end_date') as string,
     }).eq('id', fd.get('id') as string).eq('user_id', u.id)
+    revalidatePath('/recurring')
+  }
+
+  async function deleteRecurring(fd: FormData) {
+    'use server'
+    const sb = await createClient()
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('recurring_expenses').delete()
+      .eq('id', fd.get('id') as string).eq('user_id', u.id)
     revalidatePath('/recurring')
   }
 
@@ -91,14 +111,22 @@ export default async function RecurringPage() {
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-bold" style={{ color: '#f43f5e' }}>{fmt(r.amount)}</span>
-                    {active && (
-                      <form action={endRecurring} className="flex gap-1 items-center flex-wrap">
+                    <div className="flex gap-2">
+                      {active && (
+                        <form action={endRecurring} className="flex gap-1 items-center flex-wrap">
+                          <input type="hidden" name="id" value={r.id} />
+                          <input className="input text-xs py-1" style={{ width: 130 }} type="date" name="end_date"
+                            defaultValue={new Date().toISOString().split('T')[0]} />
+                          <button type="submit" className="btn-ghost text-xs py-1 px-2">סיים</button>
+                        </form>
+                      )}
+                      <form action={deleteRecurring}>
                         <input type="hidden" name="id" value={r.id} />
-                        <input className="input text-xs py-1" style={{ width: 130 }} type="date" name="end_date"
-                          defaultValue={new Date().toISOString().split('T')[0]} />
-                        <button type="submit" className="btn-ghost text-xs py-1 px-2">סיים</button>
+                        <button type="submit" className="btn-ghost text-xs py-1 px-2 text-rose-500 hover:bg-rose-50" title="מחק לגמרי">
+                          🗑️
+                        </button>
                       </form>
-                    )}
+                    </div>
                   </div>
                 </div>
               )
@@ -122,10 +150,13 @@ export default async function RecurringPage() {
             </div>
             <div>
               <label className="label">קטגוריה</label>
-              <select className="input" name="category_id">
-                <option value="">ללא</option>
-                {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select className="input flex-1" name="category_id">
+                  <option value="">ללא / בחר מהרשימה</option>
+                  {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input className="input flex-1" type="text" name="new_category" placeholder="או צור חדש..." />
+              </div>
             </div>
             <div>
               <label className="label">תדירות</label>

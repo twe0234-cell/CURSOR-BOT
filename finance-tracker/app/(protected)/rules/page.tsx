@@ -18,11 +18,22 @@ export default async function RulesPage() {
     const sb = await createClient()
     const { data: { user } } = await sb.auth.getUser()
     if (!user) return
+    let categoryId = fd.get('category_id') as string || null
+    const newCategoryName = fd.get('new_category') as string
+    if (newCategoryName?.trim()) {
+      const { data: newCat } = await sb.from('categories').insert({
+        user_id: user.id, name: newCategoryName.trim(), type: 'expense'
+      }).select().single()
+      if (newCat) categoryId = newCat.id
+    }
+
+    if (!categoryId) return // Ensure category exists
+
     await sb.from('classification_rules').insert({
       user_id: user.id,
       match_type: fd.get('match_type') as string,
       pattern: fd.get('pattern') as string,
-      category_id: fd.get('category_id') as string,
+      category_id: categoryId,
       priority: parseInt(fd.get('priority') as string) || 0,
     })
     revalidatePath('/rules')
@@ -99,10 +110,13 @@ export default async function RulesPage() {
             </div>
             <div>
               <label className="label">קטגוריה</label>
-              <select className="input" name="category_id" required>
-                <option value="">בחר...</option>
-                {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select className="input flex-1" name="category_id">
+                  <option value="">בחר...</option>
+                  {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input className="input flex-1" type="text" name="new_category" placeholder="או צור חדש..." />
+              </div>
             </div>
             <div>
               <label className="label">עדיפות (גבוה = קודם)</label>

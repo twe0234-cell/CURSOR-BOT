@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
         leumi:    CompanyTypes.leumi,
         discount: CompanyTypes.discount,
         mizrahi:  CompanyTypes.mizrahi,
+        pagi:     CompanyTypes.pagi,
         max:      CompanyTypes.max,
         cal:      CompanyTypes.visaCal,
         isracard: CompanyTypes.isracard,

@@ -135,7 +135,7 @@ export default function AiInsightsPanel() {
             const colorClass = isWarning ? 'text-rose-600 bg-rose-50 border-rose-100' : insight.type === 'positive' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-indigo-600 bg-indigo-50 border-indigo-100'
             
             return (
-              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${colorClass} animate-fade-in-up`} style={{ animationDelay: \`\${i * 100}ms\` }}>
+              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${colorClass} animate-fade-in-up`} style={{ animationDelay: `${i * 100}ms` }}>
                 <div className="mt-0.5">
                   <Icon size={18} />
                 </div>
