@@ -1,3 +1,5 @@
+import { displayTorahMarketOwner } from "@/lib/market/displayOwner";
+
 /** שדות נדרשים לטקסט שיתוף — ללא תלות ב-`actions` (server) */
 export type MarketTorahShareFields = {
   sku: string | null;
@@ -77,19 +79,16 @@ export function buildMarketTorahQuoteText(row: {
   external_sofer_name: string | null;
   sofer_name: string | null;
   dealer_name: string | null;
+  dealer_id: string | null;
 }): string {
-  const owner =
-    row.external_sofer_name?.trim() ||
-    row.sofer_name?.trim() ||
-    row.dealer_name?.trim() ||
-    null;
+  const owner = displayTorahMarketOwner(row);
 
   const lines: string[] = [];
   lines.push("הצעת מחיר — ספר תורה");
   lines.push("━━━━━━━━━━━━━━━━");
   lines.push("");
   if (row.sku) lines.push(`מק״ט: ${row.sku}`);
-  if (owner) lines.push(`בעלים / סופר (לפי הפרסום): ${owner}`);
+  if (owner !== "—") lines.push(`בעלים / סופר (לפי הפרסום): ${owner}`);
   if (row.torah_size) lines.push(`גודל ספר תורה: ${row.torah_size} ס״מ`);
   if (row.script_type) lines.push(`סוג כתב: ${row.script_type}`);
   if (row.parchment_type) lines.push(`סוג קלף: ${row.parchment_type}`);

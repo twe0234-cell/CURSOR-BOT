@@ -9,6 +9,7 @@ import type { MarketTorahBookRow } from "../actions";
 import type { MarketStage } from "../stages";
 import { updateMarketStage } from "../actions";
 import { buildMarketTorahShareText, whatsappPrefillPath } from "@/lib/market/shareOfferText";
+import { displayTorahMarketOwner } from "@/lib/market/displayOwner";
 
 // ─── Stage config ───────────────────────────────────────────────────────────
 
@@ -41,15 +42,6 @@ function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
 }
 
-/** תואם ל־cardHeadline ב־MarketClient — טקסט בעלים מההצעה לפני שמות CRM */
-function cardHeadline(row: MarketTorahBookRow): string {
-  const ext = row.external_sofer_name?.trim();
-  if (ext) return ext;
-  if (row.dealer_id && row.dealer_name) return row.dealer_name;
-  if (row.sofer_name) return row.sofer_name;
-  return "";
-}
-
 // ─── Card ────────────────────────────────────────────────────────────────────
 
 type CardProps = {
@@ -63,7 +55,7 @@ function KanbanCard({ row, onMove, isPending }: CardProps) {
   const canGoBack = currentIdx > 0;
   const canGoForward = currentIdx < STAGE_ORDER.length - 1;
   const days = daysAgo(row.created_at);
-  const owner = cardHeadline(row);
+  const owner = displayTorahMarketOwner(row);
 
   return (
     <motion.div
@@ -82,9 +74,7 @@ function KanbanCard({ row, onMove, isPending }: CardProps) {
           <span className="font-mono text-[10px] text-slate-300 hover:text-slate-500 transition-colors cursor-default">
             {row.sku ?? "—"}
           </span>
-          {owner && (
-            <p className="text-sm font-semibold text-slate-800 truncate mt-0.5">{owner}</p>
-          )}
+          <p className="text-sm font-semibold text-slate-800 truncate mt-0.5">{owner}</p>
         </div>
         {row.handwriting_image_url && (
           <a href={row.handwriting_image_url} target="_blank" rel="noopener noreferrer">

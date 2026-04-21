@@ -35,28 +35,33 @@ export async function POST(req: Request) {
   const script_type = String(body.script_type ?? "").trim();
   const parchment_type = String(body.parchment_type ?? "").trim();
   const asking_price = body.asking_price != null ? Number(body.asking_price) : null;
-  const notes = String(body.notes ?? "").trim().slice(0, 500);
+  const notes = String(body.notes ?? "").trim().slice(0, 4000);
+  const external_sofer = String(body.external_sofer_name ?? "").trim();
+  const sofer_name = String(body.sofer_name ?? "").trim();
+  const dealer_name = String(body.dealer_name ?? "").trim();
+
+  const ownerHint =
+    external_sofer || (dealer_name ? `סוחר: ${dealer_name}` : "") || (sofer_name ? `סופר: ${sofer_name}` : "");
 
   const priceLine =
     asking_price != null && Number.isFinite(asking_price)
       ? `מחיר מוצע (באלפי ש״ח / יחידות K כמו במאגר): ${asking_price}`
       : "מחיר לא צוין";
 
-  const userPrompt = `נתונים מספריים בלבד לספר תורה במלאי:
+  const userPrompt = `פרטים לספר תורה (השתמש רק במה שכתוב; אל תמציא מספרים או פרטים):
 - מק״ט: ${sku || "—"}
-- גודל (מספר ס״מ): ${torah_size || "—"}
-- סוג כתב: ${script_type || "—"}
-- סוג קלף: ${parchment_type || "—"}
+- גודל (ס״מ): ${torah_size || "—"}
+- כתב: ${script_type || "—"}
+- קלף: ${parchment_type || "—"}
 - ${priceLine}
-${notes ? `- הערה: ${notes}` : ""}
+${ownerHint ? `- גורם רלוונטי לפרסום (אם ריק אין להזכיר): ${ownerHint}` : ""}
+${notes ? `- הערות מהמאגר:\n${notes}` : ""}
 
-כתוב טקסט שיווקי קצר בעברית לוואטסאפ/מייל (בלי HTML):
-- פתיח חם ומקצועי
-- שלושה–חמישה משפטים
-- סיום עם קריאה לפעולה
-אל תמציא מחיר אם לא ניתן — השתמש רק במספרים שניתנו.`;
+כתוב בעברית טקסט קצר וברור לוואטסאפ/מייל (שטוח, בלי כותרות ובלי Markdown):
+ארבעה עד שבעה משפטים קצרים. משפט ליד משפט עם מילות חיבור פשוטות (כמו "בנוסף", "כמו כן"). טון רגוע וברור. סיים במשפט אחד של קריאה לפעולה (לפנות לפרטים).`;
 
-  const systemPrompt = `אתה קופירייטר ל"הידור הסת״ם". החזר טקסט שטוח בלבד, בלי markdown, בלי כותרות מיותרות.`;
+  const systemPrompt =
+    `אתה כותב טקסטים קצרים בעברית לעסק סת״ם. אסור Markdown, אסור רשימות עם תווים מיוחדים, אסור סופר ארוך. אם חסר מידע — אל תמלא במציאות; השתמש רק בנתונים מהבקשה.`;
 
   try {
     const genAI = new GoogleGenerativeAI(keyCheck.apiKey);
@@ -66,7 +71,7 @@ ${notes ? `- הערה: ${notes}` : ""}
     });
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      generationConfig: { maxOutputTokens: 600, temperature: 0.75 },
+      generationConfig: { maxOutputTokens: 1100, temperature: 0.55 },
     });
     const text = result.response.text().trim();
     if (!text) {

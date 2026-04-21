@@ -22,7 +22,10 @@ export default function AiInsightsPanel() {
     try {
       const res = await fetch('/api/ai/insights', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'שגיאה לא צפויה')
+      if (!res.ok) {
+        const msg = typeof data.error === 'string' ? data.error : (data.error?.message || JSON.stringify(data.error) || 'שגיאה לא צפויה')
+        throw new Error(msg)
+      }
       setInsights(data.insights)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -37,7 +40,10 @@ export default function AiInsightsPanel() {
     try {
       const res = await fetch('/api/ai/auto-classify', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'שגיאה בסיווג')
+      if (!res.ok) {
+        const msg = typeof data.error === 'string' ? data.error : (data.error?.message || JSON.stringify(data.error) || 'שגיאה בסיווג')
+        throw new Error(msg)
+      }
       setAutoClassifyResult({ classified_count: data.classified_count, rules_added: data.rules_added })
       
       // If it suggested recurring, add them to insights array so the user sees them

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useForm, FormProvider } from "react-hook-form";
-import { numericRegisterOptions, integerRegisterOptions } from "@/lib/numericInput";
+import { integerRegisterOptions, moneyRegisterOptions } from "@/lib/numericInput";
 import { toast } from "sonner";
 import {
   Table,
@@ -58,6 +58,12 @@ import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/s
 
 const STATUSES = ["available", "proofreading", "reserved", "sold"] as const;
 
+/** במסך לא מציגים 0 בשדות סכום — ריק עד מילוי */
+function coalesceMoney(n: number | null | undefined): number | null {
+  if (n == null || n === 0) return null;
+  return n;
+}
+
 type Props = {
   initialItems: InventoryItem[];
   /** Server-side fetch failed (e.g. schema mismatch); list may be empty. */
@@ -76,7 +82,12 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [viewMode, setViewMode] = useViewMode("inventory");
   const [sortKey, setSortKey] = useState<
-    "scribe_name" | "product_category" | "script_type" | "status" | "target_price"
+    | "scribe_name"
+    | "product_category"
+    | "script_type"
+    | "status"
+    | "quantity"
+    | "target_price"
   >("product_category");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -93,6 +104,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       product_category?: string | null;
       script_type?: string | null;
       status?: string | null;
+      quantity?: number | null;
       target_price?: number | null;
     },
   >(
@@ -101,9 +113,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
     return [...arr].sort((a, b) => {
       let va: string | number = "";
       let vb: string | number = "";
-      if (sortKey === "target_price") {
-        va = a.target_price ?? 0;
-        vb = b.target_price ?? 0;
+      if (sortKey === "target_price" || sortKey === "quantity") {
+        va = Number(a[sortKey as keyof T] ?? 0);
+        vb = Number(b[sortKey as keyof T] ?? 0);
       } else {
         va = String(a[sortKey as keyof T] ?? "");
         vb = String(b[sortKey as keyof T] ?? "");
@@ -151,7 +163,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       status: "available",
       quantity: 1,
       cost_price: null,
-      amount_paid: 0,
+      amount_paid: null,
       target_price: null,
       scribe_id: null,
       scribe_code: null,
@@ -176,7 +188,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       status: "available",
       quantity: 1,
       cost_price: null,
-      amount_paid: 0,
+      amount_paid: null,
       target_price: null,
       scribe_id: null,
       scribe_code: null,
@@ -210,9 +222,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
       script_type: item.script_type && SCRIPT_TYPES.includes(item.script_type as (typeof SCRIPT_TYPES)[number]) ? item.script_type : ("" as string | null),
       status: item.status ?? "available",
       quantity: item.quantity ?? 1,
-      cost_price: item.cost_price ?? null,
-      amount_paid: item.amount_paid ?? 0,
-      target_price: item.target_price ?? null,
+      cost_price: coalesceMoney(item.cost_price),
+      amount_paid: coalesceMoney(item.amount_paid),
+      target_price: coalesceMoney(item.target_price),
       scribe_id: item.scribe_id ?? null,
       scribe_code: item.scribe_code ?? null,
       images: item.images ?? [],
@@ -371,6 +383,9 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                     <CardContent className="p-3 space-y-1.5">
                       <p className="font-semibold text-sm truncate">{item.product_category ?? "—"}</p>
                       <p className="text-xs text-muted-foreground truncate">{item.scribe_name?.trim() || "—"}</p>
+                      <p className="text-xs font-medium text-foreground/80">
+                        כמות: <span className="tabular-nums">{item.quantity ?? 1}</span>
+                      </p>
                       {item.script_type && <p className="text-xs text-muted-foreground">{item.script_type}</p>}
                       {item.target_price != null && (
                         <p className="text-sm font-bold text-primary">{item.target_price.toLocaleString("he-IL")} ₪</p>
@@ -398,33 +413,38 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
               <Table className="min-w-0">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead className="min-w-[100px]">
-                      <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                    <TableHead className="w-12 text-right"></TableHead>
+                    <TableHead className="min-w-[100px] text-right">
+                      <button type="button" onClick={() => handleSort("scribe_name")} className="hover:underline font-bold text-base text-foreground">
                         סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
                       </button>
                     </TableHead>
-                    <TableHead>
-                      <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                    <TableHead className="text-right">
+                      <button type="button" onClick={() => handleSort("product_category")} className="hover:underline font-bold text-base text-foreground">
                         קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
                       </button>
                     </TableHead>
-                    <TableHead>
-                      <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                    <TableHead className="text-right">
+                      <button type="button" onClick={() => handleSort("script_type")} className="hover:underline font-bold text-base text-foreground">
                         כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
                       </button>
                     </TableHead>
-                    <TableHead>
-                      <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                    <TableHead className="text-right">
+                      <button type="button" onClick={() => handleSort("status")} className="hover:underline font-bold text-base text-foreground">
                         סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
                       </button>
                     </TableHead>
-                    <TableHead>
-                      <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
+                    <TableHead className="text-right tabular-nums">
+                      <button type="button" onClick={() => handleSort("quantity")} className="hover:underline font-bold text-base text-foreground">
+                        כמות {sortKey === "quantity" && (sortDir === "asc" ? "↑" : "↓")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-bold text-base text-foreground">
                         מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
                       </button>
                     </TableHead>
-                    <TableHead className="w-32">פעולות</TableHead>
+                    <TableHead className="w-32 text-right font-bold text-base text-foreground">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -453,7 +473,10 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                           ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">{inventoryStatusLabelHe(item.status)}</span>
                           : null}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="tabular-nums text-sm">
+                        {item.quantity ?? 1}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
                         {item.target_price != null ? `${item.target_price} ₪` : "—"}
                       </TableCell>
                       <TableCell>
@@ -502,33 +525,38 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
             <Table className="min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead className="min-w-[100px]">
-                    <button type="button" onClick={() => { setSortKey("scribe_name"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="w-12 text-right"></TableHead>
+                  <TableHead className="min-w-[100px] text-right">
+                    <button type="button" onClick={() => handleSort("scribe_name")} className="hover:underline font-bold text-base text-foreground">
                       סופר {sortKey === "scribe_name" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("product_category"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="text-right">
+                    <button type="button" onClick={() => handleSort("product_category")} className="hover:underline font-bold text-base text-foreground">
                       קטגוריה {sortKey === "product_category" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("script_type"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="text-right">
+                    <button type="button" onClick={() => handleSort("script_type")} className="hover:underline font-bold text-base text-foreground">
                       כתב {sortKey === "script_type" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => { setSortKey("status"); setSortDir((d) => (d === "asc" ? "desc" : "asc")); }} className="hover:underline font-semibold">
+                  <TableHead className="text-right">
+                    <button type="button" onClick={() => handleSort("status")} className="hover:underline font-bold text-base text-foreground">
                       סטטוס {sortKey === "status" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-semibold">
+                  <TableHead className="text-right tabular-nums">
+                    <button type="button" onClick={() => handleSort("quantity")} className="hover:underline font-bold text-base text-foreground">
+                      כמות {sortKey === "quantity" && (sortDir === "asc" ? "↑" : "↓")}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button type="button" onClick={() => handleSort("target_price")} className="hover:underline font-bold text-base text-foreground">
                       מחיר יעד {sortKey === "target_price" && (sortDir === "asc" ? "↑" : "↓")}
                     </button>
                   </TableHead>
-                  <TableHead className="w-20">פעולות</TableHead>
+                  <TableHead className="w-20 text-right font-bold text-base text-foreground">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -557,7 +585,10 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                         ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">{inventoryStatusLabelHe(item.status)}</span>
                         : <span className="text-xs text-slate-400">{inventoryStatusLabelHe(item.status)}</span>}
                     </TableCell>
-                    <TableCell className="text-slate-600">
+                    <TableCell className="tabular-nums text-sm text-slate-600">
+                      {item.quantity ?? 1}
+                    </TableCell>
+                    <TableCell className="text-slate-600 tabular-nums">
                       {item.target_price != null ? `${item.target_price} ₪` : "—"}
                     </TableCell>
                     <TableCell>
@@ -713,9 +744,10 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("cost_price", numericRegisterOptions(0))}
-                        placeholder="0"
-                        className="rounded-xl"
+                        step="any"
+                        {...form.register("cost_price", moneyRegisterOptions())}
+                        placeholder="השאר ריק אם אין עדיין"
+                        className="rounded-xl placeholder:text-muted-foreground/60"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5 w-full">
@@ -723,9 +755,10 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("amount_paid", numericRegisterOptions(0))}
-                        placeholder="0"
-                        className="rounded-xl"
+                        step="any"
+                        {...form.register("amount_paid", moneyRegisterOptions())}
+                        placeholder="השאר ריק אם אין עדיין"
+                        className="rounded-xl placeholder:text-muted-foreground/60"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5 w-full">
@@ -733,9 +766,10 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       <Input
                         type="number"
                         min={0}
-                        {...form.register("target_price", numericRegisterOptions(0))}
-                        placeholder="0"
-                        className="rounded-xl"
+                        step="any"
+                        {...form.register("target_price", moneyRegisterOptions())}
+                        placeholder="השאר ריק אם אין עדיין"
+                        className="rounded-xl placeholder:text-muted-foreground/60"
                       />
                       {(() => {
                         const q = form.watch("quantity") ?? 1;
@@ -753,7 +787,8 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                   {(() => {
                     const qty = form.watch("quantity") ?? 1;
                     const cost = form.watch("cost_price");
-                    const paid = form.watch("amount_paid") ?? 0;
+                    const paidRaw = form.watch("amount_paid");
+                    const paid = paidRaw != null && !Number.isNaN(paidRaw) ? paidRaw : 0;
                     const total = cost != null && !Number.isNaN(cost) ? (qty || 1) * cost : null;
                     if (total == null) return null;
                     const balanceToScribe = total - paid;

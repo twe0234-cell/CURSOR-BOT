@@ -67,6 +67,7 @@ import {
   MARKET_PARCHMENT_TYPES,
   STAM_SCRIPT_TYPES,
 } from "@/src/lib/stam/catalog";
+import { displayTorahMarketOwner } from "@/lib/market/displayOwner";
 
 
 function todayISODate(): string {
@@ -80,21 +81,6 @@ type Props = {
   /** שמות סוגי קלף ממחשבון (sys_calculator_config) — ממוזג עם ערכים מהמאגר */
   calculatorParchmentNames?: string[];
 };
-
-/** כרטיס / קנבן — שורת כותרת אחת (בלי כפילות עם עמודות סופר/סוחר בטבלה) */
-function cardHeadline(row: MarketTorahBookRow): string {
-  const ext = row.external_sofer_name?.trim();
-  if (ext) return ext;
-  if (row.dealer_id && row.dealer_name) return row.dealer_name;
-  if (row.sofer_name) return row.sofer_name;
-  return "—";
-}
-
-/** טבלה — עמודה ראשונה: רק טקסט בעלים מההצעה (וואטסאפ וכו׳). סוחר ב-CRM מופיע בעמודת ״סוחר״ בלבד */
-function tableOwnerOfferText(row: MarketTorahBookRow): string {
-  const t = row.external_sofer_name?.trim();
-  return t || "—";
-}
 
 /** Values arrive already in K-units from mapBookRow — no division needed. */
 const formatK = (val: number | null | undefined): string => {
@@ -828,7 +814,7 @@ export default function MarketClient({
                       key={row.id}
                       className="bg-white rounded-lg border border-border p-2.5 shadow-sm space-y-1 text-sm"
                     >
-                      <div className="font-semibold truncate">{cardHeadline(row)}</div>
+                      <div className="font-semibold truncate">{displayTorahMarketOwner(row)}</div>
                       <div className="flex gap-1 flex-wrap text-xs text-muted-foreground">
                         {row.torah_size && <span className="bg-muted rounded px-1">{row.torah_size} ס&quot;מ</span>}
                         {row.script_type && <span className="bg-muted rounded px-1">{row.script_type}</span>}
@@ -915,7 +901,7 @@ export default function MarketClient({
                   )}
                 </div>
                 <CardContent className="p-3 space-y-1.5">
-                  <p className="font-semibold text-sm truncate">{cardHeadline(row)}</p>
+                  <p className="font-semibold text-sm truncate">{displayTorahMarketOwner(row)}</p>
                   {row.sofer_name && <p className="text-xs text-muted-foreground">סופר: {row.sofer_name}</p>}
                   <div className="flex gap-1 text-xs flex-wrap">
                     {row.parchment_type && <span className="bg-muted rounded px-1.5 py-0.5 text-muted-foreground">{row.parchment_type}</span>}
@@ -956,18 +942,38 @@ export default function MarketClient({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50 border-b border-border">
-                  <TableHead className="text-right py-3 px-4 w-[150px]">בעלים (מההצעה)</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px]">סופר</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px]">סוחר (CRM)</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">קשר אחרון</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[72px]">גודל</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px]">סוג קלף</TableHead>
-                  <TableHead className="text-right py-3 px-4 w-[100px]">כתב</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px]">תמונה</TableHead>
-                  <TableHead className="text-right py-3 px-4 w-[100px]">מחיר דורש</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px]">יעד תיווך</TableHead>
-                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[100px]">רווח צפוי</TableHead>
-                  <TableHead className="text-right py-3 px-4 w-[76px]">פעולות</TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[150px] font-bold text-base text-foreground">
+                    בעלים / סופר
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[120px] font-bold text-base text-foreground">
+                    סופר
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[120px] font-bold text-base text-foreground">
+                    סוחר (CRM)
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px] font-bold text-base text-foreground">
+                    קשר אחרון
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[72px] font-bold text-base text-foreground">
+                    גודל
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden lg:table-cell w-[110px] font-bold text-base text-foreground">
+                    סוג קלף
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[100px] font-bold text-base text-foreground">כתב</TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[52px] font-bold text-base text-foreground">
+                    תמונה
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[100px] font-bold text-base text-foreground">
+                    מחיר דורש
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden sm:table-cell w-[100px] font-bold text-base text-foreground">
+                    יעד תיווך
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 hidden md:table-cell w-[100px] font-bold text-base text-foreground">
+                    רווח צפוי
+                  </TableHead>
+                  <TableHead className="text-right py-3 px-4 w-[76px] font-bold text-base text-foreground">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -986,7 +992,7 @@ export default function MarketClient({
                   filteredRows.map((row) => (
                     <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3 px-4 font-medium">
-                        <div className="truncate max-w-[138px]">{tableOwnerOfferText(row)}</div>
+                        <div className="truncate max-w-[138px]">{displayTorahMarketOwner(row)}</div>
                         <SkuBadge sku={row.sku} />
                       </TableCell>
                       <TableCell className="py-3 px-4 hidden sm:table-cell text-sm text-slate-700 truncate max-w-[108px]">

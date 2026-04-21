@@ -88,14 +88,15 @@ Output MUST be strictly JSON matching this schema:
     if (result.new_rules && result.new_rules.length > 0) {
       for (const rule of result.new_rules) {
         if (rule.category_id && rule.pattern) {
-          await supabase.from('classification_rules').insert({
-            user_id: user.id,
-            pattern: rule.pattern,
-            category_id: rule.category_id,
-            match_type: 'contains',
-            priority: 50
-          }).select().single()
-            .catch(() => {}) // ignore duplicates if unique constraint
+          try {
+            await supabase.from('classification_rules').insert({
+              user_id: user.id,
+              pattern: rule.pattern,
+              category_id: rule.category_id,
+              match_type: 'contains',
+              priority: 50
+            })
+          } catch (e) { /* ignore */ }
         }
       }
     }

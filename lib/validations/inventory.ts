@@ -58,7 +58,7 @@ const baseSchema = z.object({
   quantity: coerceNumDefault0,
   cost_price: numericNullable,
   target_price: numericNullable,
-  amount_paid: coerceNumDefault0,
+  amount_paid: numericNullable,
   scribe_id: optionalUuid,
   scribe_code: z.string().optional().nullable(),
   images: z.array(z.string()).optional().nullable().default([]),

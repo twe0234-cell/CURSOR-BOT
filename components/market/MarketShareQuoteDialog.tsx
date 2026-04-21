@@ -17,6 +17,7 @@ import {
   emailCampaignsPrefillPath,
   whatsappPrefillPath,
 } from "@/lib/market/shareOfferText";
+import { buildMarketTorahQuoteEmailSubject } from "@/lib/market/quoteSubject";
 import { MessageCircle, Mail, FileText, Sparkles } from "lucide-react";
 
 export function MarketShareQuoteDialog({
@@ -45,10 +46,7 @@ export function MarketShareQuoteDialog({
 
   const currentRow = row;
 
-  const subject =
-    currentRow.sku != null && String(currentRow.sku).trim()
-      ? `הצעת מחיר — ספר תורה ${currentRow.sku}`
-      : "הצעת מחיר — ספר תורה";
+  const subject = buildMarketTorahQuoteEmailSubject(currentRow);
 
   const waHref = whatsappPrefillPath(bodyText);
   const emailHref = emailCampaignsPrefillPath(subject, bodyText);
@@ -67,6 +65,9 @@ export function MarketShareQuoteDialog({
           parchment_type: currentRow.parchment_type,
           asking_price: currentRow.asking_price,
           notes: currentRow.notes,
+          external_sofer_name: currentRow.external_sofer_name,
+          sofer_name: currentRow.sofer_name,
+          dealer_name: currentRow.dealer_name,
         }),
       });
       const data = (await res.json()) as { text?: string; error?: string };

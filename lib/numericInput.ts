@@ -67,3 +67,16 @@ export function integerRegisterOptions(fallback = 1) {
     },
   } as const;
 }
+
+/** כסף אופציונלי במלאי: ריק במסך → null במודל (בלי להציג 0 שצריך למחוק) */
+export function moneyRegisterOptions(): {
+  setValueAs: (v: string) => number | null;
+} {
+  return {
+    setValueAs: (v: string): number | null => {
+      if (v === "" || v == null) return null;
+      const n = parseFloat(applyNumericTransform(String(v)));
+      return isNaN(n) ? null : n;
+    },
+  };
+}
