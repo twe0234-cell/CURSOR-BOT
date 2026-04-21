@@ -13,6 +13,8 @@ export default function CsvImport() {
   const [source, setSource] = useState('generic')
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [parseFailed, setParseFailed] = useState(false)
+  const [rawTextCache, setRawTextCache] = useState<{ text: string, name: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function handleImport() {
@@ -21,6 +23,8 @@ export default function CsvImport() {
 
     setLoading(true)
     setStatus('טוען קובץ...')
+    setParseFailed(false)
+    setRawTextCache(null)
 
     try {
       // Dynamic import — xlsx is a CommonJS module, .default may be undefined
@@ -85,15 +89,53 @@ export default function CsvImport() {
       const parsed = parseBySource(detectedSource, rows)
 
       if (parsed.length === 0) {
-        setStatus(`לא נמצאו עמודות מתאימות. Headers שנמצאו: ${headers.slice(0, 6).join(', ')}`)
+        // Save raw text for AI fallback
+        const text = XLSX.utils.sheet_to_csv(sheet)
+        setRawTextCache({ text, name: file.name })
+        setParseFailed(true)
+        setStatus(`לא הצלחתי לקרוא אוטומטית. Headers: ${headers.slice(0, 4).join(', ')}`)
         return
       }
 
-      setStatus(`זוהו ${parsed.length} תנועות מ-${SOURCE_META[detectedSource]?.label ?? detectedSource}. שומר...`)
+      await saveTransactions(parsed, detectedSource, file.name)
+    } catch (e: unknown) {
+      setStatus(`שגיאה: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('לא מחובר')
+  async function handleAiParse() {
+    if (!rawTextCache) return
+    setLoading(true)
+    setStatus('🤖 הסוכן מנתח את הקובץ...')
+    
+    try {
+      const res = await fetch('/api/ai/parse-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: rawTextCache.text, fileName: rawTextCache.name })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error?.message || data.error || 'שגיאה בפענוח AI')
+      
+      if (!data.transactions || data.transactions.length === 0) {
+        setStatus('הסוכן לא מצא תנועות פיננסיות בקובץ')
+        return
+      }
+      
+      await saveTransactions(data.transactions, data.transactions[0]?.source || 'generic', rawTextCache.name)
+    } catch (e: unknown) {
+      setStatus(`שגיאה (AI): ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveTransactions(parsed: any[], detectedSource: string, fileName: string) {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('לא מחובר')
 
       const { data: rules } = await supabase
         .from('classification_rules')
@@ -118,7 +160,7 @@ export default function CsvImport() {
 
       await supabase.from('imports').insert({
         user_id: user.id,
-        file_name: file.name,
+        file_name: fileName,
         source: detectedSource,
         rows_total: parsed.length,
         rows_imported: toInsert.length,
@@ -127,14 +169,9 @@ export default function CsvImport() {
       })
 
       setStatus(`✓ יובאו ${toInsert.length} תנועות (כפילויות דולגו אוטומטית)`)
+      setParseFailed(false)
+      setRawTextCache(null)
       if (fileRef.current) fileRef.current.value = ''
-
-    } catch (e: unknown) {
-      setStatus(`שגיאה: ${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (!open) return (
     <button className="btn-primary flex items-center gap-2 text-sm" onClick={() => setOpen(true)}>
@@ -191,11 +228,16 @@ export default function CsvImport() {
         <button className="btn-primary text-sm" onClick={handleImport} disabled={loading}>
           {loading ? 'מייבא...' : '📤 ייבא'}
         </button>
+        {parseFailed && (
+          <button className="btn-ghost shadow-sm bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm flex items-center gap-1" onClick={handleAiParse} disabled={loading}>
+            🤖 נסה חילוץ חכם (AI)
+          </button>
+        )}
         {status && (
           <p className="text-sm" style={{
             color: status.startsWith('✓') ? '#10b981'
-              : status.startsWith('שגיאה') ? '#f43f5e'
-              : '#a5b4fc'
+              : status.startsWith('שגיאה') || parseFailed ? '#f43f5e'
+              : '#6366f1'
           }}>
             {status}
           </p>

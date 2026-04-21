@@ -12,6 +12,7 @@ const NAV = [
   { href: '/banks',       label: 'חיבור בנקים',        icon: '🔗' },
   { href: '/categories',  label: 'קטגוריות',            icon: '🏷️' },
   { href: '/rules',       label: 'חוקי סיווג',          icon: '⚙️' },
+  { href: '/personal',    label: 'איזור אישי',         icon: '👤' },
 ]
 
 export default function Nav() {
