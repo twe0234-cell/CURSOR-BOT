@@ -71,7 +71,7 @@ export default async function RecurringPage() {
               const active = !r.end_date || new Date(r.end_date) >= new Date()
               return (
                 <div key={r.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg"
-                  style={{ background: '#12151f', border: '1px solid var(--color-border)', opacity: active ? 1 : 0.5 }}>
+                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', opacity: active ? 1 : 0.5 }}>
                   <div>
                     <p className="font-medium">{r.name}</p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>

@@ -7,26 +7,74 @@ function fmt(n: number) {
   return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 }
 
+const KPI_STYLES = [
+  {
+    label: 'הכנסות החודש',
+    gradFrom: '#10b981', gradTo: '#059669',
+    bg: 'rgba(16,185,129,0.08)',
+    iconBg: 'rgba(16,185,129,0.15)',
+    iconColor: '#059669',
+    textColor: '#059669',
+    borderColor: 'rgba(16,185,129,0.3)',
+    icon: TrendingUp,
+  },
+  {
+    label: 'הוצאות החודש',
+    gradFrom: '#f43f5e', gradTo: '#e11d48',
+    bg: 'rgba(244,63,94,0.07)',
+    iconBg: 'rgba(244,63,94,0.13)',
+    iconColor: '#e11d48',
+    textColor: '#e11d48',
+    borderColor: 'rgba(244,63,94,0.25)',
+    icon: TrendingDown,
+  },
+  {
+    label: 'מאזן נטו',
+    gradFrom: '#4f46e5', gradTo: '#7c3aed',
+    bg: 'rgba(79,70,229,0.07)',
+    iconBg: 'rgba(79,70,229,0.13)',
+    iconColor: '#4f46e5',
+    textColor: '#4f46e5',
+    borderColor: 'rgba(79,70,229,0.2)',
+    icon: Wallet,
+  },
+  {
+    label: 'שווי נקי כולל',
+    gradFrom: '#ec4899', gradTo: '#a855f7',
+    bg: 'rgba(168,85,247,0.07)',
+    iconBg: 'rgba(168,85,247,0.13)',
+    iconColor: '#a855f7',
+    textColor: '#7c3aed',
+    borderColor: 'rgba(168,85,247,0.2)',
+    icon: Landmark,
+  },
+]
+
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const now   = new Date()
-  const year  = now.getFullYear()
+  const now = new Date()
+  const year = now.getFullYear()
   const month = now.getMonth() + 1
 
   const fromDate = new Date(year, month - 13, 1).toISOString().split('T')[0]
-  const [{ data: txs }, { data: assets }, { data: snapshots }] = await Promise.all([
+  const [{ data: txs }, { data: assets }, { data: snapshots }, { data: recurring }] = await Promise.all([
     supabase.from('transactions').select('date,amount,category_id').eq('user_id', user.id).gte('date', fromDate).order('date'),
     supabase.from('assets').select('id,name,asset_type').eq('user_id', user.id),
     supabase.from('asset_snapshots').select('asset_id,value,snapshot_date').eq('user_id', user.id).order('snapshot_date', { ascending: false }),
+    supabase.from('recurring_expenses').select('amount,start_date,end_date,frequency').eq('user_id', user.id),
   ])
 
-  const thisMonth  = summarizeMonth(txs ?? [], year, month)
+  const thisMonth = summarizeMonth(txs ?? [], year, month)
   const assetValues = getLatestAssetValues(snapshots ?? [])
-  const netWorth   = calcNetWorth(assetValues)
+  const netWorth = calcNetWorth(assetValues)
+  const _ = recurring
 
+  const kpiValues = [thisMonth.income, thisMonth.expenses, thisMonth.net, netWorth]
+
+  // Monthly chart data (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(year, month - 1 - (5 - i), 1)
     const y = d.getFullYear(), m = d.getMonth() + 1
@@ -39,56 +87,78 @@ export default async function DashboardPage() {
     }
   })
 
-  const kpis = [
-    { label: 'הכנסות החודש',  value: fmt(thisMonth.income),   color: '#10b981', icon: TrendingUp },
-    { label: 'הוצאות החודש',  value: fmt(thisMonth.expenses),  color: '#f43f5e', icon: TrendingDown },
-    { label: 'מאזן נטו',      value: fmt(thisMonth.net),       color: thisMonth.net >= 0 ? '#10b981' : '#f43f5e', icon: Wallet },
-    { label: 'שווי נקי כולל', value: fmt(netWorth),            color: '#818cf8', icon: Landmark },
-  ]
-
   return (
-    <div className="space-y-5 animate-fade-in-up">
-      <h1 className="text-2xl md:text-3xl font-extrabold">דאשבורד</h1>
-
-      {/* KPI Cards — 2 cols on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {kpis.map(kpi => (
-          <div key={kpi.label} className="card relative overflow-hidden group p-4 md:p-6">
-            <div className="absolute top-0 right-0 w-1 h-full rounded-r-full" style={{ background: kpi.color }} />
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--color-muted)' }}>{kpi.label}</p>
-                <div className="p-1.5 md:p-2 rounded-xl" style={{ background: `${kpi.color}20`, color: kpi.color }}>
-                  <kpi.icon size={16} strokeWidth={2.5} />
-                </div>
-              </div>
-              <p className="text-lg md:text-2xl font-bold truncate" style={{ color: kpi.color }}>{kpi.value}</p>
-            </div>
-          </div>
-        ))}
+    <div className="space-y-6 animate-fade-in-up">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold" style={{ color: 'var(--color-text)' }}>דאשבורד</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            {now.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
+          style={{ background: 'rgba(16,185,129,0.1)', color: '#059669', border: '1px solid rgba(16,185,129,0.2)' }}>
+          <span className="pulse-dot" />
+          <span>מעודכן</span>
+        </div>
       </div>
 
-      {/* Chart */}
+      {/* KPI Cards */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        {KPI_STYLES.map((style, i) => {
+          const val = kpiValues[i]
+          const isNeg = val < 0
+          const Icon = style.icon
+          return (
+            <div key={style.label}
+              className="card relative overflow-hidden group cursor-default"
+              style={{ background: style.bg, borderColor: style.borderColor }}>
+              {/* Gradient top border */}
+              <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl"
+                style={{ background: `linear-gradient(90deg, ${style.gradFrom}, ${style.gradTo})` }} />
+              
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: style.iconColor, opacity: 0.8 }}>
+                    {style.label}
+                  </p>
+                  <p className="text-2xl font-extrabold truncate"
+                    style={{ color: isNeg && i === 2 ? '#e11d48' : style.textColor }}>
+                    {fmt(val)}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-2xl flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
+                  style={{ background: style.iconBg }}>
+                  <Icon size={22} style={{ color: style.iconColor }} strokeWidth={2.5} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Charts */}
       <div className="card">
-        <h2 className="text-base md:text-lg font-bold mb-4 flex items-center gap-2">
-          <TrendingUp className="text-indigo-400" size={18} />
+        <h2 className="text-base font-bold mb-5 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+          <TrendingUp size={18} style={{ color: 'var(--color-accent)' }} />
           <span>6 חודשים אחרונים</span>
         </h2>
         <DashboardCharts monthlyData={monthlyData} />
       </div>
 
-      {/* Assets */}
+      {/* Assets summary */}
       {(assets?.length ?? 0) > 0 && (
         <div className="card">
-          <h2 className="text-base md:text-lg font-bold mb-3 flex items-center gap-2">
-            <Landmark className="text-indigo-400" size={18} />
+          <h2 className="text-base font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <Landmark size={18} style={{ color: '#a855f7' }} />
             <span>ריכוז נכסים</span>
           </h2>
           <div className="space-y-1">
             {assets!.map(a => (
               <div key={a.id} className="flex justify-between items-center py-2.5 px-3 table-row rounded-lg">
-                <span className="text-sm font-medium">{a.name}</span>
-                <span className="font-bold text-sm" style={{ color: '#818cf8' }}>
+                <span className="font-semibold text-sm">{a.name}</span>
+                <span className="font-bold text-sm" style={{ color: 'var(--color-accent)' }}>
                   {fmt(assetValues[a.id] ?? 0)}
                 </span>
               </div>

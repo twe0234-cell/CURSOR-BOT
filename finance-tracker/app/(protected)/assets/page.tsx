@@ -106,7 +106,7 @@ export default async function AssetsPage() {
               const icon = ASSET_TYPE_ICONS[a.asset_type] ?? '🗂️'
 
               return (
-                <div key={a.id} className="p-4 rounded-xl" style={{ background: '#12151f', border: '1px solid var(--color-border)' }}>
+              <div key={a.id} className="p-4 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{icon}</span>

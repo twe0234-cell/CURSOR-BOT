@@ -54,14 +54,14 @@ export default async function RulesPage() {
           <div className="space-y-2">
             {rules!.map(r => (
               <div key={r.id} className="flex items-start justify-between gap-2 p-3 rounded-lg"
-                style={{ background: '#12151f', border: '1px solid var(--color-border)' }}>
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 <div className="flex flex-wrap items-center gap-2 text-sm min-w-0">
                   <span className="px-2 py-0.5 rounded text-xs font-mono flex-shrink-0"
                     style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
                     {MATCH_LABELS[r.match_type as keyof typeof MATCH_LABELS]}
                   </span>
                   <span className="font-mono text-xs px-2 py-0.5 rounded truncate max-w-[120px]"
-                    style={{ background: '#0f1117', border: '1px solid var(--color-border)' }}>
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                     &quot;{r.pattern}&quot;
                   </span>
                   <span style={{ color: 'var(--color-muted)' }}>→</span>

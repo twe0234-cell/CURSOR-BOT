@@ -1,6 +1,6 @@
 'use client'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid
 } from 'recharts'
 
 type MonthlyEntry = { name: string; הכנסות: number; הוצאות: number; נטו: number }
@@ -15,19 +15,32 @@ export default function DashboardCharts({ monthlyData }: { monthlyData: MonthlyE
   return (
     <div style={{ direction: 'ltr' }}>
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={monthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false}
+        <BarChart data={monthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={3}>
+          <CartesianGrid vertical={false} stroke="rgba(99,102,241,0.08)" />
+          <XAxis dataKey="name"
+            tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
+            axisLine={false} tickLine={false} />
+          <YAxis
+            tick={{ fill: '#94a3b8', fontSize: 11 }}
+            axisLine={false} tickLine={false}
             tickFormatter={v => `₪${(v / 1000).toFixed(0)}k`} />
           <Tooltip
-            contentStyle={{ background: '#1a1d27', border: '1px solid #2a2d3a', borderRadius: 8 }}
-            labelStyle={{ color: '#f1f5f9', fontWeight: 600 }}
+            contentStyle={{
+              background: 'rgba(255,255,255,0.97)',
+              border: '1px solid rgba(99,102,241,0.18)',
+              borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(99,102,241,0.15)',
+            }}
+            labelStyle={{ color: '#1e293b', fontWeight: 700, marginBottom: 4 }}
             formatter={tooltipFormatter}
+            cursor={{ fill: 'rgba(99,102,241,0.05)' }}
           />
-          <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 12 }} />
-          <Bar dataKey="הכנסות" fill="#10b981" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="הוצאות" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="נטו"    fill="#6366f1" radius={[4, 4, 0, 0]} />
+          <Legend
+            wrapperStyle={{ color: '#64748b', fontSize: 12, paddingTop: 8 }}
+          />
+          <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="נטו"    fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={36} />
         </BarChart>
       </ResponsiveContainer>
     </div>
