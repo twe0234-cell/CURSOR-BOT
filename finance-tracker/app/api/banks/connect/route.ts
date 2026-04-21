@@ -65,21 +65,26 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // Package not installed = expected in dev; log but don't fail the connection save
-      if (!msg.includes('Cannot find module')) scrapeError = msg
+      if (msg.includes('Cannot find module') || msg.includes('ERR_MODULE_NOT_FOUND')) {
+        // Package not installed — expected in some environments; connection still saved
+      } else if (msg.includes('executablePath') || msg.includes('chrome') || msg.includes('Chromium') || msg.includes('ENOENT')) {
+        scrapeError = 'אין גישה לדפדפן בסביבת הפריסה — ייבא CSV באופן ידני'
+      } else {
+        scrapeError = msg
+      }
     }
 
     // Save / update the connection record
     const { error: dbError } = await supabase
       .from('bank_connections')
       .upsert({
-        user_id:       user.id,
-        bank_id:       bankId,
-        display_name:  bankId,
-        is_active:     true,
+        user_id:        user.id,
+        bank_id:        bankId,
+        display_name:   bankId,
+        is_active:      true,
         last_synced_at: scrapeError ? null : new Date().toISOString(),
-        last_error:    scrapeError,
-      }, { onConflict: 'user_id,bank_id,account_number', ignoreDuplicates: false })
+        last_error:     scrapeError,
+      }, { onConflict: 'user_id,bank_id', ignoreDuplicates: false })
 
     if (dbError) throw dbError
 

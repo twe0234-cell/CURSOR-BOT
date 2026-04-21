@@ -117,7 +117,7 @@ create table if not exists bank_connections (
   last_error        text,
   is_active         boolean not null default true,
   created_at        timestamptz default now(),
-  unique (user_id, bank_id, account_number)
+  unique (user_id, bank_id)
 );
 alter table bank_connections enable row level security;
 create policy "own bank connections" on bank_connections using (auth.uid() = user_id);

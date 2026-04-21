@@ -31,7 +31,9 @@ export default async function RulesPage() {
   async function deleteRule(fd: FormData) {
     'use server'
     const sb = await createClient()
-    await sb.from('classification_rules').delete().eq('id', fd.get('id') as string)
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('classification_rules').delete().eq('id', fd.get('id') as string).eq('user_id', u.id)
     revalidatePath('/rules')
   }
 
@@ -51,22 +53,22 @@ export default async function RulesPage() {
         ) : (
           <div className="space-y-2">
             {rules!.map(r => (
-              <div key={r.id} className="flex items-center justify-between p-3 rounded-lg"
+              <div key={r.id} className="flex items-start justify-between gap-2 p-3 rounded-lg"
                 style={{ background: '#12151f', border: '1px solid var(--color-border)' }}>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="px-2 py-0.5 rounded text-xs font-mono"
+                <div className="flex flex-wrap items-center gap-2 text-sm min-w-0">
+                  <span className="px-2 py-0.5 rounded text-xs font-mono flex-shrink-0"
                     style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
                     {MATCH_LABELS[r.match_type as keyof typeof MATCH_LABELS]}
                   </span>
-                  <span className="font-mono text-xs px-2 py-0.5 rounded"
-                    style={{ background: '#12151f', border: '1px solid var(--color-border)' }}>
+                  <span className="font-mono text-xs px-2 py-0.5 rounded truncate max-w-[120px]"
+                    style={{ background: '#0f1117', border: '1px solid var(--color-border)' }}>
                     &quot;{r.pattern}&quot;
                   </span>
                   <span style={{ color: 'var(--color-muted)' }}>→</span>
-                  <span>{categories?.find(c => c.id === r.category_id)?.name ?? '—'}</span>
-                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>p={r.priority}</span>
+                  <span className="truncate">{categories?.find(c => c.id === r.category_id)?.name ?? '—'}</span>
+                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>p={r.priority}</span>
                 </div>
-                <form action={deleteRule}>
+                <form action={deleteRule} className="flex-shrink-0">
                   <input type="hidden" name="id" value={r.id} />
                   <button type="submit" className="text-xs opacity-30 hover:opacity-80"
                     style={{ color: '#f43f5e' }}>✕</button>

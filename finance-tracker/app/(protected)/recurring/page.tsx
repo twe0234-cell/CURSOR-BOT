@@ -40,9 +40,11 @@ export default async function RecurringPage() {
   async function endRecurring(fd: FormData) {
     'use server'
     const sb = await createClient()
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
     await sb.from('recurring_expenses').update({
       end_date: fd.get('end_date') as string,
-    }).eq('id', fd.get('id') as string)
+    }).eq('id', fd.get('id') as string).eq('user_id', u.id)
     revalidatePath('/recurring')
   }
 
@@ -68,7 +70,7 @@ export default async function RecurringPage() {
             {recurring!.map(r => {
               const active = !r.end_date || new Date(r.end_date) >= new Date()
               return (
-                <div key={r.id} className="flex items-center justify-between p-3 rounded-lg"
+                <div key={r.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg"
                   style={{ background: '#12151f', border: '1px solid var(--color-border)', opacity: active ? 1 : 0.5 }}>
                   <div>
                     <p className="font-medium">{r.name}</p>
@@ -77,12 +79,12 @@ export default async function RecurringPage() {
                       {r.end_date && ` עד ${new Date(r.end_date).toLocaleDateString('he-IL')}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-bold" style={{ color: '#f43f5e' }}>{fmt(r.amount)}</span>
                     {active && (
-                      <form action={endRecurring} className="flex gap-1 items-center">
+                      <form action={endRecurring} className="flex gap-1 items-center flex-wrap">
                         <input type="hidden" name="id" value={r.id} />
-                        <input className="input text-xs py-1" style={{ width: 120 }} type="date" name="end_date"
+                        <input className="input text-xs py-1" style={{ width: 130 }} type="date" name="end_date"
                           defaultValue={new Date().toISOString().split('T')[0]} />
                         <button type="submit" className="btn-ghost text-xs py-1 px-2">סיים</button>
                       </form>

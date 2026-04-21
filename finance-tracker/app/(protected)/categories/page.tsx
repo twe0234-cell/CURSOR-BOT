@@ -30,11 +30,17 @@ export default async function CategoriesPage() {
   async function deleteCategory(fd: FormData) {
     'use server'
     const sb = await createClient()
-    await sb.from('categories').delete().eq('id', fd.get('id') as string)
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('categories').delete().eq('id', fd.get('id') as string).eq('user_id', u.id)
     revalidatePath('/categories')
   }
 
-  const grouped = Object.groupBy(cats ?? [], c => c.type)
+  const grouped = (cats ?? []).reduce<Record<string, NonNullable<typeof cats>>>((acc, c) => {
+    acc[c.type] = acc[c.type] ?? []
+    acc[c.type]!.push(c)
+    return acc
+  }, {})
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import CursorBotSync from '@/components/assets/CursorBotSync'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   hishtalmut: 'קרן השתלמות',
@@ -77,7 +76,9 @@ export default async function AssetsPage() {
   async function deleteAsset(fd: FormData) {
     'use server'
     const sb = await createClient()
-    await sb.from('assets').delete().eq('id', fd.get('id') as string)
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('assets').delete().eq('id', fd.get('id') as string).eq('user_id', u.id)
     revalidatePath('/assets')
   }
 
@@ -90,9 +91,6 @@ export default async function AssetsPage() {
           <p className="text-2xl font-bold" style={{ color: '#a5b4fc' }}>{fmt(total)}</p>
         </div>
       </div>
-
-      {/* CURSOR-BOT sync panel */}
-      <CursorBotSync />
 
       {/* Assets list */}
       <div className="card">
