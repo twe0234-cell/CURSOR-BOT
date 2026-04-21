@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:layoutDirection="rtl"
+    app:cardBackgroundColor="@color/card_bg"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="3dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <!-- Device name + MAC row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvDeviceName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="מכשיר Bluetooth"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/tvDeviceMac"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00:00:00:00"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_secondary"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <!-- Sync button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSyncDevice"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="סנכרן"
+                android:textSize="14sp"
+                app:backgroundTint="@color/accent_blue"
+                android:minWidth="80dp" />
+        </LinearLayout>
+
+        <!-- Last sync info -->
+        <TextView
+            android:id="@+id/tvDeviceLastSync"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="טרם סונכרן"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="8dp" />
+
+        <!-- Per-device progress bar -->
+        <ProgressBar
+            android:id="@+id/progressDevice"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:indeterminate="true"
+            android:visibility="gone"
+            android:layout_marginTop="8dp"
+            style="@style/Widget.AppCompat.ProgressBar.Horizontal" />
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent_blue">#2563EB</color>
+    <color name="bg_dark">#121212</color>
+    <color name="card_bg">#1E1E2E</color>
+    <color name="divider">#2D3748</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <string name="accessibility_service_description">שירות זה סורק את המסך של אפליקציית ה-Bluetooth (Topway SYU) כדי לאתר ולשמור אנשי קשר עבור חייגן קולי דרך Google Gemini. השירות אינו אוסף נתונים אחרים או מעבירם מחוץ למכשיר.</string>
+    <string name="app_name">גשר אנשי קשר BT</string>
+    <style name="Theme.BtContactsBridge" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent_blue</item>
+        <item name="colorPrimaryVariant">@color/accent_blue</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
+    </style>
+</resources>

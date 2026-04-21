@@ -1,0 +1,356 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.btbridge"
+4    android:versionCode="3"
+5    android:versionName="1.2" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="28"
+9        android:targetSdkVersion="29" />
+10
+11    <!-- ── Bluetooth ──────────────────────────────────────────────────────── -->
+12    <uses-permission
+12-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:5:5-6:38
+13        android:name="android.permission.BLUETOOTH"
+13-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:5:22-65
+14        android:maxSdkVersion="30" />
+14-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:6:9-35
+15    <uses-permission
+15-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:7:5-8:38
+16        android:name="android.permission.BLUETOOTH_ADMIN"
+16-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:7:22-71
+17        android:maxSdkVersion="30" />
+17-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:8:9-35
+18    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+18-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:9:5-76
+18-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:9:22-73
+19    <uses-permission
+19-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:10:5-11:58
+20        android:name="android.permission.BLUETOOTH_SCAN"
+20-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:10:22-70
+21        android:usesPermissionFlags="neverForLocation" />
+21-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:11:9-55
+22
+23    <!-- ── Contacts ───────────────────────────────────────────────────────── -->
+24    <uses-permission android:name="android.permission.READ_CONTACTS" />
+24-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:14:5-72
+24-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:14:22-69
+25    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+25-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:15:5-73
+25-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:15:22-70
+26    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+26-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:16:5-71
+26-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:16:22-68
+27    <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
+27-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:17:5-80
+27-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:17:22-77
+28
+29    <!-- ── Phone / Call detection ────────────────────────────────────────── -->
+30    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+30-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:20:5-75
+30-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:20:22-72
+31    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+31-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:21:5-72
+31-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:21:22-69
+32
+33    <!-- ── Overlay (for caller display on screen) ────────────────────────── -->
+34    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+34-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:24:5-78
+34-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:24:22-75
+35
+36    <!-- ── Network (for UDP to unit 17) ──────────────────────────────────── -->
+37    <uses-permission android:name="android.permission.INTERNET" />
+37-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:27:5-67
+37-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:27:22-64
+38    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+38-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:28:5-79
+38-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:28:22-76
+39
+40    <!-- ── Foreground / Service ───────────────────────────────────────────── -->
+41    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+41-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:31:5-77
+41-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:31:22-74
+42    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+42-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:32:5-94
+42-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:32:22-91
+43    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+43-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:33:5-88
+43-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:33:22-85
+44    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+44-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:34:5-81
+44-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:34:22-78
+45    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+45-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:35:5-79
+45-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:35:22-76
+46    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+46-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:36:5-81
+46-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:36:22-78
+47    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+47-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:37:5-77
+47-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:37:22-74
+48    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+48-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:38:5-75
+48-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:38:22-72
+49
+50    <uses-feature
+50-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:40:5-87
+51        android:name="android.hardware.bluetooth"
+51-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:40:19-60
+52        android:required="true" />
+52-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:40:61-84
+53
+54    <permission
+54-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+55        android:name="com.btbridge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+55-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+56        android:protectionLevel="signature" />
+56-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+57
+58    <uses-permission android:name="com.btbridge.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+58-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+58-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+59
+60    <application
+60-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:42:5-139:19
+61        android:allowBackup="true"
+61-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:43:9-35
+62        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+62-->[androidx.core:core:1.12.0] C:\Users\T590\.gradle\caches\transforms-4\f41efb211daceaa856bafe06654da2ba\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+63        android:extractNativeLibs="false"
+64        android:icon="@android:drawable/stat_sys_data_bluetooth"
+64-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:45:9-65
+65        android:label="@string/app_name"
+65-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:46:9-41
+66        android:requestLegacyExternalStorage="true"
+66-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:44:9-52
+67        android:supportsRtl="true"
+67-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:47:9-35
+68        android:theme="@style/Theme.BtContactsBridge" >
+68-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:48:9-54
+69        <provider
+70            android:name="androidx.core.content.FileProvider"
+70-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:51:13-62
+71            android:authorities="com.btbridge.fileprovider"
+71-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:52:13-64
+72            android:exported="false"
+72-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:53:13-37
+73            android:grantUriPermissions="true" >
+73-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:54:13-47
+74            <meta-data
+74-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:55:13-57:54
+75                android:name="android.support.FILE_PROVIDER_PATHS"
+75-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:56:17-67
+76                android:resource="@xml/file_paths" />
+76-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:57:17-51
+77        </provider>
+78
+79        <!-- ── Main activity ──────────────────────────────────────────────── -->
+80        <activity
+80-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:61:9-69:20
+81            android:name="com.btbridge.MainActivity"
+81-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:62:13-41
+82            android:exported="true"
+82-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:63:13-36
+83            android:windowSoftInputMode="adjustResize" >
+83-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:64:13-55
+84            <intent-filter>
+84-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:65:13-68:29
+85                <action android:name="android.intent.action.MAIN" />
+85-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:66:17-69
+85-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:66:25-66
+86
+87                <category android:name="android.intent.category.LAUNCHER" />
+87-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:67:17-77
+87-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:67:27-74
+88            </intent-filter>
+89        </activity>
+90
+91        <!-- ── BT Accessibility Scraper ───────────────────────────────────── -->
+92        <service
+92-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:72:9-82:19
+93            android:name="com.btbridge.BtContactsAccessibilityService"
+93-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:73:13-59
+94            android:exported="false"
+94-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:74:13-37
+95            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" >
+95-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:75:13-79
+96            <intent-filter>
+96-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:76:13-78:29
+97                <action android:name="android.accessibilityservice.AccessibilityService" />
+97-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:77:17-92
+97-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:77:25-89
+98            </intent-filter>
+99
+100            <meta-data
+100-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:79:13-81:72
+101                android:name="android.accessibilityservice"
+101-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:80:17-60
+102                android:resource="@xml/accessibility_service_config" />
+102-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:81:17-69
+103        </service>
+104
+105        <!-- ── BT contact sync service ────────────────────────────────────── -->
+106        <service
+106-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:85:9-88:63
+107            android:name="com.btbridge.ContactSyncService"
+107-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:86:13-47
+108            android:exported="false"
+108-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:87:13-37
+109            android:foregroundServiceType="connectedDevice" />
+109-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:88:13-60
+110
+111        <!-- ── Caller display service (overlay + UDP to unit 17) ──────────── -->
+112        <service
+112-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:91:9-94:57
+113            android:name="com.btbridge.CallerService"
+113-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:92:13-42
+114            android:exported="false"
+114-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:93:13-37
+115            android:foregroundServiceType="phoneCall" />
+115-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:94:13-54
+116
+117        <!-- ── BT connection receiver (auto-sync on connect) ─────────────── -->
+118        <receiver
+118-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:97:9-104:20
+119            android:name="com.btbridge.BtReceiver"
+119-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:98:13-39
+120            android:exported="false" >
+120-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:99:13-37
+121            <intent-filter>
+121-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:100:13-103:29
+122                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+122-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:101:17-88
+122-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:101:25-85
+123                <action android:name="android.intent.action.BOOT_COMPLETED" />
+123-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:102:17-79
+123-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:102:25-76
+124            </intent-filter>
+125        </receiver>
+126
+127        <!-- ── Phone call state receiver (caller ID from BT phone) ───────── -->
+128        <receiver
+128-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:107:9-113:20
+129            android:name="com.btbridge.PhoneCallReceiver"
+129-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:108:13-46
+130            android:exported="false" >
+130-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:109:13-37
+131            <intent-filter>
+131-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:110:13-112:29
+132                <action android:name="android.intent.action.PHONE_STATE" />
+132-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:111:17-76
+132-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:111:25-73
+133            </intent-filter>
+134        </receiver>
+135
+136        <!-- ── SyncAdapter stub ───────────────────────────────────────────── -->
+137        <service
+137-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:116:9-125:19
+138            android:name="com.btbridge.SyncAdapterService"
+138-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:117:13-47
+139            android:exported="true" >
+139-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:118:13-36
+140            <intent-filter>
+140-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:119:13-121:29
+141                <action android:name="android.content.SyncAdapter" />
+141-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:120:17-70
+141-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:120:25-67
+142            </intent-filter>
+143
+144            <meta-data
+144-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:122:13-124:55
+145                android:name="android.content.SyncAdapter"
+145-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:123:17-59
+146                android:resource="@xml/syncadapter" />
+146-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:124:17-52
+147        </service>
+148
+149        <!-- ── AccountAuthenticator stub ─────────────────────────────────── -->
+150        <service
+150-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:128:9-137:19
+151            android:name="com.btbridge.AuthenticatorService"
+151-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:129:13-49
+152            android:exported="true" >
+152-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:130:13-36
+153            <intent-filter>
+153-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:131:13-133:29
+154                <action android:name="android.accounts.AccountAuthenticator" />
+154-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:132:17-80
+154-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:132:25-77
+155            </intent-filter>
+156
+157            <meta-data
+157-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:134:13-136:57
+158                android:name="android.accounts.AccountAuthenticator"
+158-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:135:17-69
+159                android:resource="@xml/authenticator" />
+159-->C:\Users\T590\CURSOR-BOT\bt-contacts-bridge\app\src\main\AndroidManifest.xml:136:17-54
+160        </service>
+161
+162        <provider
+162-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+163            android:name="androidx.startup.InitializationProvider"
+163-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+164            android:authorities="com.btbridge.androidx-startup"
+164-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+165            android:exported="false" >
+165-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+166            <meta-data
+166-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+167                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+167-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+168                android:value="androidx.startup" />
+168-->[androidx.emoji2:emoji2:1.2.0] C:\Users\T590\.gradle\caches\transforms-4\5484b64c7630c501c275b954b4844268\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+169            <meta-data
+169-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\T590\.gradle\caches\transforms-4\b6072b9bebaaad68060e6654c7a1ebbd\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+170                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+170-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\T590\.gradle\caches\transforms-4\b6072b9bebaaad68060e6654c7a1ebbd\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+171                android:value="androidx.startup" />
+171-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\T590\.gradle\caches\transforms-4\b6072b9bebaaad68060e6654c7a1ebbd\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+172            <meta-data
+172-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+173                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+173-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+174                android:value="androidx.startup" />
+174-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+175        </provider>
+176
+177        <receiver
+177-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+178            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+178-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+179            android:directBootAware="false"
+179-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+180            android:enabled="true"
+180-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+181            android:exported="true"
+181-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+182            android:permission="android.permission.DUMP" >
+182-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+183            <intent-filter>
+183-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+184                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+184-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+184-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+185            </intent-filter>
+186            <intent-filter>
+186-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+187                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+187-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+187-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+188            </intent-filter>
+189            <intent-filter>
+189-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+190                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+190-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+190-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+191            </intent-filter>
+192            <intent-filter>
+192-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+193                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+193-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+193-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\T590\.gradle\caches\transforms-4\c1edb1fc1b894212c2fcf69d95dd268b\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+194            </intent-filter>
+195        </receiver>
+196    </application>
+197
+198</manifest>

@@ -23,8 +23,9 @@ export default function CsvImport() {
     setStatus('טוען קובץ...')
 
     try {
-      // Dynamically import SheetJS — works with XLS, XLSX, CSV, ODS, TXT
-      const XLSX = (await import('xlsx')).default
+      // Dynamic import — xlsx is a CommonJS module, .default may be undefined
+      const xlsxMod = await import('xlsx')
+      const XLSX = xlsxMod.default ?? xlsxMod
 
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, {
@@ -52,7 +53,7 @@ export default function CsvImport() {
       // Scan up to first 20 rows to find headers (usually contains date/amount/credit/debit)
       let headerIdx = 0
       for (let i = 0; i < Math.min(20, rawRows.length); i++) {
-        const rowString = (rawRows[i] || []).join(' ')
+        const rowString = (rawRows[i] as unknown[] || []).join(' ')
         if (/תאריך|זכות|חובה|סכום עסקה|סכום חיוב/.test(rowString)) {
           headerIdx = i
           break
@@ -81,7 +82,7 @@ export default function CsvImport() {
       const parsed = parseBySource(detectedSource, rows)
 
       if (parsed.length === 0) {
-        setStatus(`לא נמצאו עמודות מתאימות. Headers שנמצאו: ${headers.slice(0, 6).join(', ')}...`)
+        setStatus(`לא נמצאו עמודות מתאימות. Headers שנמצאו: ${headers.slice(0, 6).join(', ')}`)
         return
       }
 
@@ -145,8 +146,8 @@ export default function CsvImport() {
         <button className="btn-ghost text-sm" onClick={() => { setOpen(false); setStatus(null) }}>✕ סגור</button>
       </div>
 
-      {/* Source selector */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Source + file — stack on mobile */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div>
           <label className="label">מקור / בנק</label>
           <select className="input" value={source} onChange={e => setSource(e.target.value)}>
@@ -155,7 +156,7 @@ export default function CsvImport() {
             ))}
           </select>
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-            "זיהוי אוטומטי" ינסה לזהות את הבנק מה-headers
+            &ldquo;זיהוי אוטומטי&rdquo; ינסה לזהות את הבנק מה-headers
           </p>
         </div>
 
@@ -173,8 +174,8 @@ export default function CsvImport() {
         </div>
       </div>
 
-      {/* Hints per bank */}
-      <div className="p-3 rounded-lg text-xs" style={{ background: '#12151f', color: 'var(--color-muted)', lineHeight: 1.8 }}>
+      {/* Hints */}
+      <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(99,102,241,0.06)', color: 'var(--color-muted)', lineHeight: 1.8 }}>
         <strong style={{ color: '#a5b4fc' }}>טיפ לייצוא:</strong>
         &nbsp;הפועלים: אינטרנט בנקאי → תנועות → ייצוא Excel ·
         &nbsp;לאומי: נט&nbsp;→ יומן חשבון → ייצוא ·
@@ -183,9 +184,9 @@ export default function CsvImport() {
         &nbsp;כאל/מקס/ישראכרט: תנועות → ייצוא CSV
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button className="btn-primary text-sm" onClick={handleImport} disabled={loading}>
-          {loading ? 'מייבא...' : 'ייבא'}
+          {loading ? 'מייבא...' : '📤 ייבא'}
         </button>
         {status && (
           <p className="text-sm" style={{

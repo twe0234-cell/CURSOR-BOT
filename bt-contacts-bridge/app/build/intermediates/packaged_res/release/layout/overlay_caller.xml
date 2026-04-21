@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layoutDirection="rtl"
+    android:background="@drawable/glass_background"
+    android:layout_margin="12dp"
+    android:elevation="8dp"
+    android:padding="20dp">
+
+    <!-- Caller status label -->
+    <TextView
+        android:id="@+id/tvCallerStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="מתקשר…"
+        android:textSize="12sp"
+        android:textColor="#90CAF9"
+        android:textAllCaps="true"
+        android:letterSpacing="0.1"
+        android:layout_marginBottom="4dp" />
+
+    <!-- Caller name — large, prominent -->
+    <TextView
+        android:id="@+id/tvCallerName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="שם המתקשר"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <!-- Phone number -->
+    <TextView
+        android:id="@+id/tvCallerNumber"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="050-0000000"
+        android:textSize="16sp"
+        android:textColor="#94A3B8"
+        android:fontFamily="monospace"
+        android:layout_marginTop="2dp" />
+
+</LinearLayout>

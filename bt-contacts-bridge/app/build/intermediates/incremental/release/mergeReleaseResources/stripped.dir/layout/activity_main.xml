@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layoutDirection="rtl"
+    android:background="@color/bg_dark"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ── Header ─────────────────────────────────────────────────────── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="גשר אנשי קשר BT"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:layout_marginTop="20dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="מסנכרן טלפון כשר → Google Gemini"
+            android:textSize="13sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="20dp" />
+
+        <!-- ── Stats card ──────────────────────────────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvTotalContacts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="אנשי קשר מסונכרנים: —"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/tvLastSync"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="טרם בוצע סנכרון"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Paired devices section ─────────────────────────────────────── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="מכשירים מזווגים (Bluetooth)"
+            android:textSize="13sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Device cards inserted here dynamically -->
+        <LinearLayout
+            android:id="@+id/llDeviceContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ── Import VCF button ───────────────────────────────────────────── -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnImportVcf"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="ייבא מקובץ VCF (חלופה)"
+            android:textSize="14sp"
+            app:strokeColor="@color/accent_blue"
+            android:textColor="@color/accent_blue"
+            android:layout_marginBottom="8dp" />
+
+        <ProgressBar
+            android:id="@+id/progressImport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:indeterminate="true"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp" />
+
+        <!-- ── Accessibility Service Status ─────────────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="סריקת אנשי קשר מהמסך (נגישות)"
+                            android:textSize="15sp"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/tvA11yStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="בודק סטטוס..."
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEnableA11y"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="פתח הגדרות נגישות"
+                    android:textSize="13sp"
+                    app:strokeColor="@color/accent_blue"
+                    android:textColor="@color/accent_blue" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Auto-sync toggle ───────────────────────────────────────────── -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="סנכרון אוטומטי"
+                        android:textSize="15sp"
+                        android:textColor="@color/text_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="מסנכרן ברגע שהטלפון מתחבר"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoSync"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Caller display section ─────────────────────────────────────── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="תצוגת מתקשר"
+            android:textSize="13sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginBottom="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <!-- Overlay toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="הצג שם מתקשר על המסך"
+                            android:textSize="15sp"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="באנר גדול בעת שיחה נכנסת"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchCallerOverlay"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
+                <!-- Grant overlay permission button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGrantOverlay"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="אשר הרשאת חלון (נדרש פעם אחת)"
+                    android:textSize="13sp"
+                    app:strokeColor="@color/accent_blue"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- UDP to unit 17 toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="שלח ליחידה 17 (UDP)"
+                            android:textSize="15sp"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="שידור שם מתקשר לתצוגת לוח המחוונים"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchSendUdp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+                </LinearLayout>
+
+                <!-- UDP host field -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilUdpHost"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="כתובת IP של יחידה 17 (למשל 192.168.1.50)"
+                    android:visibility="gone"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_marginBottom="8dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etUdpHost"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:fontFamily="monospace" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- UDP port field -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilUdpPort"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="פורט UDP (ברירת מחדל: 49152)"
+                    android:visibility="gone"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etUdpPort"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:fontFamily="monospace" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── Diagnostics section ────────────────────────────────────────── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="אבחון Bluetooth/מערכת"
+            android:textSize="13sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGenerateReport"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="צור דוח מערכת"
+                    android:textSize="13sp"
+                    app:strokeColor="@color/accent_blue"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnShareLogs"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="שתף דוח אבחון"
+                    android:textSize="13sp"
+                    app:strokeColor="@color/accent_blue"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="שידור דוח דרך הרשת (UDP)"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="IP יעד (למשל 192.168.1.50)"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_marginBottom="8dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etDiagUdpHost"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:fontFamily="monospace" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="פורט יעד (ברירת מחדל: 49153)"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_marginBottom="8dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etDiagUdpPort"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:text="49153"
+                        android:fontFamily="monospace" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSendReportUdp"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="שלח דוח ב-UDP"
+                    android:textSize="13sp"
+                    app:strokeColor="@color/accent_blue"
+                    android:textColor="@color/accent_blue" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── How-to info ────────────────────────────────────────────────── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="לאחר סנכרון, אמור ל-Google Gemini: &#34;חייג לדוד&#34;"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:textAlignment="center"
+            android:layout_marginBottom="32dp" />
+
+    </LinearLayout>
+</ScrollView>

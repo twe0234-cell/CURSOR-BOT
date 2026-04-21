@@ -99,7 +99,7 @@ export async function syncErpData() {
     }
     
     if (totalInvestmentsPaid > 0) {
-      await upsertAssetSnapshot('השקעות ששולמו (STaM)', 'inventory', totalInvestmentsPaid)
+      await upsertAssetSnapshot('השקעות ששולמו (STaM)', 'investment', totalInvestmentsPaid)
     }
 
     revalidatePath('/assets')

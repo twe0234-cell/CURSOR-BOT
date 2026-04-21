@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "com.btbridge.app-mergeReleaseResources-32:/layout/overlay_caller.xml",
+        "source": "com.btbridge.app-main-34:/layout/overlay_caller.xml"
+    },
+    {
+        "merged": "com.btbridge.app-mergeReleaseResources-32:/layout/activity_main.xml",
+        "source": "com.btbridge.app-main-34:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.btbridge.app-mergeReleaseResources-32:/layout/item_device.xml",
+        "source": "com.btbridge.app-main-34:/layout/item_device.xml"
+    }
+]

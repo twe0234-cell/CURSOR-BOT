@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "com.btbridge.app-merged_res-33:/xml_accessibility_service_config.xml.flat",
+        "source": "com.btbridge.app-main-35:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/layout_item_device.xml.flat",
+        "source": "com.btbridge.app-main-35:/layout/item_device.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/drawable_glass_background.xml.flat",
+        "source": "com.btbridge.app-main-35:/drawable/glass_background.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/layout_activity_main.xml.flat",
+        "source": "com.btbridge.app-main-35:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/layout_overlay_caller.xml.flat",
+        "source": "com.btbridge.app-main-35:/layout/overlay_caller.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/xml_syncadapter.xml.flat",
+        "source": "com.btbridge.app-main-35:/xml/syncadapter.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/xml_file_paths.xml.flat",
+        "source": "com.btbridge.app-main-35:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.btbridge.app-merged_res-33:/xml_authenticator.xml.flat",
+        "source": "com.btbridge.app-main-35:/xml/authenticator.xml"
+    }
+]
