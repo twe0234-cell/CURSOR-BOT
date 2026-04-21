@@ -12,25 +12,21 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const now = new Date()
-  const year = now.getFullYear()
+  const now   = new Date()
+  const year  = now.getFullYear()
   const month = now.getMonth() + 1
 
-  // Fetch last 12 months of transactions
   const fromDate = new Date(year, month - 13, 1).toISOString().split('T')[0]
-  const [{ data: txs }, { data: assets }, { data: snapshots }, { data: recurring }] = await Promise.all([
+  const [{ data: txs }, { data: assets }, { data: snapshots }] = await Promise.all([
     supabase.from('transactions').select('date,amount,category_id').eq('user_id', user.id).gte('date', fromDate).order('date'),
     supabase.from('assets').select('id,name,asset_type').eq('user_id', user.id),
     supabase.from('asset_snapshots').select('asset_id,value,snapshot_date').eq('user_id', user.id).order('snapshot_date', { ascending: false }),
-    supabase.from('recurring_expenses').select('amount,start_date,end_date,frequency').eq('user_id', user.id),
   ])
 
-  const thisMonth = summarizeMonth(txs ?? [], year, month)
-
+  const thisMonth  = summarizeMonth(txs ?? [], year, month)
   const assetValues = getLatestAssetValues(snapshots ?? [])
-  const netWorth = calcNetWorth(assetValues)
+  const netWorth   = calcNetWorth(assetValues)
 
-  // Monthly chart data (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(year, month - 1 - (5 - i), 1)
     const y = d.getFullYear(), m = d.getMonth() + 1
@@ -43,60 +39,56 @@ export default async function DashboardPage() {
     }
   })
 
-  const _ = recurring // used for future forecast
-
   const kpis = [
-    { label: 'הכנסות החודש',  value: fmt(thisMonth.income),   color: '#10b981', bg: '#d1fae5', icon: TrendingUp },
-    { label: 'הוצאות החודש',  value: fmt(thisMonth.expenses),  color: '#f43f5e', bg: '#ffe4e6', icon: TrendingDown },
-    { label: 'מאזן נטו',      value: fmt(thisMonth.net),       color: thisMonth.net >= 0 ? '#10b981' : '#f43f5e', bg: thisMonth.net >= 0 ? '#d1fae5' : '#ffe4e6', icon: Wallet },
-    { label: 'שווי נקי כולל', value: fmt(netWorth),            color: '#4f46e5', bg: '#e0e7ff', icon: Landmark },
+    { label: 'הכנסות החודש',  value: fmt(thisMonth.income),   color: '#10b981', icon: TrendingUp },
+    { label: 'הוצאות החודש',  value: fmt(thisMonth.expenses),  color: '#f43f5e', icon: TrendingDown },
+    { label: 'מאזן נטו',      value: fmt(thisMonth.net),       color: thisMonth.net >= 0 ? '#10b981' : '#f43f5e', icon: Wallet },
+    { label: 'שווי נקי כולל', value: fmt(netWorth),            color: '#818cf8', icon: Landmark },
   ]
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <h1 className="text-3xl font-extrabold" style={{ color: 'var(--color-text)' }}>דאשבורד</h1>
+    <div className="space-y-5 animate-fade-in-up">
+      <h1 className="text-2xl md:text-3xl font-extrabold">דאשבורד</h1>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+      {/* KPI Cards — 2 cols on mobile, 4 on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {kpis.map(kpi => (
-          <div key={kpi.label} className="card relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-2 h-full" style={{ background: kpi.color }}></div>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm mb-1 font-medium" style={{ color: 'var(--color-muted)' }}>{kpi.label}</p>
-                <p className="text-3xl font-bold" style={{ color: 'var(--color-text)' }}>{kpi.value}</p>
+          <div key={kpi.label} className="card relative overflow-hidden group p-4 md:p-6">
+            <div className="absolute top-0 right-0 w-1 h-full rounded-r-full" style={{ background: kpi.color }} />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--color-muted)' }}>{kpi.label}</p>
+                <div className="p-1.5 md:p-2 rounded-xl" style={{ background: `${kpi.color}20`, color: kpi.color }}>
+                  <kpi.icon size={16} strokeWidth={2.5} />
+                </div>
               </div>
-              <div className="p-3 rounded-2xl transition-transform group-hover:scale-110" style={{ background: kpi.bg, color: kpi.color }}>
-                <kpi.icon size={26} strokeWidth={2.5} />
-              </div>
+              <p className="text-lg md:text-2xl font-bold truncate" style={{ color: kpi.color }}>{kpi.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Charts */}
+      {/* Chart */}
       <div className="card">
-        <h2 className="text-lg font-bold mb-5 flex items-center gap-2">
-          <TrendingUp className="text-indigo-500" size={20} />
+        <h2 className="text-base md:text-lg font-bold mb-4 flex items-center gap-2">
+          <TrendingUp className="text-indigo-400" size={18} />
           <span>6 חודשים אחרונים</span>
         </h2>
-        <div style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.05))' }}>
-          <DashboardCharts monthlyData={monthlyData} />
-        </div>
+        <DashboardCharts monthlyData={monthlyData} />
       </div>
 
-      {/* Assets summary */}
+      {/* Assets */}
       {(assets?.length ?? 0) > 0 && (
         <div className="card">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Landmark className="text-indigo-500" size={20} />
+          <h2 className="text-base md:text-lg font-bold mb-3 flex items-center gap-2">
+            <Landmark className="text-indigo-400" size={18} />
             <span>ריכוז נכסים</span>
           </h2>
           <div className="space-y-1">
             {assets!.map(a => (
-              <div key={a.id} className="flex justify-between items-center py-3 px-4 table-row rounded-lg">
-                <span className="font-medium">{a.name}</span>
-                <span className="font-bold text-indigo-600">
+              <div key={a.id} className="flex justify-between items-center py-2.5 px-3 table-row rounded-lg">
+                <span className="text-sm font-medium">{a.name}</span>
+                <span className="font-bold text-sm" style={{ color: '#818cf8' }}>
                   {fmt(assetValues[a.id] ?? 0)}
                 </span>
               </div>

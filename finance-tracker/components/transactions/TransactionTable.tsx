@@ -11,7 +11,8 @@ type Cat = { id: string; name: string; type: string }
 
 const SOURCE_LABELS: Record<string, string> = {
   hapoalim: 'הפועלים', leumi: 'לאומי', discount: 'דיסקונט',
-  cal: 'כאל', max: 'מקס', isracard: 'ישראכרט', manual: 'ידני', generic: 'כללי'
+  cal: 'כאל', max: 'מקס', isracard: 'ישראכרט',
+  pagi: 'פאגי', mercantile: 'מרכנתיל', manual: 'ידני', generic: 'כללי'
 }
 
 const fmt = (n: number) =>
@@ -41,71 +42,108 @@ export default function TransactionTable({
   return (
     <div className="card space-y-4">
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <input className="input" style={{ width: 220 }} placeholder="חיפוש תיאור..."
+      <div className="flex gap-2 flex-wrap">
+        <input className="input" style={{ minWidth: 0, flex: '1 1 160px' }}
+          placeholder="חיפוש תיאור..."
           value={search} onChange={e => setSearch(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && applyFilter({ q: search })} />
-        <select className="input" style={{ width: 160 }} value={catFilter}
+        <select className="input" style={{ minWidth: 0, flex: '1 1 130px' }} value={catFilter}
           onChange={e => applyFilter({ cat: e.target.value })}>
           <option value="">כל הקטגוריות</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <button className="btn-primary text-sm px-3 py-2" onClick={() => applyFilter({ q: search })}>
+          חפש
+        </button>
         {(q || catFilter) && (
           <button className="btn-ghost text-sm" onClick={() => { setSearch(''); applyFilter({ q: '', cat: '' }) }}>
-            ✕ נקה
+            ✕
           </button>
         )}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-              <th className="text-right py-2 px-3 font-medium">תאריך</th>
-              <th className="text-right py-2 px-3 font-medium">תיאור</th>
-              <th className="text-right py-2 px-3 font-medium">מקור</th>
-              <th className="text-right py-2 px-3 font-medium">קטגוריה</th>
-              <th className="text-left py-2 px-3 font-medium">סכום</th>
-              <th className="py-2 px-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-10" style={{ color: 'var(--color-muted)' }}>
-                אין תנועות — ייבא CSV או הוסף ידנית
-              </td></tr>
-            ) : transactions.map(tx => (
-              <tr key={tx.id} className="table-row">
-                <td className="py-2 px-3 text-sm" style={{ color: 'var(--color-muted)' }}>
-                  {new Date(tx.date).toLocaleDateString('he-IL')}
-                </td>
-                <td className="py-2 px-3 max-w-xs truncate" title={tx.description}>{tx.description}</td>
-                <td className="py-2 px-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                  {SOURCE_LABELS[tx.source] ?? tx.source}
-                </td>
-                <td className="py-2 px-3">
-                  <select className="input text-xs py-1" style={{ width: 130 }}
+      {transactions.length === 0 ? (
+        <p className="text-center py-10 text-sm" style={{ color: 'var(--color-muted)' }}>
+          אין תנועות — ייבא קובץ או הוסף ידנית
+        </p>
+      ) : (
+        <>
+          {/* ── Desktop table (md+) ─────────────────────────────────── */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
+                  <th className="text-right py-2 px-3 font-medium">תאריך</th>
+                  <th className="text-right py-2 px-3 font-medium">תיאור</th>
+                  <th className="text-right py-2 px-3 font-medium">מקור</th>
+                  <th className="text-right py-2 px-3 font-medium">קטגוריה</th>
+                  <th className="text-left py-2 px-3 font-medium">סכום</th>
+                  <th className="py-2 px-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map(tx => (
+                  <tr key={tx.id} className="table-row">
+                    <td className="py-2 px-3 text-sm whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(tx.date).toLocaleDateString('he-IL')}
+                    </td>
+                    <td className="py-2 px-3 max-w-xs truncate" title={tx.description}>{tx.description}</td>
+                    <td className="py-2 px-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {SOURCE_LABELS[tx.source] ?? tx.source}
+                    </td>
+                    <td className="py-2 px-3">
+                      <select className="input text-xs py-1" style={{ width: 130 }}
+                        value={tx.category_id ?? ''}
+                        onChange={e => startTransition(() => updateCategoryAction(tx.id, e.target.value))}>
+                        <option value="">ללא</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-2 px-3 text-left font-semibold whitespace-nowrap"
+                      style={{ color: tx.amount > 0 ? '#10b981' : '#f43f5e' }}>
+                      {fmt(tx.amount)}
+                    </td>
+                    <td className="py-2 px-3">
+                      <button onClick={() => startTransition(() => deleteAction(tx.id))}
+                        className="text-xs opacity-30 hover:opacity-100 transition-opacity"
+                        style={{ color: '#f43f5e' }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Mobile card list ────────────────────────────────────── */}
+          <div className="md:hidden space-y-2">
+            {transactions.map(tx => (
+              <div key={tx.id} className="flex items-start justify-between p-3 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}>
+                <div className="flex-1 min-w-0 ml-3">
+                  <p className="text-sm font-medium truncate">{tx.description}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {new Date(tx.date).toLocaleDateString('he-IL')} · {SOURCE_LABELS[tx.source] ?? tx.source}
+                  </p>
+                  <select className="input text-xs py-1 mt-1.5" style={{ maxWidth: 160 }}
                     value={tx.category_id ?? ''}
                     onChange={e => startTransition(() => updateCategoryAction(tx.id, e.target.value))}>
-                    <option value="">ללא</option>
+                    <option value="">ללא קטגוריה</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                </td>
-                <td className="py-2 px-3 text-left font-semibold"
-                  style={{ color: tx.amount > 0 ? '#10b981' : '#f43f5e' }}>
-                  {fmt(tx.amount)}
-                </td>
-                <td className="py-2 px-3">
+                </div>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <span className="font-bold text-sm" style={{ color: tx.amount > 0 ? '#10b981' : '#f43f5e' }}>
+                    {fmt(tx.amount)}
+                  </span>
                   <button onClick={() => startTransition(() => deleteAction(tx.id))}
-                    className="text-xs opacity-40 hover:opacity-100 transition-opacity"
+                    className="text-xs opacity-30 hover:opacity-80 transition-opacity"
                     style={{ color: '#f43f5e' }}>✕</button>
-                </td>
-              </tr>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -114,7 +152,9 @@ export default function TransactionTable({
             className={`btn-ghost text-sm ${page <= 1 ? 'opacity-30 pointer-events-none' : ''}`}>
             ‹ הקודם
           </Link>
-          <span className="text-sm" style={{ color: 'var(--color-muted)' }}>עמוד {page} מתוך {totalPages}</span>
+          <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            {page} / {totalPages}
+          </span>
           <Link href={`/transactions?page=${page + 1}&q=${q}&cat=${catFilter}`}
             className={`btn-ghost text-sm ${page >= totalPages ? 'opacity-30 pointer-events-none' : ''}`}>
             הבא ›

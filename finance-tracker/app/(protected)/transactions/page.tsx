@@ -38,14 +38,18 @@ export default async function TransactionsPage({
   async function deleteTransaction(id: string) {
     'use server'
     const sb = await createClient()
-    await sb.from('transactions').delete().eq('id', id)
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('transactions').delete().eq('id', id).eq('user_id', u.id)
     revalidatePath('/transactions')
   }
 
   async function updateCategory(id: string, categoryId: string) {
     'use server'
     const sb = await createClient()
-    await sb.from('transactions').update({ category_id: categoryId || null }).eq('id', id)
+    const { data: { user: u } } = await sb.auth.getUser()
+    if (!u) return
+    await sb.from('transactions').update({ category_id: categoryId || null }).eq('id', id).eq('user_id', u.id)
     revalidatePath('/transactions')
   }
 
