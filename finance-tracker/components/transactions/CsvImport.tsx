@@ -172,6 +172,7 @@ export default function CsvImport() {
       setParseFailed(false)
       setRawTextCache(null)
       if (fileRef.current) fileRef.current.value = ''
+  }
 
   if (!open) return (
     <button className="btn-primary flex items-center gap-2 text-sm" onClick={() => setOpen(true)}>

@@ -120,7 +120,7 @@ export default function PersonalAreaClient() {
                 <span className="text-xs font-bold text-indigo-600">{g.progress}%</span>
               </div>
               <div className="w-full h-2 bg-indigo-50 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-500 rounded-full" style={{ width: \`\${g.progress}%\` }}></div>
+                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${g.progress}%` }}></div>
               </div>
               <p className="text-xs text-slate-600 pt-1 border-t border-indigo-50">{g.tip}</p>
             </div>
