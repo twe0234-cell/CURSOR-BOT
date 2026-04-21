@@ -7,6 +7,7 @@ const BANKS = [
   { id: 'leumi',      name: 'בנק לאומי',         logo: '🟦', color: '#2b6cb0' },
   { id: 'discount',   name: 'בנק דיסקונט',       logo: '🔵', color: '#3182ce' },
   { id: 'mizrahi',    name: 'מזרחי טפחות',       logo: '🟡', color: '#d69e2e' },
+  { id: 'pagi',       name: 'פאגי',              logo: '🏛️', color: '#0891b2' },
   { id: 'max',        name: 'מקס (כרטיס אשראי)', logo: '💳', color: '#805ad5' },
   { id: 'cal',        name: 'כאל (Visa Cal)',    logo: '💳', color: '#38a169' },
   { id: 'isracard',   name: 'ישראכרט',           logo: '💳', color: '#dd6b20' },

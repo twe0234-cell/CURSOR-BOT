@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const SUPPORTED_BANKS = new Set([
-  'hapoalim', 'leumi', 'discount', 'mizrahi', 'max', 'cal', 'isracard'
+  'hapoalim', 'leumi', 'discount', 'mizrahi', 'pagi', 'max', 'cal', 'isracard'
 ])
 
 export async function POST(req: NextRequest) {
