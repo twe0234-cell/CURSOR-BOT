@@ -27,6 +27,8 @@ function edgeKey(from: string, to: string): string {
  */
 const ALLOWED = new Set<string>([
   edgeKey("not_started", "reported_written"),
+  /** קליטת מחסן / המוני — קיצור דרך בלי «דווח נכתב» */
+  edgeKey("not_started", "received"),
   /** קליטה מהסופר — legacy */
   edgeKey("not_started", "written"),
   edgeKey("written", "reported_written"),

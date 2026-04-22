@@ -18,6 +18,10 @@ describe("torah.logic — sheet transitions", () => {
     expect(canTransitionTorahSheet("written", "in_qa")).toBe(true);
   });
 
+  it("allows warehouse shortcut not_started → received", () => {
+    expect(canTransitionTorahSheet("not_started", "received")).toBe(true);
+  });
+
   it("allows in_qa → needs_fixing and approved", () => {
     expect(canTransitionTorahSheet("in_qa", "needs_fixing")).toBe(true);
     expect(canTransitionTorahSheet("in_qa", "approved")).toBe(true);

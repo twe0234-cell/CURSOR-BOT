@@ -26,7 +26,13 @@ export default function PersonalAreaClient() {
     try {
       const res = await fetch('/api/ai/personal')
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error?.message || json.error || 'שגיאה בטעינת נתונים')
+      const errStr = typeof json.error === 'string' ? json.error : JSON.stringify(json.error)
+      if (!res.ok) {
+        if (errStr.includes('503') || errStr.includes('high demand') || errStr.includes('UNAVAILABLE')) {
+          throw new Error('הסוכן החכם עמוס כרגע עקב עומס משתמשים בענן של גוגל 🤯. אנא נסה שוב בעוד כמה דקות.')
+        }
+        throw new Error(errStr || 'שגיאה בטעינת נתונים')
+      }
       setData(json.data)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))

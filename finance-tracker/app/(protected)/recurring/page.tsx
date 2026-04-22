@@ -72,10 +72,12 @@ export default async function RecurringPage() {
 
   const FREQ = { monthly: 'חודשי', quarterly: 'רבעוני', yearly: 'שנתי' }
   const METHODS = {
-    visa: 'כרטיס אשראי',
-    direct_debit: 'הוראת קבע',
-    transfer: 'העברה',
-    manual: 'ידני'
+    cash: 'מזומן',
+    hok_pagi: 'הוק פאגי',
+    hok_mercantile: 'הוק מרכנתיל',
+    visa_chaya: 'ויזה חיה',
+    direct_pagi: 'דיירקט פאגי',
+    credit_mercantile: 'אשראי מרכנתיל'
   }
 
   return (
@@ -182,10 +184,12 @@ export default async function RecurringPage() {
             <div>
               <label className="label">אמצעי תשלום</label>
               <select className="input" name="payment_method">
-                <option value="manual">ידני</option>
-                <option value="visa">כרטיס אשראי</option>
-                <option value="direct_debit">הוראת קבע</option>
-                <option value="transfer">העברה</option>
+                <option value="cash">מזומן</option>
+                <option value="hok_pagi">הוק פאגי</option>
+                <option value="hok_mercantile">הוק מרכנתיל</option>
+                <option value="visa_chaya">ויזה חיה</option>
+                <option value="direct_pagi">דיירקט פאגי</option>
+                <option value="credit_mercantile">אשראי מרכנתיל</option>
               </select>
             </div>
           </div>

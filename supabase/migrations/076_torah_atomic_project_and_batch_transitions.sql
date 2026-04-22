@@ -193,7 +193,7 @@ BEGIN
   FROM target_rows t
   WHERE t.status <> p_to_status
     AND NOT (
-      (t.status = 'not_started' AND p_to_status IN ('written', 'reported_written')) OR
+      (t.status = 'not_started' AND p_to_status IN ('written', 'reported_written', 'received')) OR
       (t.status = 'written' AND p_to_status IN ('reported_written', 'received', 'in_qa')) OR
       (t.status = 'reported_written' AND p_to_status = 'received') OR
       (t.status = 'received' AND p_to_status = 'in_qa') OR
