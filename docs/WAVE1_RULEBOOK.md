@@ -344,7 +344,121 @@ SELECT COUNT(*) AS nulls FROM erp_sales WHERE deal_type IS NULL;
 | קובץ תכנון (מאושר) | `/root/.claude/plans/goofy-jingling-pudding.md` |
 | ספר חוקים זה | `docs/WAVE1_RULEBOOK.md` (ב-repo) |
 | TypeScript types | `src/lib/types/torah.ts` |
-| Migration חדש 1 | `supabase/migrations/079_add_deal_type_discriminator.sql` |
-| Migration חדש 2 | `supabase/migrations/080_torah_projects_3d_status.sql` |
-| בדיקות | `src/services/crm.logic.test.ts` (57 בדיקות) |
+| Migration 079 | `supabase/migrations/079_add_deal_type_discriminator.sql` |
+| Migration 080 | `supabase/migrations/080_torah_projects_3d_status.sql` |
+| Migration 081 (PATCH) | `supabase/migrations/081_sys_audit_log.sql` |
+| בדיקות | `src/services/crm.logic.test.ts` |
 | ארכיטקטורה כללית | `ARCHITECTURE.md`, `CLAUDE.md`, `ENGINEERING_QA_PROTOCOL.md` |
+
+---
+
+## 11. PATCH — Migration 081: sys_audit_log
+
+> **מטרה:** מערכת פיננסית חיה חייבת audit trail. מי שינה, מה שונה, מתי, מ→ל.
+> **מקור:** סיכום 1 מומלץ §4 (audit trail).
+
+**קובץ:** `supabase/migrations/081_sys_audit_log.sql`
+
+```sql
+-- 081: sys_audit_log — audit trail for all financial mutations
+-- ⚠️ APPEND-ONLY — never UPDATE or DELETE rows
+
+CREATE TABLE IF NOT EXISTS sys_audit_log (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID        REFERENCES auth.users(id),
+  table_name   TEXT        NOT NULL,
+  record_id    UUID        NOT NULL,
+  action       TEXT        NOT NULL CHECK (action IN ('INSERT','UPDATE','DELETE')),
+  column_name  TEXT,
+  old_value    JSONB,
+  new_value    JSONB,
+  changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source       TEXT,  -- 'web' | 'cron' | 'admin' | 'trigger'
+  notes        TEXT
+);
+
+-- Indexes לשאילתות
+CREATE INDEX IF NOT EXISTS idx_audit_log_record
+  ON sys_audit_log (table_name, record_id, changed_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_user_date
+  ON sys_audit_log (user_id, changed_at DESC);
+
+-- RLS — קריאה בלבד ע"י admin + יוצר השורה
+ALTER TABLE sys_audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "audit_log_read_own" ON sys_audit_log
+  FOR SELECT USING (user_id = auth.uid());
+
+-- Generic audit trigger function
+CREATE OR REPLACE FUNCTION public.sys_audit_trigger()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO sys_audit_log (user_id, table_name, record_id, action, new_value, source)
+    VALUES (auth.uid(), TG_TABLE_NAME, NEW.id, 'INSERT', to_jsonb(NEW), 'trigger');
+    RETURN NEW;
+  ELSIF TG_OP = 'UPDATE' THEN
+    INSERT INTO sys_audit_log (user_id, table_name, record_id, action, old_value, new_value, source)
+    VALUES (auth.uid(), TG_TABLE_NAME, NEW.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW), 'trigger');
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    INSERT INTO sys_audit_log (user_id, table_name, record_id, action, old_value, source)
+    VALUES (auth.uid(), TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD), 'trigger');
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+-- Attach trigger לטבלאות פיננסיות קריטיות
+DROP TRIGGER IF EXISTS audit_erp_sales           ON erp_sales;
+DROP TRIGGER IF EXISTS audit_erp_payments        ON erp_payments;
+DROP TRIGGER IF EXISTS audit_erp_investments     ON erp_investments;
+DROP TRIGGER IF EXISTS audit_torah_projects      ON torah_projects;
+DROP TRIGGER IF EXISTS audit_torah_transactions  ON torah_project_transactions;
+
+CREATE TRIGGER audit_erp_sales
+  AFTER INSERT OR UPDATE OR DELETE ON erp_sales
+  FOR EACH ROW EXECUTE FUNCTION sys_audit_trigger();
+
+CREATE TRIGGER audit_erp_payments
+  AFTER INSERT OR UPDATE OR DELETE ON erp_payments
+  FOR EACH ROW EXECUTE FUNCTION sys_audit_trigger();
+
+CREATE TRIGGER audit_erp_investments
+  AFTER INSERT OR UPDATE OR DELETE ON erp_investments
+  FOR EACH ROW EXECUTE FUNCTION sys_audit_trigger();
+
+CREATE TRIGGER audit_torah_projects
+  AFTER INSERT OR UPDATE OR DELETE ON torah_projects
+  FOR EACH ROW EXECUTE FUNCTION sys_audit_trigger();
+
+CREATE TRIGGER audit_torah_transactions
+  AFTER INSERT OR UPDATE OR DELETE ON torah_project_transactions
+  FOR EACH ROW EXECUTE FUNCTION sys_audit_trigger();
+```
+
+**⚠️ PITFALL:** `to_jsonb(NEW)` שומר את **כל** השדות. אם יש שדות רגישים (tokens, passwords) — הם נכנסים ל-log. ודא שאין כאלה בטבלאות המסומנות.
+
+**⚠️ PITFALL 2:** triggers מוסיפים I/O לכל INSERT/UPDATE. בדוק performance על טבלאות גדולות לפני שמפעילים בפרודקשן.
+
+**בדיקה:**
+```sql
+-- א. הטבלה קיימת
+SELECT COUNT(*) FROM sys_audit_log;
+
+-- ב. triggers מוצמדים
+SELECT event_object_table, trigger_name
+FROM information_schema.triggers
+WHERE trigger_name LIKE 'audit_%'
+ORDER BY event_object_table;
+
+-- ג. שינוי פיננסי יוצר רשומה
+UPDATE torah_projects SET notes = 'test audit' WHERE id = (SELECT id FROM torah_projects LIMIT 1);
+SELECT action, changed_at, new_value->>'notes' FROM sys_audit_log
+WHERE table_name = 'torah_projects' ORDER BY changed_at DESC LIMIT 1;
+```

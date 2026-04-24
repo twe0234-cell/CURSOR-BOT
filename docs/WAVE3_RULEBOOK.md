@@ -21,15 +21,15 @@
 
 ---
 
-## 1. Migration 085 — ledger_entries (Unified Ledger)
+## 1. Migration 090 — ledger_entries (Unified Ledger)
 
 > **מטרה:** כל תנועת כסף בעסק — מכל מקור — ברשומה אחת.
 > `erp_payments` (sales/investments) + `torah_project_transactions` → שורה אחת ב-ledger.
 
-**קובץ:** `supabase/migrations/085_ledger_entries.sql`
+**קובץ:** `supabase/migrations/090_ledger_entries.sql`
 
 ```sql
--- 085: ledger_entries — unified ledger (append-only)
+-- 090: ledger_entries — unified ledger (append-only)
 -- ⚠️ NEVER UPDATE OR DELETE rows — only INSERT (audit trail)
 
 CREATE TABLE IF NOT EXISTS ledger_entries (
@@ -75,12 +75,12 @@ CREATE INDEX IF NOT EXISTS idx_ledger_entries_deal_type
 
 ---
 
-## 2. Migration 086 — Backfill ledger_entries מ-erp_payments
+## 2. Migration 091 — Backfill ledger_entries מ-erp_payments
 
-**קובץ:** `supabase/migrations/086_ledger_backfill_erp_payments.sql`
+**קובץ:** `supabase/migrations/091_ledger_backfill_erp_payments.sql`
 
 ```sql
--- 086: backfill ledger_entries from erp_payments
+-- 091: backfill ledger_entries from erp_payments
 -- ⚠️ בדוק COUNT לפני ואחרי!
 
 -- ספירה לפני:
@@ -131,14 +131,14 @@ WHERE source_type = 'erp_payment';           -- חייב = N
 
 ---
 
-## 3. Migration 087 — Monthly Dashboard View
+## 3. Migration 092 — Monthly Dashboard View
 
 > **מטרה:** שאילתה אחת שעונה "כמה הרווחתי החודש" מ**כל** סוגי העסקאות.
 
-**קובץ:** `supabase/migrations/087_monthly_dashboard_view.sql`
+**קובץ:** `supabase/migrations/092_monthly_dashboard_view.sql`
 
 ```sql
--- 087: monthly_business_dashboard — unified P&L per month
+-- 092: monthly_business_dashboard — unified P&L per month
 
 CREATE OR REPLACE VIEW monthly_business_dashboard AS
 SELECT
@@ -188,15 +188,15 @@ ORDER BY month DESC, deal_type;
 
 ---
 
-## 4. Migration 088 — Deal Type UI Routing (server config)
+## 4. Migration 093 — Deal Type UI Routing (server config)
 
 > **מטרה:** כל `deal_type` יודע לאיזה route ב-Next.js הוא שייך.
 > זה מאפשר ל-Server Component לעשות redirect אוטומטי.
 
-**קובץ:** `supabase/migrations/088_deal_type_ui_routes.sql`
+**קובץ:** `supabase/migrations/093_deal_type_ui_routes.sql`
 
 ```sql
--- 088: add ui_route to sys_deal_types
+-- 093: add ui_route to sys_deal_types
 
 ALTER TABLE sys_deal_types
   ADD COLUMN IF NOT EXISTS ui_route        TEXT,
@@ -347,13 +347,13 @@ export default async function DealTypeRouter({ params }: Props) {
 
 ```
 שלב 1:  git checkout -b claude/wave3-unified-ledger
-שלב 2:  צור 085_ledger_entries.sql → apply_migration
+שלב 2:  צור 090_ledger_entries.sql → apply_migration
 שלב 3:  בדוק: SELECT COUNT(*) FROM ledger_entries; (צפוי: 0)
-שלב 4:  צור 086_ledger_backfill_erp_payments.sql → apply_migration
+שלב 4:  צור 091_ledger_backfill_erp_payments.sql → apply_migration
 שלב 5:  בדוק ספירה: COUNT(ledger_entries WHERE source_type='erp_payment') = COUNT(erp_payments)
-שלב 6:  צור 087_monthly_dashboard_view.sql → apply_migration
+שלב 6:  צור 092_monthly_dashboard_view.sql → apply_migration
 שלב 7:  בדוק: SELECT * FROM monthly_business_dashboard LIMIT 5;
-שלב 8:  צור 088_deal_type_ui_routes.sql → apply_migration
+שלב 8:  צור 093_deal_type_ui_routes.sql → apply_migration
 שלב 9:  בדוק: SELECT code, ui_route FROM sys_deal_types;
 שלב 10: צור src/lib/types/ledger.ts
 שלב 11: צור src/lib/types/deal.ts
@@ -413,6 +413,318 @@ SELECT get_net_worth_snapshot();
 ◻ WhatsApp automation per deal_type (ברכות, תזכורות, קבלות)
 ◻ לקוח portal — לקוח רואה סטטוס הפרויקט שלו בלבד
 ◻ דוח שנתי PDF — סיכום לחשבונאי
-◻ Multi-user (SaaS) — הפעלת user_id isolation מלאה
 ◻ Mobile-first UI לסופר — עדכון סטטוס יריעות מהשטח
+◻ IVR integration (ימות המשיח) — שעון נוכחות סופר
+◻ External gallery + share links — לסוחרים
+◻ AI "glue only" — quote generator סביב שדות מאושרים
+◻ BI deep analytics — רווחיות לפי סופר/קלף/כתב/מגיה
+◻ Smart pricing engine — מחשבון חוזה מבוסס עלויות היסטוריות
+```
+
+---
+
+## 11. PATCHES — פערים שנמצאו בניתוח שקלול
+
+> **מקור:** שקלול 3 מסמכי סיכום (2026-04-24). Priority B — חובה לפני production.
+
+### 11.1 Migration 094 — `sys_user_roles` + Permission Engine
+
+> **מטרה:** הפרדה רשמית בין תפקידים (admin/employee/client/scribe/trader).
+> לא רק "להסתיר שדות ב-UI" — אלא מנוע הרשאות DB-level.
+> **מקור:** סיכום 1 חובה §10.
+
+**קובץ:** `supabase/migrations/094_sys_user_roles.sql`
+
+```sql
+-- 094: sys_user_roles — formal permission engine
+
+CREATE TABLE IF NOT EXISTS sys_user_roles (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL CHECK (role IN (
+    'admin','employee','client','scribe','trader','partner'
+  )),
+  scope_type   TEXT,  -- 'project' | 'contact' | 'global'
+  scope_id     UUID,  -- project_id / contact_id if scoped
+  granted_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  granted_by   UUID REFERENCES auth.users(id),
+  expires_at   TIMESTAMPTZ,
+  UNIQUE (user_id, role, scope_type, scope_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON sys_user_roles (user_id, role);
+CREATE INDEX IF NOT EXISTS idx_user_roles_scope ON sys_user_roles (scope_type, scope_id);
+
+ALTER TABLE sys_user_roles ENABLE ROW LEVEL SECURITY;
+
+-- רק admin רואה הכל, משתמש רואה את הרולים שלו
+CREATE POLICY "user_roles_self_read" ON sys_user_roles
+  FOR SELECT USING (
+    user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM sys_user_roles r
+      WHERE r.user_id = auth.uid() AND r.role = 'admin'
+    )
+  );
+
+-- רק admin יוצר/מוחק רולים
+CREATE POLICY "user_roles_admin_write" ON sys_user_roles
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM sys_user_roles r
+      WHERE r.user_id = auth.uid() AND r.role = 'admin'
+    )
+  );
+
+-- Helper function
+CREATE OR REPLACE FUNCTION public.has_role(p_role TEXT, p_scope_id UUID DEFAULT NULL)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY INVOKER
+STABLE
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM sys_user_roles
+    WHERE user_id = auth.uid()
+      AND role = p_role
+      AND (scope_id IS NULL OR scope_id = p_scope_id)
+      AND (expires_at IS NULL OR expires_at > now())
+  );
+END;
+$$;
+
+-- Seed: המשתמש הנוכחי יקבל admin
+INSERT INTO sys_user_roles (user_id, role, scope_type)
+SELECT id, 'admin', 'global' FROM auth.users
+WHERE email = (SELECT email FROM auth.users LIMIT 1)
+ON CONFLICT DO NOTHING;
+```
+
+**⚠️ PITFALL:** ה-seed נותן admin למשתמש הראשון. ודא שזה אתה לפני deploy.
+
+**⚠️ PITFALL 2:** אל תפעיל מיד RLS policies שמבוססות על `has_role()` על טבלאות חיות — קודם ודא שיש לך admin role. אחרת תינעל מהנתונים שלך.
+
+---
+
+### 11.2 Migration 095 — `business_exceptions` VIEW
+
+> **מטרה:** דשבורד שצועק — פרויקטים בפיגור, גבייה תקועה, חריגת עלות, חוב פתוח.
+> **מקור:** סיכום 1 מומלץ §3 + סיכום 3 §2.
+
+**קובץ:** `supabase/migrations/095_business_exceptions_view.sql`
+
+```sql
+-- 095: business_exceptions — unified alerts VIEW
+
+CREATE OR REPLACE VIEW business_exceptions AS
+
+-- 1. פרויקטי תורה בפיגור כתיבה
+SELECT
+  'pace_behind'::TEXT                        AS exception_type,
+  'error'::TEXT                              AS severity,
+  pa.project_id                              AS entity_id,
+  'torah_project'::TEXT                      AS entity_type,
+  pa.title                                   AS entity_label,
+  format('פיגור %s עמודות בכתיבה', pa.columns_behind) AS message,
+  jsonb_build_object(
+    'columns_behind', pa.columns_behind,
+    'pace_status',    pa.pace_status
+  ) AS meta,
+  now() AS detected_at
+FROM torah_project_pace_analysis pa
+WHERE pa.pace_status IN ('behind','at_risk')
+
+UNION ALL
+
+-- 2. גבייה תקועה מלקוחות (פיגור > 7 ימים)
+SELECT
+  'collection_overdue'::TEXT,
+  CASE WHEN days_overdue > 30 THEN 'error' ELSE 'warning' END,
+  project_id,
+  'torah_project'::TEXT,
+  NULL,  -- תצטרך JOIN לטבלת torah_projects ב-UI
+  format('%s₪ בפיגור %s ימים מהלקוח', variance_amount, days_overdue),
+  jsonb_build_object(
+    'variance_amount', variance_amount,
+    'days_overdue',    days_overdue,
+    'party',           party
+  ),
+  now()
+FROM torah_payment_schedule_variance
+WHERE party = 'client' AND variance_amount > 0 AND days_overdue > 7
+
+UNION ALL
+
+-- 3. חריגת עלות פרויקט (מעל 10% מהתקציב)
+SELECT
+  'budget_overrun'::TEXT,
+  CASE
+    WHEN cost_variance > planned_total_cost * 0.25 THEN 'error'
+    ELSE 'warning'
+  END,
+  id,
+  'torah_project'::TEXT,
+  title,
+  format('חריגת עלות: %s₪ (+%s%%)',
+    cost_variance::INTEGER,
+    ((cost_variance / NULLIF(planned_total_cost, 0)) * 100)::INTEGER),
+  jsonb_build_object(
+    'cost_variance',      cost_variance,
+    'planned_total_cost', planned_total_cost,
+    'actual_total_cost',  actual_total_cost
+  ),
+  now()
+FROM torah_project_budget_vs_actual
+WHERE cost_variance > planned_total_cost * 0.10
+  AND planned_total_cost > 0
+
+UNION ALL
+
+-- 4. חוב פתוח לסופרים (פיגור בתשלום לסופר)
+SELECT
+  'scribe_debt_overdue'::TEXT,
+  'warning'::TEXT,
+  project_id,
+  'torah_project'::TEXT,
+  NULL,
+  format('חוב לסופר: %s₪ בפיגור %s ימים', variance_amount, days_overdue),
+  jsonb_build_object(
+    'variance_amount', variance_amount,
+    'days_overdue',    days_overdue
+  ),
+  now()
+FROM torah_payment_schedule_variance
+WHERE party = 'scribe' AND variance_amount > 0 AND days_overdue > 14
+
+UNION ALL
+
+-- 5. מכירות לא שולמו (חוב לקוח > 30 ימים מהעסקה)
+SELECT
+  'sale_unpaid'::TEXT,
+  'warning'::TEXT,
+  s.id,
+  'erp_sale'::TEXT,
+  NULL,
+  format('מכירה לא שולמה: %s₪ מתוך %s₪',
+    (s.total_price - COALESCE(p.total_paid, 0))::INTEGER,
+    s.total_price::INTEGER),
+  jsonb_build_object(
+    'unpaid_amount', s.total_price - COALESCE(p.total_paid, 0),
+    'total_price',   s.total_price
+  ),
+  now()
+FROM erp_sales s
+LEFT JOIN (
+  SELECT entity_id, SUM(amount) AS total_paid
+  FROM erp_payments
+  WHERE direction = 'incoming'
+  GROUP BY entity_id
+) p ON p.entity_id = s.id
+WHERE s.status NOT IN ('נמכר','sold','cancelled','paid')
+  AND (s.total_price - COALESCE(p.total_paid, 0)) > 0;
+```
+
+**⚠️ PITFALL:** ה-VIEW תלוי ב-`torah_project_pace_analysis` ו-`torah_payment_schedule_variance` (מ-Wave 2 patches §9.2, §9.3). ודא שהם הוחלו קודם.
+
+**בדיקה:**
+```sql
+-- כל החריגות לפי חומרה
+SELECT exception_type, severity, COUNT(*)
+FROM business_exceptions
+GROUP BY exception_type, severity
+ORDER BY severity, exception_type;
+
+-- top 10 דחופות
+SELECT exception_type, severity, entity_id, message
+FROM business_exceptions
+WHERE severity = 'error'
+LIMIT 10;
+```
+
+---
+
+### 11.3 Server Action — Broadcast Replay
+
+> **מטרה:** כפתור "שלח שוב" ל-broadcast שכבר נשלח.
+> **מקור:** סיכום 3 §8.
+
+**קובץ:** `app/broadcasts/actions.ts` — הוסף את הפעולה הזו:
+
+```typescript
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { createClient } from '@/src/lib/supabase/server';
+
+const ReplayInput = z.object({
+  broadcast_log_id: z.string().uuid(),
+});
+
+export async function replayBroadcast(input: z.infer<typeof ReplayInput>) {
+  const parsed = ReplayInput.parse(input);
+  const supabase = await createClient();
+
+  // טען את ה-broadcast המקורי
+  const { data: original, error: loadErr } = await supabase
+    .from('broadcast_logs')
+    .select('*')
+    .eq('id', parsed.broadcast_log_id)
+    .single();
+
+  if (loadErr || !original) {
+    throw new Error('Broadcast לא נמצא');
+  }
+
+  // צור רשומה חדשה ב-broadcast_queue עם reference למקור
+  const { error: queueErr } = await supabase
+    .from('broadcast_queue')
+    .insert({
+      message_text: original.message_text,
+      audience_filter: original.audience_filter,
+      scheduled_at: new Date().toISOString(),
+      replay_of_log_id: parsed.broadcast_log_id,
+      status: 'pending',
+    });
+
+  if (queueErr) {
+    throw new Error(`Replay נכשל: ${queueErr.message}`);
+  }
+
+  revalidatePath('/broadcasts');
+  return { success: true };
+}
+```
+
+**⚠️ PITFALL:** ודא ש-`broadcast_queue` מכיל את העמודה `replay_of_log_id`. אם לא — הוסף migration קטן:
+
+```sql
+ALTER TABLE broadcast_queue
+  ADD COLUMN IF NOT EXISTS replay_of_log_id UUID REFERENCES broadcast_logs(id);
+```
+
+**UI Integration:** הוסף כפתור ב-`app/broadcasts/page.tsx`:
+
+```typescript
+<form action={async () => {
+  'use server';
+  await replayBroadcast({ broadcast_log_id: log.id });
+}}>
+  <button type="submit">שלח שוב</button>
+</form>
+```
+
+---
+
+## 12. סדר ביצוע גל 3 מעודכן (18 שלבים)
+
+```
+שלבים 1-15: כמו בסעיף §7 (090-093 + TypeScript + router)
+שלב 16: צור 094_sys_user_roles.sql → apply_migration
+שלב 17: בדוק: SELECT * FROM sys_user_roles;  — חייב לראות admin
+שלב 18: צור 095_business_exceptions_view.sql → apply_migration
+שלב 19: בדוק: SELECT * FROM business_exceptions LIMIT 10;
+שלב 20: הוסף replayBroadcast ל-app/broadcasts/actions.ts
+שלב 21: npm test + commit + push → Preview → אישור → merge
 ```
