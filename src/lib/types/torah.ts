@@ -62,6 +62,9 @@ export interface TorahProject {
   scribe_id: string;
   title: string;
   status: TorahProjectStatus;
+  commercial_status?: CommercialStatus;
+  production_status?: ProductionStatus;
+  deal_type?: string | null;
   start_date: string | null;    // ISO date "YYYY-MM-DD"
   target_date: string | null;   // ISO date "YYYY-MM-DD"
   /** Total contract price (₪); financial split is per-column across sheets */
@@ -261,3 +264,48 @@ export const TORAH_SHEET_STATUS_LABELS: Record<TorahSheetStatus, string> = {
 
 /** Total number of sheets in a standard Sefer Torah */
 export const TORAH_SHEET_COUNT = 62;
+
+// ── 3D Status — גל 1 ─────────────────────────────────────────
+
+export const COMMERCIAL_STATUSES = [
+  'lead', 'quoted', 'contract_signed', 'delivered', 'closed', 'cancelled',
+] as const;
+
+export const PRODUCTION_STATUSES = [
+  'not_started', 'writing', 'sheets_received',
+  'in_qa', 'qa_approved', 'sewn', 'delivered',
+] as const;
+
+export const FINANCIAL_STATUSES = [
+  'no_payment', 'deposit_received', 'partially_paid', 'fully_paid',
+] as const;
+
+export type CommercialStatus = typeof COMMERCIAL_STATUSES[number];
+export type ProductionStatus = typeof PRODUCTION_STATUSES[number];
+export type FinancialStatus  = typeof FINANCIAL_STATUSES[number];
+
+export const COMMERCIAL_STATUS_LABELS: Record<CommercialStatus, string> = {
+  lead:            'ליד',
+  quoted:          'הוצע מחיר',
+  contract_signed: 'חוזה חתום',
+  delivered:       'נמסר',
+  closed:          'סגור',
+  cancelled:       'מבוטל',
+};
+
+export const PRODUCTION_STATUS_LABELS: Record<ProductionStatus, string> = {
+  not_started:     'טרם התחיל',
+  writing:         'בכתיבה',
+  sheets_received: 'יריעות התקבלו',
+  in_qa:           'בהגהה',
+  qa_approved:     'הגהה אושרה',
+  sewn:            'תפור',
+  delivered:       'נמסר',
+};
+
+export const FINANCIAL_STATUS_LABELS: Record<FinancialStatus, string> = {
+  no_payment:       'טרם שולם',
+  deposit_received: 'מקדמה התקבלה',
+  partially_paid:   'שולם חלקית',
+  fully_paid:       'שולם במלואו',
+};
