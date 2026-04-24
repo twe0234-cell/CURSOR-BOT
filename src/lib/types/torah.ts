@@ -28,6 +28,38 @@ export function columnsCountForTorahSheetNumber(sheetNumber: number): number {
   return 4;
 }
 
+export const TAGGING_STATUSES = [
+  "not_required", "pending", "in_progress", "completed",
+] as const;
+
+export type TaggingStatus = typeof TAGGING_STATUSES[number];
+
+export const TAGGING_STATUS_LABELS: Record<TaggingStatus, string> = {
+  not_required: "׳׳ ׳ ׳“׳¨׳©",
+  pending: "׳׳׳×׳™׳ ׳׳×׳™׳•׳’",
+  in_progress: "׳‘׳×׳™׳•׳’",
+  completed: "׳×׳•׳™׳’",
+};
+
+export interface TorahBudgetVsActual {
+  id: string;
+  title: string;
+  contract_price: number;
+  planned_scribe: number;
+  planned_parchment: number;
+  planned_proofreading: number;
+  planned_total_cost: number;
+  actual_scribe: number;
+  actual_parchment: number;
+  actual_proofreading: number;
+  actual_total_cost: number;
+  actual_income: number;
+  actual_refunds: number;
+  projected_profit: number;
+  realized_profit: number;
+  cost_variance: number;
+}
+
 // ── Enum-like string literals ────────────────────────────────
 
 export type TorahProjectStatus =
@@ -108,6 +140,7 @@ export interface TorahProject {
   /** סה״כ עלויות מתוכננות לרווח תיאורטי (דוחף על סכימת צילום) */
   estimated_expenses_total: number | null;
   created_at: string;           // ISO timestamptz
+  tagging_status?: TaggingStatus;
 }
 
 /** torah_sheets row — one row per physical יריעה (sheet), 1–62 */
