@@ -6,6 +6,7 @@ import { logError, logInfo } from "@/lib/logger";
 import { resolveContentType } from "@/lib/upload";
 import { greenApiDispatchSpacingDelayMs } from "@/lib/whatsapp/greenApi";
 import type { BroadcastLogRow } from "@/src/lib/types/broadcast";
+import { z } from "zod";
 
 const GREEN_API_URL = "https://api.green-api.com";
 const MEDIA_BUCKET = "media";
@@ -656,4 +657,51 @@ export async function scheduleBroadcastAction(
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
   }
+}
+const ReplayInput = z.object({
+  broadcast_log_id: z.string().uuid(),
+});
+
+export async function replayBroadcast(input: z.infer<typeof ReplayInput>) {
+  const parsed = ReplayInput.parse(input);
+  const supabase = await createClient();
+
+  const { data: original, error: loadErr } = await supabase
+    .from("broadcast_logs")
+    .select("*")
+    .eq("id", parsed.broadcast_log_id)
+    .single();
+
+  if (loadErr || !original) {
+    throw new Error("Broadcast לא נמצא");
+  }
+
+  const payload = {
+    messageText: original.message_text ?? original.message_snippet ?? "",
+    imageUrl: null,
+    tags: original.tags ?? [],
+    scribeCode: original.scribe_code ?? null,
+    internalNotes: original.internal_notes ?? null,
+  };
+
+  const { error: queueErr } = await supabase
+    .from("broadcast_queue")
+    .insert({
+      user_id: original.user_id,
+      payload,
+      replay_of_log_id: parsed.broadcast_log_id,
+      status: "pending",
+      log_details: {
+        replay_of_log_id: parsed.broadcast_log_id,
+        replay_source: "manual",
+      },
+    });
+
+  if (queueErr) {
+    throw new Error(`Replay נכשל: ${queueErr.message}`);
+  }
+
+  revalidatePath("/broadcast");
+  revalidatePath("/whatsapp");
+  return { success: true };
 }
