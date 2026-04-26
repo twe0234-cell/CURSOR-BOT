@@ -32,6 +32,9 @@ Start a safe, additive first pass of premium Hidur HaSTaM visual polish focused 
   - Compact contextual subtitles
   - Tabular numbers in KPI values for premium financial readability
 - Preserve RTL-first readability and avoid large text blocks.
+- Build reliability note:
+  - Temporarily disable `Frank_Ruhl_Libre` from `next/font/google` due to build instability in this environment.
+  - Use CSS/system serif fallback via `--font-display` until a licensed/local display font is supplied.
 
 ## Component Targets
 - New reusable brand surface component for dashboard banner and KPI cards.
@@ -63,6 +66,7 @@ Potential future phases (not in this pass):
 - Over-styling may reduce information density/readability on finance-heavy dashboard cards.
 - Motion can feel noisy if applied too broadly.
 - Existing in-progress local CSS changes may overlap visually with dashboard updates.
+- Remote font fetching can fail in CI/local network conditions; avoid making critical build paths depend on optional display web-font fetches.
 
 ## Rollback Plan
 - All changes are component-level and additive:

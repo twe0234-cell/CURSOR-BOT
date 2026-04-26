@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Heebo, Geist_Mono, Frank_Ruhl_Libre } from "next/font/google";
+import { Heebo, Geist_Mono } from "next/font/google";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import "./globals.css";
 import NavBar from "./components/NavBar";
@@ -14,14 +14,6 @@ const heebo = Heebo({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-// Serif display — reserved for Display / H1 / H2 headings.
-// Evokes traditional Hebrew book typography (appropriate for a סת״ם ERP).
-const frankRuhl = Frank_Ruhl_Libre({
-  variable: "--font-display",
-  subsets: ["latin", "hebrew"],
-  weight: ["500", "700", "900"],
 });
 
 const APP_TITLE = "הידור הסת״ם";
@@ -67,7 +59,7 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <body
-        className={`${heebo.variable} ${geistMono.variable} ${frankRuhl.variable} font-sans antialiased overflow-x-hidden min-w-0 bg-background`}
+        className={`${heebo.variable} ${geistMono.variable} font-sans antialiased overflow-x-hidden min-w-0 bg-background`}
       >
         <NavBar />
         {children}
