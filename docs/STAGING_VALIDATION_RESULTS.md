@@ -4,107 +4,82 @@ Date: 2026-04-26
 Branch: `codex/finalize-claude-erp-waves`  
 PR: `#2 - Prepare Claude ERP waves for safe review`  
 Issue: `#3`  
-Status: `BLOCKED`
+Status: `BLOCKED` (Supabase staging/clone not provable; no database connectivity)
 
-## Summary
+## Supabase pre-flight (required before any SQL)
 
-Supabase staging validation did not run because staging/clone database access is not available in this local environment.
+| Check | Result |
+| --- | --- |
+| Supabase project ref (from API URL) | **Unavailable** — `NEXT_PUBLIC_SUPABASE_URL` is present in `.env.local` but **empty** |
+| Database host / project ref (from `DATABASE_URL`) | **Unavailable** — `DATABASE_URL` is **empty** |
+| Environment variables present by name (values not recorded) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (and other app secrets per `.env.example`) |
+| Staging/clone vs production | **Cannot determine.** With no project URL, ref, or Postgres host, the connected project cannot be identified, so it cannot be proven non-production. |
+| Migrations 079–098 applied or validated on Supabase | **No** — no connection; **nothing applied** (including production) |
 
-No production database was touched. No migrations were applied. No destructive database commands were run.
+**Safety compliance:** No production database was touched. No migrations were applied anywhere. No destructive SQL was run. PR #2 was not merged and was not converted from Draft. Supabase SQL Editor / CLI was not used because there is no configured staging target.
 
-## What Was Checked Locally
+## Local verification (this workspace)
 
-- Current branch is `codex/finalize-claude-erp-waves`.
-- Required documentation was reviewed:
-  - `docs/STAGING_VALIDATION_RUNBOOK.md`
-  - `docs/PR_READINESS_CHECKLIST.md`
-  - `docs/CODEX_MERGE_AUDIT.md`
-- Local env files were checked:
-  - `.env.example` exists.
-  - No local `.env`, `.env.local`, or staging env file is present.
-- Relevant environment variable names were checked:
-  - No `SUPABASE`, `POSTGRES`, `DATABASE`, `DB_`, or `VERCEL` variables are available in the shell environment.
-- Local project links were checked:
-  - `.vercel` project link is not present.
-  - `supabase/migrations` exists locally.
+Commands run on branch `codex/finalize-claude-erp-waves` after `git fetch` / `git pull` (fast-forward to `origin`).
 
-## Missing Access / Credentials
+| Command | Result |
+| --- | --- |
+| `npm test` | **Pass** — 244 tests, 8 files |
+| `npm run build` | **Pass** — Next.js 16.1.6 production build completed |
+| `npm run audit:migrations` | **Pass** — 102 migrations reported (duplicate filename numbering and historical `drop` findings in older files per script output) |
+| `npm run list:surfaces` | **Pass** — Pages 31, API routes 18, server actions 21, migrations 102, tests 8 |
 
-Validation requires one of the following staging-only access paths:
+### Second run (post-documentation pass)
 
-- Supabase staging/clone project URL and project ref.
-- A staging-only Postgres connection string or database URL with permission to apply migrations and run the SQL checks.
-- OR Supabase CLI access for the staging/clone project, including access token/project ref/database password as required by the CLI.
-- Confirmation that the target Supabase project is a staging/clone database and not production.
-- Confirmation that a recent production backup exists before any staging migration rehearsal.
-- Vercel Preview URL or confirmation that PR #2 preview/build is green and connected to staging/clone data.
+| Command | Result |
+| --- | --- |
+| `npm test` | **Pass** — 244/244 |
+| `npm run build` | **Pass** |
 
-Do not provide production credentials for this validation.
+## Manual SQL checks (Supabase staging/clone)
 
-## Required Supabase Steps Before Validation Can Continue
+**Not executed.** Blocked for the same reason as migrations: no valid `DATABASE_URL` or project URL, so the runbook queries (deal types, Torah status axes, ledger counts, duplicate ledger, `erp_payments` vs ledger, `torah_project_transactions` vs ledger, audit triggers, `business_exceptions`, `get_net_worth_snapshot()`, `monthly_business_dashboard`) were not run.
 
-1. Create or identify the Supabase staging/clone project.
-2. Confirm the project is not production.
-3. Confirm a recent production database backup exists and is accessible.
-4. Provide staging-only connection access using one approved method:
-   - Supabase SQL Editor access for the staging/clone project, or
-   - staging Postgres connection string, or
-   - Supabase CLI credentials/project ref for the staging/clone project.
-5. Apply migrations `079` through `098` to staging/clone only.
-6. Run every SQL block in `docs/STAGING_VALIDATION_RUNBOOK.md`.
-7. Record the query outputs in this file or in the PR notes.
-8. Run the smoke test checklist from `docs/STAGING_VALIDATION_RUNBOOK.md`.
-9. Keep PR #2 as Draft until all staging checks pass.
+## Detailed checklist (N/A = blocked)
 
-## SQL Checks Not Yet Run
+| Item | Status |
+| --- | --- |
+| Confirmed Supabase project is staging/clone | **No** |
+| Migrations 079–098 applied/validated on staging | **No** |
+| SQL checks (aggregate) | **Not run** (blocked) |
+| Ledger duplicate status | **Not verified** |
+| Audit trigger status | **Not verified** |
+| Net worth function status | **Not verified** |
+| Business exceptions status | **Not verified** |
+| Smoke test (Vercel Preview / staging data) | **Not run** |
+| PR #2 can move from Draft to Ready | **No** — staging DB validation and smoke tests are incomplete; production backup not confirmed in this run |
 
-The following checks are still pending on staging:
+## Blockers (for Ready)
 
-- Deal types.
-- Torah commercial/production status axes.
-- Ledger counts by `source_type`.
-- Duplicate ledger rows.
-- `erp_payments` count vs `ledger_entries` count.
-- positive `torah_project_transactions` count vs `ledger_entries` count.
-- Audit triggers.
-- Business exceptions.
-- `public.get_net_worth_snapshot()`.
-- `public.monthly_business_dashboard`.
+1. **No provable non-production Supabase target:** Local `.env.local` does not set `NEXT_PUBLIC_SUPABASE_URL` or `DATABASE_URL` (empty). Without a project ref and a policy-backed statement that the target is staging/clone (not production), pre-flight fails per `docs/STAGING_VALIDATION_RUNBOOK.md` section A.
+2. Migrations 079–098 not applied/validated on any database from this environment.
+3. All manual SQL checks from `docs/STAGING_VALIDATION_RUNBOOK.md` are pending.
+4. Vercel Preview smoke tests against staging/clone data not performed here.
 
-## Local Verification Results
+## What is needed to unblock
 
-These checks were run locally on the branch after recording the staging blocker:
+1. Configure **staging/clone only** credentials locally or run SQL in the Supabase Dashboard on a project that is **documented and verified** as non-production (e.g. separate project name/ref from production, or internal runbook with production ref vs staging ref).
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `DATABASE_URL` (or use Supabase CLI with a **staging** project ref) for that project only.
+3. Apply/validate migrations 079–098 on staging, then re-run this results file and the full SQL + smoke list.
 
-- `npm test`: passed, 244/244 tests.
-- `npm run build`: passed.
-- `npm run audit:migrations`: passed; 102 migrations detected. Historical duplicate numbering and risky findings remain in older migrations.
-- `npm run list:surfaces`: passed; Pages 31, API routes 18, server actions 21, migrations 102, tests 8.
+## If validation had passed (policy reminder)
 
-## Smoke Tests Not Yet Run
+Per operator instructions: still **do not merge** from this process; PR #2 may be considered for **Ready** only after user approval and confirmed production backup — not done in this run.
 
-The following app-level checks are still pending on the Vercel Preview connected to staging/clone data:
+## Merge Readiness (PR #2)
 
-- Login works.
-- CRM list opens.
-- Contact detail opens.
-- Torah list opens.
-- Torah project detail opens.
-- Broadcast page opens.
-- `replayBroadcast` works only for own broadcasts.
-- Dashboard pages do not crash.
-- Transactions page opens.
-- Investments page opens.
+- **Move from Draft to Ready:** **Not recommended** until Supabase staging proof, migrations, SQL checks, and smoke tests succeed.
 
-## Merge Readiness
+## Documentation reviewed
 
-PR #2 cannot move from Draft to Ready yet.
+- `docs/STAGING_VALIDATION_RUNBOOK.md`
+- `docs/PR_READINESS_CHECKLIST.md`
+- `docs/CODEX_MERGE_AUDIT.md`
+- `docs/AI_AGENT_SAFETY_RULES.md` (reference)
 
-Required before Ready:
-
-- `npm test` passes.
-- `npm run build` passes.
-- Vercel Preview works.
-- Staging/clone migrations `079`-`098` apply successfully.
-- Manual SQL checks pass.
-- Smoke tests pass.
-- Production DB backup is ready.
+No production resources were used. This file is the only intended commit for the validation run (documentation/results only).
