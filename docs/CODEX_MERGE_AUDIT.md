@@ -1,6 +1,6 @@
 # Codex Merge Audit - Claude ERP Waves
 
-Date: 2026-04-26
+Date: 2026-04-26  
 Branch: `codex/finalize-claude-erp-waves`
 
 ## A. What Claude Implemented
@@ -12,17 +12,12 @@ Branch: `codex/finalize-claude-erp-waves`
 
 ## B. What Claude Documented But Did Not Implement
 
-- `docs/WAVE1_RULEBOOK.md` documents a `sys_audit_log` audit trail concept, but no audit log table/function/triggers existed in migrations `079`-`096`.
-- `docs/WAVE3_RULEBOOK.md` describes `ledger_entries` as a unified ledger for `erp_payments` and `torah_project_transactions`, but the implemented migration only backfills existing `erp_payments`. No future-write trigger or server-side insert path currently creates `ledger_entries` for new `erp_payments` or `torah_project_transactions`.
-- Wave 3 documentation implies coverage for Torah transactions in the unified ledger, but there is no backfill migration for existing `torah_project_transactions`.
+- `docs/WAVE1_RULEBOOK.md` documented a `sys_audit_log` audit trail concept, but no audit log table/function/triggers existed in migrations `079`-`096`.
+- `docs/WAVE3_RULEBOOK.md` described `ledger_entries` as a unified ledger for `erp_payments` and `torah_project_transactions`, but the original Wave 3 implementation only backfilled existing `erp_payments`. Codex Wave 3.5 completes this with migration `098`.
 
 ## C. What Codex Fixed Now
 
-- Fixed corrupted Hebrew labels in `TAGGING_STATUS_LABELS`:
-  - `not_required`: `לא נדרש`
-  - `pending`: `ממתין לתיוג`
-  - `in_progress`: `בתיוג`
-  - `completed`: `תויג`
+- Fixed corrupted Hebrew labels in `TAGGING_STATUS_LABELS`: `לא נדרש`, `ממתין לתיוג`, `בתיוג`, `תויג`.
 - Hardened `replayBroadcast` authorization:
   - Authenticates with `supabase.auth.getUser()` before loading data.
   - Loads `broadcast_logs` by both `id` and authenticated `user_id`.
@@ -32,19 +27,24 @@ Branch: `codex/finalize-claude-erp-waves`
   - Enables RLS and adds a safe own-row SELECT policy.
   - Adds indexes for record timeline and user timeline lookups.
   - Creates `public.sys_audit_trigger()`.
-  - Conditionally attaches triggers only to existing allowed business tables: `erp_sales`, `erp_payments`, `erp_investments`, `torah_projects`, `torah_project_transactions`.
+  - Conditionally attaches triggers only to existing allowed business tables.
+- Added `098_ledger_consistency.sql`:
+  - Adds one-to-one duplicate protection for `erp_payment` and `torah_transaction` ledger sources when no duplicates already exist.
+  - Backfills existing `torah_project_transactions` to `ledger_entries`.
+  - Adds future sync for new `erp_payments`.
+  - Adds future sync for new `torah_project_transactions`.
+  - Documents mapping assumptions in SQL comments.
 
 ## D. Remaining Risks Before Merge
 
-- `ledger_entries` is not yet future-consistent. New `erp_payments` inserts from `app/payments/actions.ts`, `app/transactions/actions.ts`, and investment/sales flows do not automatically insert into `ledger_entries`.
-- New `torah_project_transactions` inserts from `app/torah/[id]/actions.ts`, `src/services/torah.service.ts`, and DB automation such as tagging cost triggers do not automatically insert into `ledger_entries`.
-- Existing `torah_project_transactions` are not backfilled into `ledger_entries`.
+- Wave 3.5 ledger consistency is implemented, but must be verified on a Supabase staging clone before production.
+- If staging already contains duplicate `ledger_entries` rows for the same `erp_payment` or `torah_transaction`, migration `098` intentionally skips creating that partial unique index and raises a notice; inspect duplicates manually before production.
 - Existing lint baseline fails on tracked code unrelated to this stabilization pass. Do not mass-fix before merge unless explicitly scoped.
-- Migration audit tooling reports historical risky operations in older migrations. The new `097` migration is additive, but the full migration history still needs staging validation.
+- Migration audit tooling reports historical risky operations in older migrations. The new `097` and `098` migrations are additive, but the full migration history still needs staging validation.
 
 ## E. Manual SQL Checks Required In Supabase Staging Before Production
 
-Run on a staging clone before production:
+Do not apply migrations directly to production before a staging clone test.
 
 ```sql
 SELECT COUNT(*) FROM public.sys_audit_log;
@@ -56,13 +56,27 @@ ORDER BY 1, 2;
 
 SELECT COUNT(*) FROM public.erp_payments;
 
-SELECT COUNT(*) FROM public.ledger_entries
+SELECT COUNT(*)
+FROM public.ledger_entries
 WHERE source_type = 'erp_payment';
 
 SELECT COUNT(*) FROM public.torah_project_transactions;
 
-SELECT COUNT(*) FROM public.ledger_entries
+SELECT COUNT(*)
+FROM public.ledger_entries
 WHERE source_type = 'torah_transaction';
+
+SELECT source_type, COUNT(*)
+FROM public.ledger_entries
+GROUP BY source_type
+ORDER BY source_type;
+
+SELECT source_type, source_id, COUNT(*)
+FROM public.ledger_entries
+WHERE source_type IN ('erp_payment', 'torah_transaction')
+GROUP BY source_type, source_id
+HAVING COUNT(*) > 1
+ORDER BY COUNT(*) DESC;
 
 SELECT table_name, record_id, action, changed_at
 FROM public.sys_audit_log
@@ -74,7 +88,8 @@ Expected staging interpretation:
 
 - Audit trigger count should match the subset of target tables that exist in the environment.
 - `ledger_entries` rows for `erp_payment` should match the one-time backfill expectation from migration `091`.
-- `ledger_entries` rows for `torah_transaction` are expected to be missing unless a later migration adds Torah transaction backfill/future-write coverage.
+- `ledger_entries` rows for `torah_transaction` should match positive-amount `torah_project_transactions` after migration `098`.
+- Duplicate query should return zero rows for `erp_payment` and `torah_transaction`.
 
 ## F. Recommended Merge Path
 
