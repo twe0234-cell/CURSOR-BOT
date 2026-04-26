@@ -44,11 +44,27 @@ export type LedgerEntryRow = {
   notes: string | null;
 };
 
+export type TorahFinancialSnapshotRow = {
+  user_id: string;
+  project_id: string;
+  project_label: string | null;
+  customer_label: string | null;
+  commercial_status: string | null;
+  production_status: string | null;
+  contract_amount: number;
+  received_amount: number;
+  actual_cost: number;
+  expected_profit: number;
+  realized_profit: number;
+  cashflow_status: string | null;
+};
+
 export type ReadOnlyErpDashboard = {
   netWorth: NetWorthSnapshot | null;
   monthlyCashflow: MonthlyBusinessDashboardRow[];
   businessExceptions: BusinessExceptionRow[];
   recentLedgerEntries: LedgerEntryRow[];
+  torahFinancialSnapshot: TorahFinancialSnapshotRow[];
   errors: string[];
   loadedAt: string;
 };
@@ -111,6 +127,18 @@ export async function fetchReadOnlyErpDashboard(): Promise<
     .limit(12);
   if (ledgerError) errors.push(`ledger_entries: ${ledgerError.message}`);
 
+  const { data: torahSnapshotRows, error: torahSnapshotError } = await supabase
+    .from("torah_financial_dashboard_snapshot")
+    .select(
+      "user_id, project_id, project_label, customer_label, commercial_status, production_status, contract_amount, received_amount, actual_cost, expected_profit, realized_profit, cashflow_status",
+    )
+    .eq("user_id", user.id)
+    .order("project_label", { ascending: true })
+    .limit(12);
+  if (torahSnapshotError) {
+    errors.push(`torah_financial_dashboard_snapshot: ${torahSnapshotError.message}`);
+  }
+
   return {
     success: true,
     dashboard: {
@@ -144,6 +172,20 @@ export async function fetchReadOnlyErpDashboard(): Promise<
         project_id: row.project_id ?? null,
         investment_id: row.investment_id ?? null,
         notes: row.notes ?? null,
+      })),
+      torahFinancialSnapshot: (torahSnapshotRows ?? []).map((row) => ({
+        user_id: String(row.user_id),
+        project_id: String(row.project_id),
+        project_label: row.project_label ?? null,
+        customer_label: row.customer_label ?? null,
+        commercial_status: row.commercial_status ?? null,
+        production_status: row.production_status ?? null,
+        contract_amount: toNumber(row.contract_amount),
+        received_amount: toNumber(row.received_amount),
+        actual_cost: toNumber(row.actual_cost),
+        expected_profit: toNumber(row.expected_profit),
+        realized_profit: toNumber(row.realized_profit),
+        cashflow_status: row.cashflow_status ?? null,
       })),
       errors,
       loadedAt,

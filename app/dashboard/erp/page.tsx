@@ -48,6 +48,16 @@ function cashflowTone(value: number): string {
   return "text-muted-foreground";
 }
 
+function torahCashflowStatusLabel(value: string | null): string {
+  const labels: Record<string, string> = {
+    collected: "נגבה במלואו",
+    partial_collection: "גבייה חלקית",
+    uncollected: "טרם נגבה",
+    no_contract: "ללא חוזה",
+  };
+  return value ? labels[value] ?? value : "לא ידוע";
+}
+
 function monthlyTotals(rows: MonthlyBusinessDashboardRow[]) {
   return rows.reduce(
     (acc, row) => ({
@@ -301,13 +311,59 @@ export default async function ErpDashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-dashed border-border/90 bg-muted/30">
-        <CardContent className="flex gap-3 pt-6 text-sm text-muted-foreground">
-          <BookOpen className="mt-0.5 size-4 shrink-0 text-accent" />
-          <p>
-            Snapshot פרויקטי ס״ת נדחה בכוונה: `torah_project_budget_vs_actual` קיים, אך לא חושף `user_id`
-            לסינון tenant מפורש בשכבת ה-UI. מומלץ להוסיף read model מאושר לפני הצגה ישירה.
+      <Card className="rounded-2xl border-border/80">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <BookOpen className="size-5 text-accent" />
+            Snapshot פיננסי — פרויקטי ס״ת
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            מקור: `public.torah_financial_dashboard_snapshot` עם סינון מפורש לפי `user_id`.
           </p>
+        </CardHeader>
+        <CardContent>
+          {dashboard.torahFinancialSnapshot.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              אין כרגע נתוני פרויקטים להצגה.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">פרויקט</TableHead>
+                  <TableHead className="text-right">לקוח</TableHead>
+                  <TableHead className="text-right">סטטוס מסחרי</TableHead>
+                  <TableHead className="text-right">סטטוס ייצור</TableHead>
+                  <TableHead className="text-right">חוזה</TableHead>
+                  <TableHead className="text-right">התקבל</TableHead>
+                  <TableHead className="text-right">עלות בפועל</TableHead>
+                  <TableHead className="text-right">רווח צפוי</TableHead>
+                  <TableHead className="text-right">רווח ממומש</TableHead>
+                  <TableHead className="text-right">מצב תזרים</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dashboard.torahFinancialSnapshot.map((row) => (
+                  <TableRow key={row.project_id}>
+                    <TableCell className="font-medium">{row.project_label ?? "ללא שם"}</TableCell>
+                    <TableCell>{row.customer_label ?? "ללא לקוח"}</TableCell>
+                    <TableCell>{row.commercial_status ?? "—"}</TableCell>
+                    <TableCell>{row.production_status ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums">{shekel(row.contract_amount)}</TableCell>
+                    <TableCell className="tabular-nums">{shekel(row.received_amount)}</TableCell>
+                    <TableCell className="tabular-nums">{shekel(row.actual_cost)}</TableCell>
+                    <TableCell className={cn("tabular-nums", cashflowTone(row.expected_profit))}>
+                      {shekel(row.expected_profit)}
+                    </TableCell>
+                    <TableCell className={cn("tabular-nums font-semibold", cashflowTone(row.realized_profit))}>
+                      {shekel(row.realized_profit)}
+                    </TableCell>
+                    <TableCell>{torahCashflowStatusLabel(row.cashflow_status)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </main>
