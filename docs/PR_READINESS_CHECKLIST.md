@@ -83,6 +83,10 @@ Suggested PR body:
 
 Do not apply migrations directly to production before a staging clone test.
 
+## Staging Validation Runbook
+
+Use [STAGING_VALIDATION_RUNBOOK.md](./STAGING_VALIDATION_RUNBOOK.md) as the operator-facing checklist before converting PR #2 from Draft to Ready.
+
 Required staging checks:
 
 ```sql
