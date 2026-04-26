@@ -28,6 +28,38 @@ export function columnsCountForTorahSheetNumber(sheetNumber: number): number {
   return 4;
 }
 
+export const TAGGING_STATUSES = [
+  "not_required", "pending", "in_progress", "completed",
+] as const;
+
+export type TaggingStatus = typeof TAGGING_STATUSES[number];
+
+export const TAGGING_STATUS_LABELS: Record<TaggingStatus, string> = {
+  not_required: "לא נדרש",
+  pending: "ממתין לתיוג",
+  in_progress: "בתיוג",
+  completed: "תויג",
+};
+
+export interface TorahBudgetVsActual {
+  id: string;
+  title: string;
+  contract_price: number;
+  planned_scribe: number;
+  planned_parchment: number;
+  planned_proofreading: number;
+  planned_total_cost: number;
+  actual_scribe: number;
+  actual_parchment: number;
+  actual_proofreading: number;
+  actual_total_cost: number;
+  actual_income: number;
+  actual_refunds: number;
+  projected_profit: number;
+  realized_profit: number;
+  cost_variance: number;
+}
+
 // ── Enum-like string literals ────────────────────────────────
 
 export type TorahProjectStatus =
@@ -62,6 +94,9 @@ export interface TorahProject {
   scribe_id: string;
   title: string;
   status: TorahProjectStatus;
+  commercial_status?: CommercialStatus;
+  production_status?: ProductionStatus;
+  deal_type?: string | null;
   start_date: string | null;    // ISO date "YYYY-MM-DD"
   target_date: string | null;   // ISO date "YYYY-MM-DD"
   /** Total contract price (₪); financial split is per-column across sheets */
@@ -105,6 +140,7 @@ export interface TorahProject {
   /** סה״כ עלויות מתוכננות לרווח תיאורטי (דוחף על סכימת צילום) */
   estimated_expenses_total: number | null;
   created_at: string;           // ISO timestamptz
+  tagging_status?: TaggingStatus;
 }
 
 /** torah_sheets row — one row per physical יריעה (sheet), 1–62 */
@@ -261,3 +297,48 @@ export const TORAH_SHEET_STATUS_LABELS: Record<TorahSheetStatus, string> = {
 
 /** Total number of sheets in a standard Sefer Torah */
 export const TORAH_SHEET_COUNT = 62;
+
+// ── 3D Status — גל 1 ─────────────────────────────────────────
+
+export const COMMERCIAL_STATUSES = [
+  'lead', 'quoted', 'contract_signed', 'delivered', 'closed', 'cancelled',
+] as const;
+
+export const PRODUCTION_STATUSES = [
+  'not_started', 'writing', 'sheets_received',
+  'in_qa', 'qa_approved', 'sewn', 'delivered',
+] as const;
+
+export const FINANCIAL_STATUSES = [
+  'no_payment', 'deposit_received', 'partially_paid', 'fully_paid',
+] as const;
+
+export type CommercialStatus = typeof COMMERCIAL_STATUSES[number];
+export type ProductionStatus = typeof PRODUCTION_STATUSES[number];
+export type FinancialStatus  = typeof FINANCIAL_STATUSES[number];
+
+export const COMMERCIAL_STATUS_LABELS: Record<CommercialStatus, string> = {
+  lead:            'ליד',
+  quoted:          'הוצע מחיר',
+  contract_signed: 'חוזה חתום',
+  delivered:       'נמסר',
+  closed:          'סגור',
+  cancelled:       'מבוטל',
+};
+
+export const PRODUCTION_STATUS_LABELS: Record<ProductionStatus, string> = {
+  not_started:     'טרם התחיל',
+  writing:         'בכתיבה',
+  sheets_received: 'יריעות התקבלו',
+  in_qa:           'בהגהה',
+  qa_approved:     'הגהה אושרה',
+  sewn:            'תפור',
+  delivered:       'נמסר',
+};
+
+export const FINANCIAL_STATUS_LABELS: Record<FinancialStatus, string> = {
+  no_payment:       'טרם שולם',
+  deposit_received: 'מקדמה התקבלה',
+  partially_paid:   'שולם חלקית',
+  fully_paid:       'שולם במלואו',
+};
