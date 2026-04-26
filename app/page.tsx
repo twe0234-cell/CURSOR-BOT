@@ -4,6 +4,7 @@ import { createClient } from "@/src/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { Radio, Settings, Users, Package, Mail, Wallet, TrendingUp, BookOpen } from "lucide-react";
 import DashboardClient from "./DashboardClient";
+import { BrandBannerCard } from "@/components/dashboard/BrandBannerCard";
 import {
   fetchDashboardKpis,
   fetchIncomeExpensesChart,
@@ -58,12 +59,19 @@ export default async function HomePage() {
   return (
     <div className="container mx-auto max-w-5xl px-4 py-10 sm:py-12 min-h-screen">
       <div className="mb-8 sm:mb-10 animate-fade-in-up">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2">
-          ברוכים הבאים
-        </h1>
-        <p className="text-muted-foreground text-[15px]">
-          מחובר כ־<span className="font-semibold text-primary">{user.email}</span>
-        </p>
+        <BrandBannerCard variant="banner" glow className="p-5 sm:p-7">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-primary/80 sm:text-xs">
+            <span className="gold-dot" />
+            <span>HIDUR HASTAM · לוח בקרה ראשי</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2">
+            ברוכים הבאים
+          </h1>
+          <p className="text-muted-foreground text-[15px]">
+            מחובר כ־<span className="font-semibold text-primary">{user.email}</span>
+          </p>
+          <div className="mt-4 gold-line" />
+        </BrandBannerCard>
       </div>
 
       <DashboardClient

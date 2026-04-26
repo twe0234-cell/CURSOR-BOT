@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { BrandBannerCard } from "@/components/dashboard/BrandBannerCard";
 import { searchByScribeCode, type ScribeSearchResult } from "@/app/actions/scribeSearch";
 import { SearchIcon, Radio, UserPlus, ShoppingCart, Plus, Package } from "lucide-react";
 import {
@@ -128,17 +129,17 @@ export default function DashboardClient({
         {heroCards.map((card) => (
           <motion.div key={card.label} variants={itemVariants}>
             <motion.div
-              whileHover={{ y: -5, boxShadow: "0px 10px 20px rgba(0,0,0,0.05)" }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              whileHover={{ y: -3 }}
+              transition={{ type: "spring", stiffness: 280, damping: 24 }}
             >
-              <Card className={`rounded-2xl border bg-white shadow-sm ${card.bgClass}`}>
-                <CardContent className="pt-6">
+              <BrandBannerCard variant="kpi" className={`card-interactive ${card.bgClass}`}>
+                <CardContent className="pt-6 pb-5">
                   <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-                  <p className={`mt-1 text-2xl font-bold ${card.colorClass}`}>
+                  <p className={`mt-1 text-2xl font-bold tabular-nums ${card.colorClass}`}>
                     {formatShekel(card.value)}
                   </p>
                 </CardContent>
-              </Card>
+              </BrandBannerCard>
             </motion.div>
           </motion.div>
         ))}
@@ -153,12 +154,14 @@ export default function DashboardClient({
       >
         {secondaryCards.map((card) => (
           <motion.div key={card.label} variants={itemVariants}>
-            <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardContent className="pt-6">
+            <BrandBannerCard variant="kpi" className="card-interactive border-slate-200/80">
+              <CardContent className="pt-6 pb-5">
                 <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-xl font-bold text-sky-700">{formatShekel(card.value)}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-sky-700">
+                  {formatShekel(card.value)}
+                </p>
               </CardContent>
-            </Card>
+            </BrandBannerCard>
           </motion.div>
         ))}
       </motion.div>
@@ -166,18 +169,18 @@ export default function DashboardClient({
       {/* Monthly Net Profit */}
       {kpis && (
         <motion.div variants={itemVariants} initial="hidden" animate="visible">
-          <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <CardContent className="pt-6">
+          <BrandBannerCard variant="kpi" className="border-slate-200/80">
+            <CardContent className="pt-6 pb-5">
               <p className="text-sm font-medium text-muted-foreground">רווח נקי חודשי</p>
               <p
-                className={`mt-1 text-2xl font-bold ${
+                className={`mt-1 text-2xl font-bold tabular-nums ${
                   kpis.monthlyNetProfit < 0 ? "text-red-600" : "text-sky-700"
                 }`}
               >
                 {kpis.monthlyNetProfit.toLocaleString("he-IL")} ₪
               </p>
             </CardContent>
-          </Card>
+          </BrandBannerCard>
         </motion.div>
       )}
 
