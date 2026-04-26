@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { BrandKpiCard } from "@/components/dashboard/BrandKpiCard";
 import { searchByScribeCode, type ScribeSearchResult } from "@/app/actions/scribeSearch";
 import { SearchIcon, Radio, UserPlus, ShoppingCart, Plus, Package } from "lucide-react";
 import {
@@ -37,14 +38,6 @@ function formatProfitMonthHe(profitMonth: string): string {
   if (Number.isNaN(d.getTime())) return profitMonth;
   return d.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
 }
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-};
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -89,26 +82,23 @@ export default function DashboardClient({
     {
       label: "עלות מלאי קיים",
       value: kpis?.totalInvested ?? 0,
-      colorClass: "text-slate-700",
-      bgClass: "border-slate-200",
+      tone: "ink" as const,
     },
     {
       label: "שווי שוק / צפי הכנסות",
       value: kpis?.expectedRevenue ?? 0,
-      colorClass: "text-sky-700",
-      bgClass: "border-sky-200",
+      tone: "navy" as const,
     },
     {
       label: "רווח צפוי",
       value: kpis?.potentialProfit ?? 0,
-      colorClass: kpis && kpis.potentialProfit < 0 ? "text-red-600" : "text-amber-600",
-      bgClass: "border-amber-200",
+      tone: kpis && kpis.potentialProfit < 0 ? ("danger" as const) : ("gold" as const),
     },
   ];
 
   const secondaryCards = [
-    { label: "השקעות פתוחות", value: kpis?.activeInvestmentsBalance ?? 0 },
-    { label: "מכירות החודש", value: kpis?.monthlySales ?? 0 },
+    { label: "השקעות פתוחות", value: kpis?.activeInvestmentsBalance ?? 0, tone: "gold" as const },
+    { label: "מכירות החודש", value: kpis?.monthlySales ?? 0, tone: "navy" as const },
   ];
 
   return (
@@ -119,49 +109,30 @@ export default function DashboardClient({
         </div>
       )}
       {/* Hero KPI Cards - Cost, Revenue, Profit */}
-      <motion.div
-        className="grid gap-4 sm:grid-cols-3"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {heroCards.map((card) => (
-          <motion.div key={card.label} variants={itemVariants}>
-            <motion.div
-              whileHover={{ y: -5, boxShadow: "0px 10px 20px rgba(0,0,0,0.05)" }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            >
-              <Card className={`rounded-2xl border bg-white shadow-sm ${card.bgClass}`}>
-                <CardContent className="pt-6">
-                  <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-                  <p className={`mt-1 text-2xl font-bold ${card.colorClass}`}>
-                    {formatShekel(card.value)}
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {heroCards.map((card, i) => (
+          <BrandKpiCard
+            key={card.label}
+            label={card.label}
+            value={formatShekel(card.value)}
+            tone={card.tone}
+            delay={i * 0.04}
+          />
         ))}
-      </motion.div>
+      </div>
 
       {/* Secondary KPIs */}
-      <motion.div
-        className="grid gap-4 sm:grid-cols-2"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {secondaryCards.map((card) => (
-          <motion.div key={card.label} variants={itemVariants}>
-            <Card className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardContent className="pt-6">
-                <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-xl font-bold text-sky-700">{formatShekel(card.value)}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {secondaryCards.map((card, i) => (
+          <BrandKpiCard
+            key={card.label}
+            label={card.label}
+            value={formatShekel(card.value)}
+            tone={card.tone}
+            delay={0.12 + i * 0.04}
+          />
         ))}
-      </motion.div>
+      </div>
 
       {/* Monthly Net Profit */}
       {kpis && (
