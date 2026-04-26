@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/server";
 import { cn } from "@/lib/utils";
-import { Radio, Settings, Users, Package, Mail, Wallet, TrendingUp, BookOpen } from "lucide-react";
+import { BarChart3, Radio, Settings, Users, Package, Mail, Wallet, TrendingUp, BookOpen } from "lucide-react";
 import DashboardClient from "./DashboardClient";
 import { BrandDashboardBanner } from "@/components/dashboard/BrandDashboardBanner";
 import {
@@ -52,6 +52,7 @@ export default async function HomePage() {
     { href: "/inventory", label: "מלאי", icon: Package, desc: "נהל מלאי מוצרים" },
     { href: "/sales", label: "מכירות ותזרים", icon: Wallet, desc: "מכירות והוצאות" },
     { href: "/investments", label: "תיק השקעות", icon: TrendingUp, desc: "פרויקטי כתיבה" },
+    { href: "/dashboard/erp", label: "לוח ERP", icon: BarChart3, desc: "שווי, תזרים, ledger וחריגים" },
     { href: "/torah", label: "פרויקטי ס״ת", icon: BookOpen, desc: "מעקב יריעות, הגהה וסטטוס" },
     { href: "/settings", label: "הגדרות", icon: Settings, desc: "Green API, Gmail והגדרות" },
   ];
