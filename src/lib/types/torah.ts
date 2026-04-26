@@ -35,10 +35,10 @@ export const TAGGING_STATUSES = [
 export type TaggingStatus = typeof TAGGING_STATUSES[number];
 
 export const TAGGING_STATUS_LABELS: Record<TaggingStatus, string> = {
-  not_required: "׳׳ ׳ ׳“׳¨׳©",
-  pending: "׳׳׳×׳™׳ ׳׳×׳™׳•׳’",
-  in_progress: "׳‘׳×׳™׳•׳’",
-  completed: "׳×׳•׳™׳’",
+  not_required: "לא נדרש",
+  pending: "ממתין לתיוג",
+  in_progress: "בתיוג",
+  completed: "תויג",
 };
 
 export interface TorahBudgetVsActual {

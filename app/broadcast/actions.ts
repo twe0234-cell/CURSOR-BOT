@@ -666,10 +666,19 @@ export async function replayBroadcast(input: z.infer<typeof ReplayInput>) {
   const parsed = ReplayInput.parse(input);
   const supabase = await createClient();
 
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    throw new Error(authErr.message);
+  }
+  if (!user) {
+    throw new Error("יש להתחבר");
+  }
+
   const { data: original, error: loadErr } = await supabase
     .from("broadcast_logs")
     .select("*")
     .eq("id", parsed.broadcast_log_id)
+    .eq("user_id", user.id)
     .single();
 
   if (loadErr || !original) {
@@ -687,7 +696,7 @@ export async function replayBroadcast(input: z.infer<typeof ReplayInput>) {
   const { error: queueErr } = await supabase
     .from("broadcast_queue")
     .insert({
-      user_id: original.user_id,
+      user_id: user.id,
       payload,
       replay_of_log_id: parsed.broadcast_log_id,
       status: "pending",
