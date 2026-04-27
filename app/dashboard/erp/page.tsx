@@ -70,6 +70,14 @@ function monthlyTotals(rows: MonthlyBusinessDashboardRow[]) {
   );
 }
 
+function EmptyState({ text }: { text: string }) {
+  return (
+    <p className="rounded-xl border border-dashed border-border/90 bg-background/70 px-5 py-7 text-center text-sm text-muted-foreground">
+      {text}
+    </p>
+  );
+}
+
 export default async function ErpDashboardPage() {
   const supabase = await createClient();
   const {
@@ -94,7 +102,7 @@ export default async function ErpDashboardPage() {
   const timestamp = netWorth?.snapshot_at ?? dashboard.loadedAt;
 
   return (
-    <main className="container mx-auto max-w-6xl space-y-8 px-4 py-10 sm:py-12" dir="rtl">
+    <main className="container mx-auto max-w-6xl space-y-8 px-4 py-10 sm:space-y-9 sm:py-12" dir="rtl">
       <BrandDashboardBanner
         title="לוח ERP פיננסי"
         meta={
@@ -122,9 +130,9 @@ export default async function ErpDashboardPage() {
       )}
 
       <section className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">שווי עסקי משוער</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+        <div className="space-y-1.5">
+          <h2 className="font-display text-[1.55rem] font-semibold text-navy">שווי עסקי משוער</h2>
+          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
             מקור: `public.get_net_worth_snapshot()`. החישוב מציג מלאי, חובות פתוחים ורווח ממומש לפי הרשומות הזמינות.
           </p>
         </div>
@@ -162,9 +170,9 @@ export default async function ErpDashboardPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-        <Card className="rounded-2xl border-border/80">
+        <Card className="rounded-2xl border-border/80 bg-[linear-gradient(170deg,var(--card)_0%,oklch(0.99_0.005_80)_100%)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle className="flex items-center gap-2 text-lg text-navy">
               <Database className="size-5 text-accent" />
               תזרים חודשי
             </CardTitle>
@@ -174,9 +182,7 @@ export default async function ErpDashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.monthlyCashflow.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                אין תנועות חודשיות להצגה.
-              </p>
+              <EmptyState text="אין תנועות חודשיות להצגה." />
             ) : (
               <Table>
                 <TableHeader>
@@ -219,9 +225,9 @@ export default async function ErpDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-border/80">
+        <Card className="rounded-2xl border-border/80 bg-[linear-gradient(170deg,var(--card)_0%,oklch(0.99_0.005_80)_100%)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle className="flex items-center gap-2 text-lg text-navy">
               <AlertTriangle className="size-5 text-accent" />
               חריגים עסקיים
             </CardTitle>
@@ -229,9 +235,7 @@ export default async function ErpDashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.businessExceptions.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                לא זוהו חריגים עסקיים פעילים.
-              </p>
+              <EmptyState text="לא זוהו חריגים עסקיים פעילים." />
             ) : (
               <div className="space-y-3">
                 {dashboard.businessExceptions.map((item, index) => {
@@ -265,9 +269,9 @@ export default async function ErpDashboardPage() {
         </Card>
       </section>
 
-      <Card className="rounded-2xl border-border/80">
+      <Card className="rounded-2xl border-border/80 bg-[linear-gradient(170deg,var(--card)_0%,oklch(0.99_0.005_80)_100%)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-lg text-navy">
             <FileText className="size-5 text-accent" />
             תנועות ledger אחרונות
           </CardTitle>
@@ -277,9 +281,7 @@ export default async function ErpDashboardPage() {
         </CardHeader>
         <CardContent>
           {dashboard.recentLedgerEntries.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              אין תנועות ledger להצגה.
-            </p>
+            <EmptyState text="אין תנועות ledger להצגה." />
           ) : (
             <Table>
               <TableHeader>
@@ -311,13 +313,13 @@ export default async function ErpDashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-border/80">
+      <Card className="rounded-2xl border-border/80 bg-[linear-gradient(170deg,var(--card)_0%,oklch(0.99_0.005_80)_100%)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-lg text-navy">
             <BookOpen className="size-5 text-accent" />
             Snapshot פיננסי — פרויקטי ס״ת
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             מקור: `public.torah_financial_dashboard_snapshot` עם סינון מפורש לפי `user_id`.
           </p>
         </CardHeader>
