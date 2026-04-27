@@ -22,9 +22,11 @@ import {
   fetchNextScribeNumber,
   sendSingleMessage,
   insertBroadcastLog,
+  scheduleBroadcastAction,
   type BroadcastLog,
   type QueueItem,
 } from "@/app/broadcast/actions";
+import { broadcastQueueDisplayStatus } from "@/src/lib/broadcast/scheduling";
 import {
   SendIcon,
   VariableIcon,
@@ -85,6 +87,8 @@ export default function BroadcastTab({
   const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [groupSearch, setGroupSearch] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const allowedSet = useMemo(
@@ -364,6 +368,54 @@ export default function BroadcastTab({
     });
   };
 
+  const handleSchedule = async () => {
+    if (selectedTags.size === 0 && selectedGroups.size === 0) {
+      toast.error("בחר לפחות תגית אחת או קבוצה");
+      return;
+    }
+    if (!messageText.trim()) {
+      toast.error("הזן טקסט להודעה");
+      return;
+    }
+    if (!scheduledAt) {
+      toast.error("בחר תאריך ושעה לתזמון");
+      return;
+    }
+    if (new Date(scheduledAt) <= new Date()) {
+      toast.error("יש לבחור זמן עתידי");
+      return;
+    }
+    if (imageFile && !imageUrl.trim() && uploading === false) {
+      toast.error("ממתין להעלאת התמונה");
+      return;
+    }
+
+    setScheduling(true);
+    const res = await scheduleBroadcastAction(
+      [...selectedTags],
+      [...selectedGroups],
+      messageText.trim(),
+      imageUrl.trim() || null,
+      new Date(scheduledAt).toISOString(),
+      scribeCode.trim() || null,
+      internalNotes.trim() || null
+    );
+    setScheduling(false);
+
+    if (res.success) {
+      toast.success(`שידור תוזמן ל-${new Date(scheduledAt).toLocaleString("he-IL")}`);
+      setScheduledAt("");
+      setMessageText("");
+      setScribeCode("");
+      setInternalNotes("");
+      setSelectedGroups(new Set());
+      setSelectedTags(new Set());
+      refreshLogs();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const formatDate = (s: string) => {
     const d = new Date(s);
     return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -619,6 +671,35 @@ export default function BroadcastTab({
               ? "שולח..."
               : "שלח שידור"}
         </Button>
+
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-semibold text-amber-900">
+              תזמון שידור WhatsApp
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"
+              dir="ltr"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleSchedule()}
+            disabled={
+              scheduling ||
+              uploading ||
+              !scheduledAt ||
+              (selectedTags.size === 0 && selectedGroups.size === 0)
+            }
+            className="rounded-xl border-amber-400 text-amber-800 hover:bg-amber-100 sm:mt-5"
+          >
+            {scheduling ? "מתזמן..." : "תזמן שידור"}
+          </Button>
+        </div>
       </TabsContent>
 
       <TabsContent value="logs" className="mt-0">
@@ -649,23 +730,40 @@ export default function BroadcastTab({
               </p>
             ) : (
               <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-                {queueItems.map((item) => (
+                {queueItems.map((item) => {
+                  const displayStatus = broadcastQueueDisplayStatus(item.status, item.scheduled_at);
+                  const statusLabel: Record<typeof displayStatus, string> = {
+                    scheduled: "מתוזמן",
+                    pending: "ממתין לשליחה",
+                    processing: "בתהליך",
+                    sent: "נשלח",
+                    failed: "נכשל",
+                    unknown: "לא ידוע",
+                  };
+                  return (
                   <div
                     key={item.id}
                     className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2"
                   >
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                      <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
+                      <span className="text-xs text-muted-foreground">{formatDate(item.scheduled_at ?? item.created_at)}</span>
                       <span
                         className={cn(
                           "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                          item.status === "completed"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
+                          displayStatus === "sent" && "bg-green-100 text-green-700",
+                          displayStatus === "failed" && "bg-red-100 text-red-700",
+                          displayStatus === "scheduled" && "bg-amber-100 text-amber-800",
+                          (displayStatus === "pending" || displayStatus === "processing") && "bg-sky-100 text-sky-700",
+                          displayStatus === "unknown" && "bg-slate-100 text-slate-700"
                         )}
                       >
-                        {item.status === "completed" ? "הושלם" : "נכשל"}
+                        {statusLabel[displayStatus]}
                       </span>
+                      {item.payload.messageText && (
+                        <span className="max-w-sm truncate text-xs text-slate-500" title={item.payload.messageText}>
+                          {item.payload.messageText}
+                        </span>
+                      )}
                       {item.result && (
                         <>
                           <span className="flex items-center gap-1 text-green-600">
@@ -692,7 +790,8 @@ export default function BroadcastTab({
                     )}
                     {renderLogDetails(item)}
                   </div>
-                ))}
+                  );
+                })}
                 {logs.map((log) => (
                   <div
                     key={`log-${log.id}`}

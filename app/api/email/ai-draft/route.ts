@@ -1,22 +1,20 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { wrapAiEmailHtml } from "@/lib/email/wrapAiEmailHtml";
 import { assertGeminiApiKeyConfigured, pingGeminiModel } from "@/src/lib/aiProvider";
+import {
+  bodyMaxTokensForLength,
+  buildEmailBodySystemPrompt,
+  buildEmailBodyUserPrompt,
+  buildSubjectPrompt,
+  normalizeTemplateMode,
+  type AiDraftBrief,
+  type EmailLengthHint,
+  type EmailTemplateMode,
+} from "@/src/lib/email/aiDraftContract";
 
 export type AiDraftKind = "html_body" | "subject";
-type AiDraftBrief = {
-  audience?: string;
-  goal?: string;
-  offer?: string;
-  cta?: string;
-};
 const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 const MAX_CONTEXT_CHARS = 8000;
-const DEFAULT_BODY_MAX_TOKENS = 2200;
-const MAX_BODY_MAX_TOKENS = 4096;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 export async function POST(req: Request) {
   const keyCheck = assertGeminiApiKeyConfigured();
@@ -36,8 +34,9 @@ export async function POST(req: Request) {
   let context = "";
   let style = "";
   let kind: AiDraftKind = "html_body";
-  let bodyMaxTokens = DEFAULT_BODY_MAX_TOKENS;
-  let requestedLength: "קצר" | "בינוני" | "ארוך" = "בינוני";
+  let bodyMaxTokens = bodyMaxTokensForLength("קצר");
+  let requestedLength: EmailLengthHint = "קצר";
+  let templateMode: EmailTemplateMode = "short_offer";
   let brief: AiDraftBrief = {};
   try {
     const body = await req.json() as {
@@ -46,6 +45,7 @@ export async function POST(req: Request) {
       kind?: AiDraftKind;
       maxOutputTokens?: number;
       lengthHint?: "קצר" | "בינוני" | "ארוך";
+      templateMode?: EmailTemplateMode;
       brief?: AiDraftBrief;
     };
     context = (body.context ?? "").trim().slice(0, MAX_CONTEXT_CHARS);
@@ -54,13 +54,8 @@ export async function POST(req: Request) {
     if (body.lengthHint === "קצר" || body.lengthHint === "בינוני" || body.lengthHint === "ארוך") {
       requestedLength = body.lengthHint;
     }
-    if (typeof body.maxOutputTokens === "number" && Number.isFinite(body.maxOutputTokens)) {
-      bodyMaxTokens = clamp(Math.floor(body.maxOutputTokens), 700, MAX_BODY_MAX_TOKENS);
-    } else if (requestedLength === "קצר") {
-      bodyMaxTokens = 900;
-    } else if (requestedLength === "ארוך") {
-      bodyMaxTokens = 3200;
-    }
+    templateMode = normalizeTemplateMode(body.templateMode);
+    bodyMaxTokens = bodyMaxTokensForLength(requestedLength, body.maxOutputTokens);
     brief = {
       audience: body.brief?.audience?.trim(),
       goal: body.brief?.goal?.trim(),
@@ -78,11 +73,8 @@ export async function POST(req: Request) {
   const client = new GoogleGenerativeAI(apiKey);
 
   if (kind === "subject") {
-    const systemPrompt = `אתה עוזר שיווק ל"הידור הסת"ם". כתוב שורת נושא קצרה ומושכת למייל בעברית.
-החזר שורת נושא אחת בלבד, בלי מירכאות, בלי תווי מקף מיותרים, עד 80 תווים.`;
-    const userPrompt = `הצע שורת נושא למייל על סמך:
-${context}
-${style ? `\nטון: ${style}` : ""}`;
+    const systemPrompt = "You write concise Hebrew business email subjects for Hidur HaSTaM.";
+    const userPrompt = buildSubjectPrompt(context, style);
 
     try {
       const model = client.getGenerativeModel({
@@ -102,33 +94,14 @@ ${style ? `\nטון: ${style}` : ""}`;
     }
   }
 
-  const systemPrompt = `אתה קופירייטר בכיר ל"הידור הסת"ם" — עסק למסחר ותיווך בספרי תורה, תפילין ומזוזות.
-כתוב בעברית טבעית, רהוטה ומכבדת; שכנועי אבל לא אגרסיבי.
-מטרות תוכן:
-1) פתיח קצר עם אמון/סמכות.
-2) ערך ברור ללקוח (איכות, שקיפות, שירות, אחריות).
-3) פרטים פרקטיים ותועלות.
-4) קריאה לפעולה ברורה בסוף (השב/ווטסאפ/שיחה).
-
-פורמט חובה:
-- החזר HTML בלבד, בלי markdown ובלי הסברים מסביב.
-- התחל באלמנט שורש אחד: <div dir="rtl" style="text-align:right"> ... </div>
-- מותר להשתמש רק בתגיות: div, p, strong, ul, li, br, a
-- אל תכלול תגיות html/head/body/script/style.
-- אל תכלול שורת נושא (רק גוף המייל).`;
-
-  const userPrompt = `כתוב אימייל שיווקי על סמך המידע הבא:
-${context}
-
-טון וסגנון רצוי: ${style || "מקצועי, אנושי, אמין"}.
-אורך רצוי: ${requestedLength}.
-קהל יעד: ${brief.audience || "לא צוין"}.
-מטרה עסקית: ${brief.goal || "לא צוין"}.
-הצעה מרכזית: ${brief.offer || "לא צוין"}.
-קריאה לפעולה: ${brief.cta || "השב למייל / וואטסאפ לשיחת המשך"}.
-אם המידע חלקי, בצע השלמה סבירה אבל לא תמציא עובדות ספציפיות שלא ניתנו.
-דאג שהטקסט יהיה קריא, עם פסקאות קצרות או בולטים כשצריך.
-החזר HTML גוף בלבד לפי הכללים.`;
+  const systemPrompt = buildEmailBodySystemPrompt(templateMode, requestedLength);
+  const userPrompt = buildEmailBodyUserPrompt({
+    context,
+    style,
+    lengthHint: requestedLength,
+    templateMode,
+    brief,
+  });
 
   try {
     const model = client.getGenerativeModel({
@@ -139,15 +112,15 @@ ${context}
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         maxOutputTokens: bodyMaxTokens,
-        temperature: 0.8,
-        topP: 0.95,
+        temperature: 0.45,
+        topP: 0.85,
       },
     });
     const text = result.response.text().trim();
     if (!text) {
       return Response.json({ error: "המודל החזיר תוצאה ריקה — נסה שוב" }, { status: 502 });
     }
-    return Response.json({ html: wrapAiEmailHtml(text) });
+    return Response.json({ html: wrapAiEmailHtml(text), templateMode });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "שגיאת AI";
     return Response.json({ error: msg }, { status: 500 });

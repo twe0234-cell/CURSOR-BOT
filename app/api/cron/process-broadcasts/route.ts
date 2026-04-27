@@ -38,23 +38,41 @@ export async function GET(req: Request) {
   }
 
   try {
-    const { data: job } = await supabase
+    const nowIso = new Date().toISOString();
+    const { data: candidateJobs, error: candidateErr } = await supabase
       .from("broadcast_queue")
       .select("id, user_id, payload")
       .eq("status", "pending")
-      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
+      .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
       .order("created_at", { ascending: true })
-      .limit(1)
-      .single();
+      .limit(3);
 
-    if (!job) {
+    if (candidateErr) {
+      return NextResponse.json({ error: candidateErr.message }, { status: 500 });
+    }
+
+    if (!candidateJobs || candidateJobs.length === 0) {
       return NextResponse.json({ processed: 0, message: "No pending jobs" });
     }
 
-    await supabase
-      .from("broadcast_queue")
-      .update({ status: "processing", updated_at: new Date().toISOString() })
-      .eq("id", job.id);
+    let job: { id: string; user_id: string; payload: Record<string, unknown> } | null = null;
+    for (const candidate of candidateJobs) {
+      const { data: claimed } = await supabase
+        .from("broadcast_queue")
+        .update({ status: "processing", updated_at: new Date().toISOString() })
+        .eq("id", candidate.id)
+        .eq("status", "pending")
+        .select("id, user_id, payload")
+        .maybeSingle();
+      if (claimed) {
+        job = claimed as { id: string; user_id: string; payload: Record<string, unknown> };
+        break;
+      }
+    }
+
+    if (!job) {
+      return NextResponse.json({ processed: 0, message: "No claimable jobs" });
+    }
 
     const { payload, user_id } = job;
     const { targets, messageText, imageUrl, scribeCode, tags } = payload as {
@@ -63,6 +81,7 @@ export async function GET(req: Request) {
       imageUrl?: string | null;
       scribeCode?: string | null;
       tags?: string[];
+      internalNotes?: string | null;
     };
 
     const { data: settings } = await supabase
@@ -208,6 +227,7 @@ export async function GET(req: Request) {
           .update({
             status: "failed",
             result: { error: msg },
+            log_details: [{ ok: false, error: msg }],
             updated_at: new Date().toISOString(),
           })
           .eq("id", stuckJob.id);
