@@ -62,6 +62,7 @@ import {
 } from "@/src/lib/constants/torahPages";
 import { TorahFinancialsTab } from "./TorahFinancialsTab";
 import { TorahOverviewTab } from "./TorahOverviewTab";
+import { TorahProjectWorkflowSummary } from "@/components/torah/TorahProjectWorkflowSummary";
 import {
   updateSheet,
   batchUpdateSheetStatuses,
@@ -69,6 +70,7 @@ import {
   receiveSheetsFromScribe,
   markTorahSheetsReceived,
   deleteTorahProject,
+  type TorahProjectWorkflowSummaryData,
 } from "./actions";
 import { createCrmContact } from "@/app/crm/actions";
 import { applyNumericTransform } from "@/lib/numericInput";
@@ -183,6 +185,7 @@ type Props = {
   projectId: string;
   project: TorahProjectDetailView;
   initialSheets: TorahSheetGridRow[];
+  workflowSummary: TorahProjectWorkflowSummaryData;
   parchmentLabels: string[];
 };
 
@@ -194,6 +197,7 @@ export default function TorahDetailClient({
   projectId,
   project,
   initialSheets,
+  workflowSummary,
   parchmentLabels,
 }: Props) {
   const router = useRouter();
@@ -1002,6 +1006,12 @@ export default function TorahDetailClient({
             </Button>
           </div>
         </div>
+
+        <TorahProjectWorkflowSummary
+          project={project}
+          sheets={sheets}
+          summary={workflowSummary}
+        />
 
         {/* Cash tracking — מקור אמת: יומן תנועות (לשונית פיננסים) */}
         <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">

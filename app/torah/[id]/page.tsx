@@ -33,6 +33,7 @@ export default async function TorahProjectDetailPage({ params }: Props) {
         projectId={id}
         project={res.project}
         initialSheets={res.sheets}
+        workflowSummary={res.workflowSummary}
         parchmentLabels={parchmentLabels}
       />
     </div>

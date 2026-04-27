@@ -4,6 +4,9 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/src/lib/supabase/server";
 import type {
+  CommercialStatus,
+  ProductionStatus,
+  TaggingStatus,
   TorahProjectDetailView,
   TorahSheetGridRow,
   TorahSheetStatus,
@@ -57,9 +60,271 @@ const SHEET_STATUS_TUPLE = [
 
 const sheetStatusEnum = z.enum(SHEET_STATUS_TUPLE);
 
+export type TorahProjectWorkflowBudgetRow = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  commercial_status: string | null;
+  production_status: string | null;
+  contract_price: number;
+  planned_scribe: number;
+  planned_parchment: number;
+  planned_proofreading: number;
+  planned_total_cost: number;
+  actual_scribe: number;
+  actual_parchment: number;
+  actual_proofreading: number;
+  actual_total_cost: number;
+  actual_income: number;
+  actual_refunds: number;
+  projected_profit: number;
+  realized_profit: number;
+  cost_variance: number;
+};
+
+export type TorahProjectWorkflowPaceRow = {
+  project_id: string;
+  title: string | null;
+  start_date: string | null;
+  target_date: string | null;
+  required_pace: number;
+  columns_total: number;
+  columns_written: number;
+  days_since_start: number;
+  actual_pace: number;
+  expected_columns_by_now: number;
+  columns_behind: number;
+  pace_status: string | null;
+};
+
+export type TorahProjectPaymentVarianceRow = {
+  project_id: string;
+  party: string;
+  total_scheduled: number;
+  expected_by_now: number;
+  actual_paid: number;
+  variance_amount: number;
+  days_overdue: number;
+};
+
+export type TorahProjectCalculatorVarianceRow = {
+  project_id: string;
+  title: string | null;
+  snapshot_locked_at: string | null;
+  quoted_scribe: number;
+  quoted_parchment: number;
+  quoted_proofreading: number;
+  quoted_tagging: number;
+  quoted_total: number;
+  actual_scribe: number;
+  actual_parchment: number;
+  actual_proofreading: number;
+  actual_total_cost: number;
+  scribe_variance: number;
+  parchment_variance: number;
+  proofreading_variance: number;
+  total_variance: number;
+};
+
+export type TorahProjectBusinessExceptionRow = {
+  exception_type: string;
+  severity: string;
+  entity_id: string;
+  entity_type: string;
+  entity_label: string | null;
+  message: string;
+  detected_at: string;
+};
+
+export type TorahProjectWorkflowSummaryData = {
+  budget: TorahProjectWorkflowBudgetRow | null;
+  pace: TorahProjectWorkflowPaceRow | null;
+  paymentVariance: TorahProjectPaymentVarianceRow[];
+  calculatorVariance: TorahProjectCalculatorVarianceRow | null;
+  exceptions: TorahProjectBusinessExceptionRow[];
+  sourceWarnings: string[];
+};
+
 export type FetchProjectWithSheetsResult =
-  | { success: true; project: TorahProjectDetailView; sheets: TorahSheetGridRow[] }
+  | {
+      success: true;
+      project: TorahProjectDetailView;
+      sheets: TorahSheetGridRow[];
+      workflowSummary: TorahProjectWorkflowSummaryData;
+    }
   | { success: false; code: "NOT_FOUND" | "UNAUTHENTICATED" | "ERROR"; error: string };
+
+function readNumber(value: unknown): number {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+function mapWorkflowBudgetRow(row: Record<string, unknown>): TorahProjectWorkflowBudgetRow {
+  return {
+    id: String(row.id ?? ""),
+    title: readString(row.title),
+    status: readString(row.status),
+    commercial_status: readString(row.commercial_status),
+    production_status: readString(row.production_status),
+    contract_price: readNumber(row.contract_price),
+    planned_scribe: readNumber(row.planned_scribe),
+    planned_parchment: readNumber(row.planned_parchment),
+    planned_proofreading: readNumber(row.planned_proofreading),
+    planned_total_cost: readNumber(row.planned_total_cost),
+    actual_scribe: readNumber(row.actual_scribe),
+    actual_parchment: readNumber(row.actual_parchment),
+    actual_proofreading: readNumber(row.actual_proofreading),
+    actual_total_cost: readNumber(row.actual_total_cost),
+    actual_income: readNumber(row.actual_income),
+    actual_refunds: readNumber(row.actual_refunds),
+    projected_profit: readNumber(row.projected_profit),
+    realized_profit: readNumber(row.realized_profit),
+    cost_variance: readNumber(row.cost_variance),
+  };
+}
+
+function mapWorkflowPaceRow(row: Record<string, unknown>): TorahProjectWorkflowPaceRow {
+  return {
+    project_id: String(row.project_id ?? ""),
+    title: readString(row.title),
+    start_date: readString(row.start_date),
+    target_date: readString(row.target_date),
+    required_pace: readNumber(row.required_pace),
+    columns_total: readNumber(row.columns_total),
+    columns_written: readNumber(row.columns_written),
+    days_since_start: readNumber(row.days_since_start),
+    actual_pace: readNumber(row.actual_pace),
+    expected_columns_by_now: readNumber(row.expected_columns_by_now),
+    columns_behind: readNumber(row.columns_behind),
+    pace_status: readString(row.pace_status),
+  };
+}
+
+function mapPaymentVarianceRow(row: Record<string, unknown>): TorahProjectPaymentVarianceRow {
+  return {
+    project_id: String(row.project_id ?? ""),
+    party: String(row.party ?? "unknown"),
+    total_scheduled: readNumber(row.total_scheduled),
+    expected_by_now: readNumber(row.expected_by_now),
+    actual_paid: readNumber(row.actual_paid),
+    variance_amount: readNumber(row.variance_amount),
+    days_overdue: readNumber(row.days_overdue),
+  };
+}
+
+function mapCalculatorVarianceRow(
+  row: Record<string, unknown>
+): TorahProjectCalculatorVarianceRow {
+  return {
+    project_id: String(row.project_id ?? ""),
+    title: readString(row.title),
+    snapshot_locked_at: readString(row.snapshot_locked_at),
+    quoted_scribe: readNumber(row.quoted_scribe),
+    quoted_parchment: readNumber(row.quoted_parchment),
+    quoted_proofreading: readNumber(row.quoted_proofreading),
+    quoted_tagging: readNumber(row.quoted_tagging),
+    quoted_total: readNumber(row.quoted_total),
+    actual_scribe: readNumber(row.actual_scribe),
+    actual_parchment: readNumber(row.actual_parchment),
+    actual_proofreading: readNumber(row.actual_proofreading),
+    actual_total_cost: readNumber(row.actual_total_cost),
+    scribe_variance: readNumber(row.scribe_variance),
+    parchment_variance: readNumber(row.parchment_variance),
+    proofreading_variance: readNumber(row.proofreading_variance),
+    total_variance: readNumber(row.total_variance),
+  };
+}
+
+function mapBusinessExceptionRow(
+  row: Record<string, unknown>
+): TorahProjectBusinessExceptionRow {
+  return {
+    exception_type: String(row.exception_type ?? "unknown"),
+    severity: String(row.severity ?? "info"),
+    entity_id: String(row.entity_id ?? ""),
+    entity_type: String(row.entity_type ?? ""),
+    entity_label: readString(row.entity_label),
+    message: String(row.message ?? ""),
+    detected_at: String(row.detected_at ?? ""),
+  };
+}
+
+async function fetchTorahProjectWorkflowSummary(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string
+): Promise<TorahProjectWorkflowSummaryData> {
+  const sourceWarnings: string[] = [];
+
+  const [budgetResult, paceResult, varianceResult, calculatorResult, exceptionsResult] =
+    await Promise.all([
+      supabase
+        .from("torah_project_budget_vs_actual")
+        .select(
+          "id,title,status,commercial_status,production_status,contract_price,planned_scribe,planned_parchment,planned_proofreading,planned_total_cost,actual_scribe,actual_parchment,actual_proofreading,actual_total_cost,actual_income,actual_refunds,projected_profit,realized_profit,cost_variance"
+        )
+        .eq("id", projectId)
+        .maybeSingle(),
+      supabase
+        .from("torah_project_pace_analysis")
+        .select(
+          "project_id,title,start_date,target_date,required_pace,columns_total,columns_written,days_since_start,actual_pace,expected_columns_by_now,columns_behind,pace_status"
+        )
+        .eq("project_id", projectId)
+        .maybeSingle(),
+      supabase
+        .from("torah_payment_schedule_variance")
+        .select(
+          "project_id,party,total_scheduled,expected_by_now,actual_paid,variance_amount,days_overdue"
+        )
+        .eq("project_id", projectId)
+        .order("party", { ascending: true }),
+      supabase
+        .from("torah_calculator_vs_actual")
+        .select(
+          "project_id,title,snapshot_locked_at,quoted_scribe,quoted_parchment,quoted_proofreading,quoted_tagging,quoted_total,actual_scribe,actual_parchment,actual_proofreading,actual_total_cost,scribe_variance,parchment_variance,proofreading_variance,total_variance"
+        )
+        .eq("project_id", projectId)
+        .maybeSingle(),
+      supabase
+        .from("business_exceptions")
+        .select("exception_type,severity,entity_id,entity_type,entity_label,message,detected_at")
+        .eq("entity_type", "torah_project")
+        .eq("entity_id", projectId)
+        .order("detected_at", { ascending: false })
+        .limit(6),
+    ]);
+
+  if (budgetResult.error) sourceWarnings.push(`budget_vs_actual: ${budgetResult.error.message}`);
+  if (paceResult.error) sourceWarnings.push(`pace_analysis: ${paceResult.error.message}`);
+  if (varianceResult.error) sourceWarnings.push(`payment_variance: ${varianceResult.error.message}`);
+  if (calculatorResult.error) {
+    sourceWarnings.push(`calculator_vs_actual: ${calculatorResult.error.message}`);
+  }
+  if (exceptionsResult.error) {
+    sourceWarnings.push(`business_exceptions: ${exceptionsResult.error.message}`);
+  }
+
+  return {
+    budget: budgetResult.data
+      ? mapWorkflowBudgetRow(budgetResult.data as Record<string, unknown>)
+      : null,
+    pace: paceResult.data ? mapWorkflowPaceRow(paceResult.data as Record<string, unknown>) : null,
+    paymentVariance: ((varianceResult.data ?? []) as Record<string, unknown>[]).map(
+      mapPaymentVarianceRow
+    ),
+    calculatorVariance: calculatorResult.data
+      ? mapCalculatorVarianceRow(calculatorResult.data as Record<string, unknown>)
+      : null,
+    exceptions: ((exceptionsResult.data ?? []) as Record<string, unknown>[]).map(
+      mapBusinessExceptionRow
+    ),
+    sourceWarnings,
+  };
+}
 
 export async function fetchProjectWithSheets(
   projectId: string
@@ -111,6 +376,17 @@ export async function fetchProjectWithSheets(
       scribe_id: row.scribe_id as string,
       title: row.title as string,
       status: row.status as TorahProjectDetailView["status"],
+      commercial_status:
+        ((row as { commercial_status?: CommercialStatus | null }).commercial_status as
+          | CommercialStatus
+          | null
+          | undefined) ?? undefined,
+      production_status:
+        ((row as { production_status?: ProductionStatus | null }).production_status as
+          | ProductionStatus
+          | null
+          | undefined) ?? undefined,
+      deal_type: ((row as { deal_type?: string | null }).deal_type as string | null) ?? null,
       start_date: (row.start_date as string | null) ?? null,
       target_date: (row.target_date as string | null) ?? null,
       total_agreed_price: Number(row.total_agreed_price ?? 0),
@@ -163,6 +439,11 @@ export async function fetchProjectWithSheets(
         (row as { estimated_expenses_total?: unknown }).estimated_expenses_total !== ""
           ? Number((row as { estimated_expenses_total: unknown }).estimated_expenses_total)
           : null,
+      tagging_status:
+        ((row as { tagging_status?: TaggingStatus | null }).tagging_status as
+          | TaggingStatus
+          | null
+          | undefined) ?? undefined,
       created_at: row.created_at as string,
       scribe_name: nameMap.get(row.scribe_id as string) ?? null,
       client_name: row.client_id ? (nameMap.get(row.client_id as string) ?? null) : null,
@@ -177,7 +458,9 @@ export async function fetchProjectWithSheets(
       sku: (s.sku as string | null) ?? null,
     }));
 
-    return { success: true, project, sheets };
+    const workflowSummary = await fetchTorahProjectWorkflowSummary(supabase, projectId);
+
+    return { success: true, project, sheets, workflowSummary };
   } catch (err) {
     return {
       success: false,
