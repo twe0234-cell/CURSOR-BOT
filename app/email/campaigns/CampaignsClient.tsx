@@ -41,6 +41,7 @@ import {
   RocketIcon,
   WandSparklesIcon,
 } from "lucide-react";
+import type { EmailTemplateMode } from "@/src/lib/email/aiDraftContract";
 
 type Props = {
   initialContacts: EmailContact[];
@@ -56,6 +57,14 @@ const SEGMENT_PRESETS: { label: string; tags: string[] }[] = [
   { label: "לקוחות פעילים", tags: ["לקוחות_פעילים"] },
   { label: "גבאים", tags: ["גבאים"] },
   { label: "סוחרים", tags: ["סוחרים"] },
+];
+
+const EMAIL_TEMPLATE_MODE_OPTIONS: Array<{ value: EmailTemplateMode; label: string }> = [
+  { value: "short_offer", label: "הצעה קצרה" },
+  { value: "price_quote", label: "הצעת מחיר" },
+  { value: "follow_up", label: "פולואפ" },
+  { value: "friendly_reply", label: "מענה ידידותי" },
+  { value: "formal_supplier_message", label: "הודעה רשמית לספק" },
 ];
 
 function fileToBase64(file: File): Promise<{ filename: string; contentBase64: string }> {
@@ -105,6 +114,7 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
   const [aiGoal, setAiGoal] = useState("");
   const [aiOffer, setAiOffer] = useState("");
   const [aiCta, setAiCta] = useState("");
+  const [aiTemplateMode, setAiTemplateMode] = useState<EmailTemplateMode>("short_offer");
   const [aiLoading, setAiLoading] = useState(false);
   const [subjectAiLoading, setSubjectAiLoading] = useState(false);
 
@@ -358,6 +368,7 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
           context: aiContext,
           style: aiStyle,
           kind: "html_body",
+          templateMode: aiTemplateMode,
           brief: {
             audience: aiAudience,
             goal: aiGoal,
@@ -886,6 +897,21 @@ export default function CampaignsClient({ initialContacts, signature, initialEma
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
+            <div>
+              <label className="text-sm font-medium block mb-1">תבנית עסקית</label>
+              <select
+                dir="rtl"
+                value={aiTemplateMode}
+                onChange={(e) => setAiTemplateMode(e.target.value as EmailTemplateMode)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {EMAIL_TEMPLATE_MODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="text-sm font-medium block mb-1">הקשר לכתיבה</label>
               <Textarea

@@ -239,7 +239,8 @@ export type QueueItem = {
   result: { sent?: number; failed?: number; errors?: string[] } | null;
   log_details: unknown;
   created_at: string;
-  payload: { tags?: string[] };
+  scheduled_at: string | null;
+  payload: { tags?: string[]; messageText?: string };
 };
 
 export async function fetchBroadcastLogs(): Promise<
@@ -287,9 +288,9 @@ export async function fetchBroadcastQueueItems(): Promise<
 
     const { data, error } = await supabase
       .from("broadcast_queue")
-      .select("id, status, result, log_details, created_at, payload")
+      .select("id, status, result, log_details, created_at, scheduled_at, payload")
       .eq("user_id", user.id)
-      .in("status", ["completed", "failed"])
+      .in("status", ["pending", "processing", "completed", "failed"])
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -300,7 +301,8 @@ export async function fetchBroadcastQueueItems(): Promise<
       result: (r.result ?? null) as QueueItem["result"],
       log_details: r.log_details ?? null,
       created_at: r.created_at ?? "",
-      payload: (r.payload ?? {}) as { tags?: string[] },
+      scheduled_at: (r as { scheduled_at?: string | null }).scheduled_at ?? null,
+      payload: (r.payload ?? {}) as { tags?: string[]; messageText?: string },
     }));
     return { success: true, items };
   } catch (err) {
@@ -612,7 +614,9 @@ export async function scheduleBroadcastAction(
   groupIds: string[],
   messageText: string,
   imageUrl: string | null,
-  scheduledAt: string // ISO string
+  scheduledAt: string, // ISO string
+  scribeCode?: string | null,
+  internalNotes?: string | null
 ): Promise<{ success: true } | { success: false; error: string }> {
   try {
     const supabase = await createClient();
@@ -634,20 +638,43 @@ export async function scheduleBroadcastAction(
 
     if (targets.length === 0) return { success: false, error: "אין נמענים" };
 
+    const scheduledDate = new Date(scheduledAt);
+    if (!Number.isFinite(scheduledDate.getTime())) {
+      return { success: false, error: "זמן תזמון לא תקין" };
+    }
+    if (scheduledDate <= new Date()) {
+      return { success: false, error: "בחר זמן עתידי לתזמון" };
+    }
+
+    let validatedImageUrl: string | null = null;
+    if (imageUrl?.trim()) {
+      const urlCheck = ensurePublicImageUrl(imageUrl.trim());
+      if (!urlCheck.ok) return { success: false, error: urlCheck.error };
+      const sizeBytes = await getImageSizeBytes(urlCheck.url);
+      if (sizeBytes !== null && sizeBytes > IMAGE_SIZE_LIMIT_BYTES) {
+        return { success: false, error: "התמונה חורגת ממגבלת 5MB" };
+      }
+      validatedImageUrl = urlCheck.url;
+    }
+
     const { error } = await supabase.from("broadcast_queue").insert({
       user_id: user.id,
-      scheduled_at: scheduledAt,
+      status: "pending",
+      scheduled_at: scheduledDate.toISOString(),
       payload: {
         targets,
         messageText,
-        imageUrl: imageUrl || null,
+        imageUrl: validatedImageUrl,
         tags,
-        scribeCode: null,
+        scribeCode: scribeCode?.trim() || null,
+        internalNotes: internalNotes?.trim() || null,
       },
     });
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/broadcast");
+    revalidatePath("/whatsapp");
+    revalidatePath("/communications");
     logInfo("Broadcast", "Scheduled broadcast queued", {
       userId: user.id,
       scheduledAt,
