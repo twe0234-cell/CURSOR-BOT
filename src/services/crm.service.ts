@@ -1159,6 +1159,52 @@ async function fetchErpData(
   };
 }
 
+async function fetchBusinessActivityData(
+  supabase: SupabaseClient,
+  contactId: string,
+  userId: string
+) {
+  const [sourcedInventoryRes, directTorahProjectsRes] = await Promise.all([
+    supabase
+      .from("inventory")
+      .select(
+        "id, sku, product_category, status, quantity, cost_price, total_cost, amount_paid, purchase_date"
+      )
+      .eq("user_id", userId)
+      .eq("scribe_id", contactId)
+      .order("purchase_date", { ascending: false, nullsFirst: false }),
+    supabase
+      .from("torah_projects")
+      .select("id, project_name, project_status, created_at, client_id, scribe_id, current_holder_id")
+      .eq("user_id", userId)
+      .or(`client_id.eq.${contactId},scribe_id.eq.${contactId},current_holder_id.eq.${contactId}`)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const sourcedInventoryRows = sourcedInventoryRes.data ?? [];
+  const sourcedInventoryIds = sourcedInventoryRows.map((r) => r.id);
+
+  const soldSourcedRows =
+    sourcedInventoryIds.length === 0
+      ? []
+      : (
+          await supabase
+            .from("erp_sales")
+            .select(
+              "id, item_id, sale_type, sale_date, total_price, amount_paid, buyer_id, item_description"
+            )
+            .eq("user_id", userId)
+            .in("item_id", sourcedInventoryIds)
+            .order("sale_date", { ascending: false })
+        ).data ?? [];
+
+  return {
+    sourcedInventoryRows,
+    soldSourcedRows,
+    directTorahProjectsRows: directTorahProjectsRes.data ?? [],
+  };
+}
+
 /**
  * Fetches `erp_payments` for a set of related entity IDs (sale IDs + investment IDs)
  * and returns two structures:
@@ -1556,6 +1602,64 @@ export type ContactDetailPageData = {
     timestamp: string;
     direction: string | null;
   }>;
+  businessActivity: {
+    purchasesFromContact: Array<{
+      id: string;
+      item_details: string | null;
+      status: string;
+      total_agreed_price: number;
+      amount_paid: number;
+      target_date: string | null;
+    }>;
+    salesToContact: Array<{
+      id: string;
+      sale_type: string;
+      sale_date: string;
+      total_price: number;
+      total_paid: number;
+      label: string;
+    }>;
+    inventorySourcedFromContact: Array<{
+      id: string;
+      sku: string | null;
+      product_category: string | null;
+      status: string | null;
+      quantity: number;
+      total_cost: number;
+      amount_paid: number;
+      purchase_date: string | null;
+    }>;
+    soldInventorySourcedFromContact: Array<{
+      sale_id: string;
+      sale_date: string;
+      sale_type: string;
+      inventory_id: string;
+      inventory_sku: string | null;
+      inventory_category: string | null;
+      buyer_name: string | null;
+      total_price: number;
+      total_paid: number;
+      item_description: string | null;
+    }>;
+    totals: {
+      purchasesCount: number;
+      purchasesTotal: number;
+      salesCount: number;
+      salesTotal: number;
+      sourcedInventoryCount: number;
+      sourcedInventoryTotalCost: number;
+      soldSourcedCount: number;
+      soldSourcedSalesTotal: number;
+    };
+    relatedTorahProjects: Array<{
+      id: string;
+      name: string | null;
+      status: string | null;
+      role: "לקוח" | "סופר" | "מחזיק נוכחי" | "מרובה";
+      created_at: string | null;
+    }>;
+    missingLinks: string[];
+  };
 };
 
 /**
@@ -1640,6 +1744,9 @@ export async function loadContactDetailPage(
   const { txRows, docRows, logRows, contactHistoryRows } = crmActivity;
   const { inventoryRows, investmentRowsForBalance, buyerRows, sellerRows, allInvestmentRows } = erpData;
 
+  const { sourcedInventoryRows, soldSourcedRows, directTorahProjectsRows } =
+    await fetchBusinessActivityData(supabase, id, user.id);
+
   // 3. Collect all entity IDs needed for payment lookups.
   const allEntityIds = [
     ...new Set([
@@ -1712,6 +1819,40 @@ export async function loadContactDetailPage(
       }))
       .filter((x) => x.value.length > 0);
   };
+
+  const inventoryMetaById = new Map(
+    sourcedInventoryRows.map((inv) => [
+      inv.id,
+      {
+        sku: (inv.sku as string | null) ?? null,
+        category: (inv.product_category as string | null) ?? null,
+      },
+    ])
+  );
+  const buyerIdsForSoldSourced = [
+    ...new Set(
+      soldSourcedRows
+        .map((s) => s.buyer_id as string | null)
+        .filter((v): v is string => Boolean(v))
+    ),
+  ];
+  const buyerNameMap = new Map<string, string>();
+  if (buyerIdsForSoldSourced.length > 0) {
+    const { data: buyerContacts } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .in("id", buyerIdsForSoldSourced);
+    for (const bc of buyerContacts ?? []) {
+      buyerNameMap.set(bc.id as string, (bc.name as string) ?? "");
+    }
+  }
+
+  const businessMissingLinks: string[] = [
+    "אין בטבלה inventory שדה supplier_id/vendor_id נפרד; שיוך מקור אפשרי רק דרך inventory.scribe_id.",
+    "מכירות תיווך/פרויקט בלי item_id אינן ניתנות לקישור אמין למלאי שמקורו באיש קשר.",
+    "אין קישור ישיר בין erp_investments לפרויקט תורה (torah_projects), ולכן מוצגים רק פרויקטים הקשורים ישירות לאיש הקשר.",
+  ];
 
   return {
     success: true,
@@ -1795,6 +1936,90 @@ export async function loadContactDetailPage(
         timestamp: l.timestamp ?? "",
         direction: (l.direction as string | null) ?? null,
       })),
+      businessActivity: {
+        purchasesFromContact: allInvestmentRows.map((i) => ({
+          id: i.id,
+          item_details: i.item_details ?? null,
+          status: i.status ?? "",
+          total_agreed_price: Number(i.total_agreed_price ?? 0),
+          amount_paid: Number(i.amount_paid ?? 0),
+          target_date: i.target_date ?? null,
+        })),
+        salesToContact: buyerSales,
+        inventorySourcedFromContact: sourcedInventoryRows.map((inv) => ({
+          id: inv.id as string,
+          sku: (inv.sku as string | null) ?? null,
+          product_category: (inv.product_category as string | null) ?? null,
+          status: (inv.status as string | null) ?? null,
+          quantity: Number(inv.quantity ?? 0),
+          total_cost:
+            inv.total_cost != null
+              ? Number(inv.total_cost)
+              : Math.max(1, Number(inv.quantity ?? 1)) * Number(inv.cost_price ?? 0),
+          amount_paid: Number(inv.amount_paid ?? 0),
+          purchase_date: (inv.purchase_date as string | null) ?? null,
+        })),
+        soldInventorySourcedFromContact: soldSourcedRows.map((sale) => {
+          const invMeta = inventoryMetaById.get((sale.item_id as string) ?? "");
+          return {
+            sale_id: sale.id as string,
+            sale_date: (sale.sale_date as string | null) ?? "",
+            sale_type: (sale.sale_type as string | null) ?? "ממלאי",
+            inventory_id: (sale.item_id as string | null) ?? "",
+            inventory_sku: invMeta?.sku ?? null,
+            inventory_category: invMeta?.category ?? null,
+            buyer_name: sale.buyer_id
+              ? buyerNameMap.get(sale.buyer_id as string) ?? null
+              : null,
+            total_price: Number(sale.total_price ?? 0),
+            total_paid: Number(sale.amount_paid ?? 0),
+            item_description: (sale.item_description as string | null) ?? null,
+          };
+        }),
+        totals: {
+          purchasesCount: allInvestmentRows.length,
+          purchasesTotal: allInvestmentRows.reduce(
+            (sum, row) => sum + Number(row.total_agreed_price ?? 0),
+            0
+          ),
+          salesCount: buyerSales.length,
+          salesTotal: buyerSales.reduce((sum, row) => sum + row.total_price, 0),
+          sourcedInventoryCount: sourcedInventoryRows.length,
+          sourcedInventoryTotalCost: sourcedInventoryRows.reduce((sum, inv) => {
+            const qty = Math.max(1, Number(inv.quantity ?? 1));
+            const total =
+              inv.total_cost != null ? Number(inv.total_cost) : qty * Number(inv.cost_price ?? 0);
+            return sum + Math.max(0, total);
+          }, 0),
+          soldSourcedCount: soldSourcedRows.length,
+          soldSourcedSalesTotal: soldSourcedRows.reduce(
+            (sum, row) => sum + Number(row.total_price ?? 0),
+            0
+          ),
+        },
+        relatedTorahProjects: directTorahProjectsRows.map((row) => {
+          const isClient = (row.client_id as string | null) === id;
+          const isScribe = (row.scribe_id as string | null) === id;
+          const isHolder = (row.current_holder_id as string | null) === id;
+          const roleCount = [isClient, isScribe, isHolder].filter(Boolean).length;
+          const role: "לקוח" | "סופר" | "מחזיק נוכחי" | "מרובה" =
+            roleCount > 1
+              ? "מרובה"
+              : isClient
+                ? "לקוח"
+                : isScribe
+                  ? "סופר"
+                  : "מחזיק נוכחי";
+          return {
+            id: row.id as string,
+            name: (row.project_name as string | null) ?? null,
+            status: (row.project_status as string | null) ?? null,
+            role,
+            created_at: (row.created_at as string | null) ?? null,
+          };
+        }),
+        missingLinks: businessMissingLinks,
+      },
     },
   };
 }
