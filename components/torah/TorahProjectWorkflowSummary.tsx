@@ -176,8 +176,14 @@ export function TorahProjectWorkflowSummary({ project, sheets, summary }: Props)
               <p className="mt-1 text-xs leading-5 text-slate-500">
                 מוצג לפי ההגדרות הקיימות בפרויקט: תיוג, מספר הגהות גברא ומספר הגהות מחשב.
               </p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                ניתן לערוך עכשיו את ספירות ה-QA ואת דרישת התיוג דרך כפתור "ערוך פרויקט" בראש הדף.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                עריכת פלואו: זמינה חלקית
+              </span>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
                 גברא: {project.gavra_qa_count ?? 0}
               </span>
@@ -219,6 +225,9 @@ export function TorahProjectWorkflowSummary({ project, sheets, summary }: Props)
           )}
           <p className="mt-3 text-[11px] leading-5 text-slate-500">
             הערה: סדר QA מפורט לפי פרויקט עדיין אינו נשמר בטבלה ייעודית; כרגע מוצגים סבבי גברא ולאחריהם סבבי מחשב לפי השדות הקיימים.
+          </p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+            עריכת פלואו עדיין לא זמינה ברמת שינוי סדר/שם שלב לכל סבב בנפרד.
           </p>
         </div>
 
