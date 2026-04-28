@@ -74,7 +74,7 @@ export default function SalesClient() {
   const [newSaleSellerId, setNewSaleSellerId] = useState("");
   const [newSaleInvestmentId, setNewSaleInvestmentId] = useState("");
   const [newSaleItemDescription, setNewSaleItemDescription] = useState("");
-  const [newSaleQuantity, setNewSaleQuantity] = useState("1");
+  const [newSaleQuantity, setNewSaleQuantity] = useState("");
   const [newSalePrice, setNewSalePrice] = useState("");
   const [newSaleAmountPaid, setNewSaleAmountPaid] = useState("");
   const [newSaleCommission, setNewSaleCommission] = useState("");
@@ -147,10 +147,10 @@ export default function SalesClient() {
   const handleCreateSale = async () => {
     if (saleType === "ממלאי") {
       const unitPrice = parseFloat(newSalePrice);
-      const qty = Math.max(1, parseInt(newSaleQuantity, 10) || 1);
+      const qty = parseInt(newSaleQuantity, 10);
       const amountPaid = parseFloat(newSaleAmountPaid) || 0;
-      if (!newSaleItemId || isNaN(unitPrice) || unitPrice <= 0) {
-        toast.error("בחר פריט והזן מחיר ליחידה");
+      if (!newSaleItemId || !Number.isFinite(qty) || qty <= 0 || isNaN(unitPrice) || unitPrice <= 0) {
+        toast.error("בחר פריט והזן כמות ומחיר ליחידה");
         return;
       }
       if (qty > maxQtyToSell) {
@@ -228,7 +228,7 @@ export default function SalesClient() {
     setNewSaleSellerId("");
     setNewSaleInvestmentId("");
     setNewSaleItemDescription("");
-    setNewSaleQuantity("1");
+    setNewSaleQuantity("");
     setNewSalePrice("");
     setNewSaleAmountPaid("");
     setNewSaleCommission("");
@@ -628,7 +628,7 @@ export default function SalesClient() {
                     value={newSaleItemId}
                     onChange={(e) => {
                       setNewSaleItemId(e.target.value);
-                      setNewSaleQuantity("1");
+                      setNewSaleQuantity("");
                     }}
                     className="w-full rounded-xl border px-3 py-2 text-sm"
                   >
@@ -647,7 +647,7 @@ export default function SalesClient() {
                       max={maxQtyToSell}
                       value={newSaleQuantity}
                       onChange={handleNumericChange(setNewSaleQuantity)}
-                      placeholder="1"
+                      placeholder="לדוגמה: 1"
                       className="rounded-xl"
                     />
                   </div>
@@ -658,7 +658,7 @@ export default function SalesClient() {
                       min={0}
                       value={newSalePrice}
                       onChange={handleNumericChange(setNewSalePrice)}
-                      placeholder="0"
+                      placeholder="לדוגמה: 250"
                       className="rounded-xl"
                     />
                   </div>
@@ -669,16 +669,16 @@ export default function SalesClient() {
                       min={0}
                       value={newSaleAmountPaid}
                       onChange={handleNumericChange(setNewSaleAmountPaid)}
-                      placeholder="0"
+                      placeholder="ריק = לא שולם עדיין"
                       className="rounded-xl"
                     />
                   </div>
                 </div>
                 {(() => {
-                  const qty = parseInt(newSaleQuantity, 10) || 1;
+                  const qty = parseInt(newSaleQuantity, 10);
                   const unitPrice = parseFloat(newSalePrice);
                   const paid = parseFloat(newSaleAmountPaid) || 0;
-                  const total = !isNaN(unitPrice) && unitPrice >= 0 ? qty * unitPrice : null;
+                  const total = Number.isFinite(qty) && qty > 0 && !isNaN(unitPrice) && unitPrice >= 0 ? qty * unitPrice : null;
                   const remaining = total != null ? total - paid : null;
                   if (total == null) return null;
                   return (

@@ -52,7 +52,7 @@ export default function InvestmentsClient() {
   const [loading, setLoading] = useState(false);
   const [newScribeId, setNewScribeId] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
-  const [newQuantity, setNewQuantity] = useState("1");
+  const [newQuantity, setNewQuantity] = useState("");
   const [newCostPerUnit, setNewCostPerUnit] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
@@ -109,7 +109,7 @@ export default function InvestmentsClient() {
       setCreateOpen(false);
       setNewScribeId("");
       setNewItemDetails("");
-      setNewQuantity("1");
+      setNewQuantity("");
       setNewCostPerUnit("");
       setNewTargetDate("");
       setNewNotes("");
@@ -528,7 +528,7 @@ export default function InvestmentsClient() {
                   step={0.01}
                   value={newQuantity}
                   onChange={handleNumericChange(setNewQuantity)}
-                  placeholder="1"
+                  placeholder="לדוגמה: 1"
                   className="rounded-xl"
                 />
               </div>

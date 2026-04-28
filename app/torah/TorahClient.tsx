@@ -100,10 +100,10 @@ const emptyForm = (): FormState => ({
   price_per_column: "",
   parchment_type: "",
   includes_accessories: false,
-  columns_per_day: "0",
+  columns_per_day: "",
   qa_weeks_buffer: "3",
-  gavra_qa_count: "1",
-  computer_qa_count: "1",
+  gavra_qa_count: "",
+  computer_qa_count: "",
   requires_tagging: false,
 });
 
@@ -312,7 +312,7 @@ function NewProjectDialog({
                     total_agreed_price: applyNumericTransform(e.target.value),
                   }))
                 }
-                placeholder="0"
+                placeholder="לדוגמה: 120000"
               />
             </div>
             <div>
@@ -329,7 +329,7 @@ function NewProjectDialog({
                     price_per_column: applyNumericTransform(e.target.value),
                   }))
                 }
-                placeholder="0"
+                placeholder="לדוגמה: 450"
               />
             </div>
             <div>
@@ -370,6 +370,7 @@ function NewProjectDialog({
                       gavra_qa_count: applyNumericTransform(e.target.value),
                     }))
                   }
+                  placeholder="לדוגמה: 1"
                 />
               </div>
               <div>
@@ -385,6 +386,7 @@ function NewProjectDialog({
                       computer_qa_count: applyNumericTransform(e.target.value),
                     }))
                   }
+                  placeholder="לדוגמה: 1"
                 />
               </div>
             </div>
@@ -416,7 +418,7 @@ function NewProjectDialog({
                       columns_per_day: applyNumericTransform(e.target.value),
                     }))
                   }
-                  placeholder="0"
+                  placeholder="ריק = לא מוגדר"
                 />
               </div>
               <div>
