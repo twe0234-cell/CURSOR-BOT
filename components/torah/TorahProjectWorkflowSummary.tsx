@@ -25,6 +25,7 @@ import {
   TAGGING_STATUS_LABELS,
   TORAH_SHEET_STATUS_LABELS,
 } from "@/src/lib/types/torah";
+import { buildTorahWorkflowPlan } from "@/src/services/torahWorkflowConfig";
 
 type Props = {
   project: TorahProjectDetailView;
@@ -117,6 +118,13 @@ export function TorahProjectWorkflowSummary({ project, sheets, summary }: Props)
       0
     );
   const progressPercent = totalColumns > 0 ? Math.min(100, (writtenColumns / totalColumns) * 100) : 0;
+  const workflowPlan = buildTorahWorkflowPlan({
+    gavraQaCount: project.gavra_qa_count,
+    computerQaCount: project.computer_qa_count,
+    requiresTagging: project.requires_tagging,
+    taggingStatus: project.tagging_status,
+  });
+  const qaRoundCount = workflowPlan.filter((stage) => stage.kind === "qa").length;
 
   const scheduleWarnings = summary.paymentVariance.filter((row) => row.variance_amount > 0);
   const hasWarnings =
@@ -156,6 +164,62 @@ export function TorahProjectWorkflowSummary({ project, sheets, summary }: Props)
               {statusLabel(TAGGING_STATUS_LABELS, project.tagging_status as TaggingStatus | undefined)}
             </span>
           </div>
+        </div>
+
+        <div className="mb-4 rounded-2xl border border-sky-100 bg-white/85 p-4">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <ClipboardList className="size-5 text-sky-700" />
+                <h3 className="font-semibold text-slate-900">מסלול עבודה מוגדר לפרויקט</h3>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                מוצג לפי ההגדרות הקיימות בפרויקט: תיוג, מספר הגהות גברא ומספר הגהות מחשב.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+                גברא: {project.gavra_qa_count ?? 0}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+                מחשב: {project.computer_qa_count ?? 0}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+                תיוג: {project.requires_tagging ? "נדרש" : "לא נדרש"}
+              </span>
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {workflowPlan.map((stage) => (
+              <div
+                key={stage.id}
+                className={cn(
+                  "rounded-xl border p-3 text-sm",
+                  stage.kind === "qa" && "border-amber-100 bg-amber-50/60",
+                  stage.kind === "tagging" && "border-emerald-100 bg-emerald-50/60",
+                  stage.kind === "sheet" && "border-slate-200 bg-slate-50"
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-slate-900">
+                    {stage.order}. {stage.labelHe}
+                  </span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500">
+                    {stage.kind === "qa" ? "QA" : stage.kind === "tagging" ? "תיוג" : "יריעה"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{stage.helperHe}</p>
+              </div>
+            ))}
+          </div>
+          {qaRoundCount === 0 && (
+            <p className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-800">
+              לא מוגדרים סבבי QA בפרויקט הזה. אם זה לא מכוון, צריך לעדכן את הגדרת הפרויקט לפני עבודה שוטפת.
+            </p>
+          )}
+          <p className="mt-3 text-[11px] leading-5 text-slate-500">
+            הערה: סדר QA מפורט לפי פרויקט עדיין אינו נשמר בטבלה ייעודית; כרגע מוצגים סבבי גברא ולאחריהם סבבי מחשב לפי השדות הקיימים.
+          </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
