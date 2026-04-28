@@ -118,6 +118,16 @@ const QA_KIND_LABELS: Record<"gavra" | "computer" | "repair" | "other", string> 
   other: "אחר",
 };
 
+const QA_BATCH_STATUS_LABELS: Record<string, string> = {
+  sent: "נשלחה",
+  returned: "חזרה",
+  draft: "טיוטה",
+  pending: "ממתינה",
+  corrections_needed: "נדרש תיקון",
+  closed: "סגורה",
+  cancelled: "מבוטלת",
+};
+
 type FixCompletionRoute =
   | "computer_review"
   | "gavra_review"
@@ -1316,6 +1326,36 @@ export default function TorahDetailClient({
                           <p className="text-xs text-slate-500">
                             יריעות ({b.sheet_numbers.length}): {b.sheet_numbers.join(", ") || "—"}
                           </p>
+                          <div className="grid gap-2 rounded-lg border border-slate-200 bg-white/75 p-3 text-xs text-slate-600 sm:grid-cols-2">
+                            <span>
+                              סטטוס שקית:{" "}
+                              <strong className="text-slate-800">
+                                {QA_BATCH_STATUS_LABELS[b.status] ?? b.status}
+                              </strong>
+                            </span>
+                            <span>
+                              סוג סבב:{" "}
+                              <strong className="text-slate-800">
+                                {b.qa_kind ? QA_KIND_LABELS[b.qa_kind] : "לא הוגדר"}
+                              </strong>
+                            </span>
+                            <span>
+                              יעד/מגיה:{" "}
+                              <strong className="text-slate-800">
+                                {b.magiah_name ?? b.vendor_label ?? "לא הוגדר"}
+                              </strong>
+                            </span>
+                            <span>
+                              עלות סבב נוכחי:{" "}
+                              <strong className="text-slate-800">
+                                {typeof b.cost_amount === "number" && b.cost_amount > 0
+                                  ? formatShekels(b.cost_amount)
+                                  : "לא הוזנה"}
+                              </strong>
+                            </span>
+                            <span>נשלח: {formatDate(b.sent_date)}</span>
+                            <span>חזרה בפועל: {b.returned_date ? formatDate(b.returned_date) : "עדיין לא"}</span>
+                          </div>
                           {b.notes && <p className="text-xs text-slate-500 italic">{b.notes}</p>}
                         </div>
                         <div className="flex flex-wrap gap-2 shrink-0">
@@ -1333,6 +1373,28 @@ export default function TorahDetailClient({
                             }
                           >
                             🖨️ הדפס מדבקה
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg border-slate-200 text-slate-400"
+                            disabled
+                            title="עריכת מטא-דאטה לשקית תדרוש פעולה מבוקרת עם audit trail ב-PR הבא"
+                          >
+                            <Pencil className="size-3.5 ml-1" />
+                            עריכת שקית
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg border-slate-200 text-slate-400"
+                            disabled
+                            title="פירוק/בנייה מחדש צריכים typed confirmation ועדכון סטטוסים מבוקר"
+                          >
+                            <Trash2 className="size-3.5 ml-1" />
+                            פירוק / בנייה מחדש
                           </Button>
                           {b.status === "sent" && (
                             <>
