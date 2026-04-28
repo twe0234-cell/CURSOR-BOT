@@ -1180,6 +1180,17 @@ export default function TorahDetailClient({
 
           {/* ── TAB 2: QA Batches ────────────────────────── */}
           <TabsContent value="qa">
+            <Card className="mb-4 rounded-xl border-slate-200 bg-slate-50/60">
+              <CardContent className="space-y-2 p-3 text-xs text-slate-700">
+                <p className="font-semibold text-slate-900">פעולות נתמכות כרגע בשקיות הגהה</p>
+                <p>
+                  יצירת שקית, החזרה/סגירת סבב, פתרון יריעות (אישור/לתיקון), יצירת משימת תיקון וסגירת תיקון.
+                </p>
+                <p className="text-slate-600">
+                  לא זמין עדיין: פירוק שקית, בנייה מחדש, הוצאה/הוספת יריעה לשקית קיימת, ועריכת מטא-דאטה היסטורית של שקית.
+                </p>
+              </CardContent>
+            </Card>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <PackageCheck className="size-5 text-amber-600" />
@@ -1383,7 +1394,7 @@ export default function TorahDetailClient({
                             title="עריכת מטא-דאטה לשקית תדרוש פעולה מבוקרת עם audit trail ב-PR הבא"
                           >
                             <Pencil className="size-3.5 ml-1" />
-                            עריכת שקית
+                            עריכת שקית (לא זמין עדיין)
                           </Button>
                           <Button
                             type="button"
@@ -1394,7 +1405,7 @@ export default function TorahDetailClient({
                             title="פירוק/בנייה מחדש צריכים typed confirmation ועדכון סטטוסים מבוקר"
                           >
                             <Trash2 className="size-3.5 ml-1" />
-                            פירוק / בנייה מחדש
+                            פירוק / בנייה מחדש (לא זמין עדיין)
                           </Button>
                           {b.status === "sent" && (
                             <>

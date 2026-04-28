@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +83,9 @@ export default function SalesClient() {
   const [newExpAmount, setNewExpAmount] = useState("");
   const [newExpNotes, setNewExpNotes] = useState("");
   const [addClientOpen, setAddClientOpen] = useState(false);
+  const [addClientTarget, setAddClientTarget] = useState<"buyer" | "seller">("buyer");
+  const [buyerSearch, setBuyerSearch] = useState("");
+  const [sellerSearch, setSellerSearch] = useState("");
   const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
   const [editSale, setEditSale] = useState<SaleRecord | null>(null);
   const [editSaleDate, setEditSaleDate] = useState("");
@@ -143,6 +146,16 @@ export default function SalesClient() {
 
   const selectedInventoryLine = inventoryItems.find((i) => i.id === newSaleItemId);
   const maxQtyToSell = selectedInventoryLine?.quantity ?? 1;
+  const filteredBuyerContacts = useMemo(() => {
+    const q = buyerSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter((c) => c.name.toLowerCase().includes(q));
+  }, [buyerSearch, contacts]);
+  const filteredSellerContacts = useMemo(() => {
+    const q = sellerSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter((c) => c.name.toLowerCase().includes(q));
+  }, [sellerSearch, contacts]);
 
   const handleCreateSale = async () => {
     if (saleType === "ממלאי") {
@@ -234,6 +247,8 @@ export default function SalesClient() {
     setNewSaleCommission("");
     setNewSaleNotes("");
     setInventorySearch("");
+    setBuyerSearch("");
+    setSellerSearch("");
   };
 
   const handleAddExpense = async () => {
@@ -706,16 +721,39 @@ export default function SalesClient() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold">בעלים מקורי (אופציונלי)</label>
-                  <select
-                    value={newSaleSellerId}
-                    onChange={(e) => setNewSaleSellerId(e.target.value)}
-                    className="w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="">—</option>
-                    {contacts.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <Input
+                      value={sellerSearch}
+                      onChange={(e) => setSellerSearch(e.target.value)}
+                      placeholder="חפש בעלים לפי שם..."
+                      className="rounded-xl"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={newSaleSellerId}
+                        onChange={(e) => setNewSaleSellerId(e.target.value)}
+                        className="flex-1 rounded-xl border px-3 py-2"
+                      >
+                        <option value="">—</option>
+                        {filteredSellerContacts.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setAddClientTarget("seller");
+                          setAddClientOpen(true);
+                        }}
+                        className="rounded-xl shrink-0"
+                      >
+                        <PlusIcon className="size-4 ml-1" />
+                        צור איש קשר חדש
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold">עמלה בפועל שהתקבלה (₪)</label>
@@ -774,27 +812,38 @@ export default function SalesClient() {
 
             <div>
               <label className="mb-1.5 block text-sm font-semibold">קונה (אופציונלי)</label>
-              <div className="flex gap-2">
-                <select
-                  value={newSaleBuyerId}
-                  onChange={(e) => setNewSaleBuyerId(e.target.value)}
-                  className="flex-1 rounded-xl border px-3 py-2"
-                >
-                  <option value="">—</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAddClientOpen(true)}
-                  className="rounded-xl shrink-0"
-                >
-                  <PlusIcon className="size-4 ml-1" />
-                  הוסף
-                </Button>
+              <div className="space-y-2">
+                <Input
+                  value={buyerSearch}
+                  onChange={(e) => setBuyerSearch(e.target.value)}
+                  placeholder="חפש קונה לפי שם..."
+                  className="rounded-xl"
+                />
+                <div className="flex gap-2">
+                  <select
+                    value={newSaleBuyerId}
+                    onChange={(e) => setNewSaleBuyerId(e.target.value)}
+                    className="flex-1 rounded-xl border px-3 py-2"
+                  >
+                    <option value="">—</option>
+                    {filteredBuyerContacts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAddClientTarget("buyer");
+                      setAddClientOpen(true);
+                    }}
+                    className="rounded-xl shrink-0"
+                  >
+                    <PlusIcon className="size-4 ml-1" />
+                    צור איש קשר חדש
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -913,7 +962,13 @@ export default function SalesClient() {
         onOpenChange={setAddClientOpen}
         onSuccess={(c) => {
           setContacts((prev) => [...prev, c]);
-          setNewSaleBuyerId(c.id);
+          if (addClientTarget === "seller") {
+            setNewSaleSellerId(c.id);
+            setSellerSearch("");
+          } else {
+            setNewSaleBuyerId(c.id);
+            setBuyerSearch("");
+          }
         }}
       />
 

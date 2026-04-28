@@ -369,12 +369,12 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
             <div
               className={cn(
                 "flex gap-2 rounded-xl border px-3 py-2.5 text-sm",
-                "border-red-200 bg-red-50 text-red-900"
+                "border-amber-200 bg-amber-50 text-amber-950"
               )}
             >
               <AlertTriangle className="size-4 shrink-0 mt-0.5" />
               <span>
-                שולם לסופר בעוד שאין עמודות בסטטוס מאושר/תפור — ודא שהתשלום תואם להתקדמות.
+                יש תשלומים לסופר לפני אישור/תפירה מלאה. ודא שהתשלום תואם להסכם, קצב כתיבה או מקדמה מתוכננת.
               </span>
             </div>
           )}
