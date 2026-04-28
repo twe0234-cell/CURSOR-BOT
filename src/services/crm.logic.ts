@@ -429,6 +429,15 @@ export type SaleRowDisplay = {
   paidPct: number;
 };
 
+export type MediationCommissionReceiptStatus = "לא שולם" | "שולם חלקית" | "שולם במלואו";
+
+export type MediationCommissionDisplay = {
+  expectedCommission: number;
+  receivedCommission: number;
+  remainingCommission: number;
+  status: MediationCommissionReceiptStatus;
+};
+
 /**
  * Pure row-display helper for the sales list UI.
  *
@@ -472,6 +481,32 @@ export function computeSaleRowDisplay(sale: SaleRowInput): SaleRowDisplay {
     paid: Math.max(0, paid),
     balance,
     paidPct,
+  };
+}
+
+/**
+ * Commission receipt display helper for mediation deals.
+ * Uses the same canonical paid/remaining derivation as computeSaleRowDisplay.
+ */
+export function computeMediationCommissionDisplay(
+  sale: SaleRowInput
+): MediationCommissionDisplay {
+  const row = computeSaleRowDisplay(sale);
+  const expectedCommission = row.totalDeal;
+  const receivedCommission = row.paid;
+  const remainingCommission = row.balance;
+  const status: MediationCommissionReceiptStatus =
+    receivedCommission <= 0
+      ? "לא שולם"
+      : remainingCommission > 0
+        ? "שולם חלקית"
+        : "שולם במלואו";
+
+  return {
+    expectedCommission,
+    receivedCommission,
+    remainingCommission,
+    status,
   };
 }
 
