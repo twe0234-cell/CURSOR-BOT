@@ -18,6 +18,7 @@ import {
   getDealFinancials,
   computeSaleProfit,
   computeSaleRowDisplay,
+  computeMediationCommissionDisplay,
   computeSaleFinancialPatch,
   isDealDelivered,
   classifyDealBalance,
@@ -1118,6 +1119,38 @@ describe("computeSaleRowDisplay", () => {
     expect(r.totalDeal).toBeGreaterThanOrEqual(0);
     expect(r.paid).toBeGreaterThanOrEqual(0);
     expect(r.balance).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("computeMediationCommissionDisplay", () => {
+  it("returns לא שולם when no commission receipt exists", () => {
+    const r = computeMediationCommissionDisplay({
+      total_price: 1200,
+      total_paid: 0,
+    });
+    expect(r.expectedCommission).toBe(1200);
+    expect(r.receivedCommission).toBe(0);
+    expect(r.remainingCommission).toBe(1200);
+    expect(r.status).toBe("לא שולם");
+  });
+
+  it("returns שולם חלקית for partial receipt", () => {
+    const r = computeMediationCommissionDisplay({
+      total_price: 1200,
+      total_paid: 450,
+    });
+    expect(r.receivedCommission).toBe(450);
+    expect(r.remainingCommission).toBe(750);
+    expect(r.status).toBe("שולם חלקית");
+  });
+
+  it("returns שולם במלואו when commission fully received", () => {
+    const r = computeMediationCommissionDisplay({
+      total_price: 1200,
+      total_paid: 1200,
+    });
+    expect(r.remainingCommission).toBe(0);
+    expect(r.status).toBe("שולם במלואו");
   });
 });
 

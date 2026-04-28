@@ -48,7 +48,10 @@ import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
 import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon } from "lucide-react";
 import { buildPaymentRequestText, buildCalendarEventUrl, mailtoPaymentHref } from "@/lib/sales/paymentRequest";
-import { computeSaleRowDisplay } from "@/src/services/crm.logic";
+import {
+  computeMediationCommissionDisplay,
+  computeSaleRowDisplay,
+} from "@/src/services/crm.logic";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
@@ -307,6 +310,11 @@ export default function SalesClient() {
     return s.item_category ?? "—";
   };
 
+  const paymentSale = useMemo(
+    () => (paymentSaleId ? sales.find((s) => s.id === paymentSaleId) ?? null : null),
+    [paymentSaleId, sales]
+  );
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="sales" className="w-full">
@@ -364,6 +372,8 @@ export default function SalesClient() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sales.map((s, i) => {
                     const { totalDeal, paid, balance, paidPct: pct } = computeSaleRowDisplay(s);
+                    const isMediation = s.sale_type === "תיווך";
+                    const mediation = isMediation ? computeMediationCommissionDisplay(s) : null;
                     return (
                       <div
                         key={s.id}
@@ -383,6 +393,18 @@ export default function SalesClient() {
                         <p className="font-semibold text-sm leading-snug">{getSaleDisplay(s)}</p>
                         {s.buyer_name && (
                           <p className="text-xs text-muted-foreground">קונה: {s.buyer_name}</p>
+                        )}
+                        {isMediation && mediation && (
+                          <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-2 text-[11px] leading-5">
+                            <p className="font-semibold text-sky-900">
+                              סטטוס עמלה: {mediation.status}
+                            </p>
+                            <p className="text-slate-700">
+                              צפוי: {mediation.expectedCommission.toLocaleString("he-IL")} ₪ · התקבל:{" "}
+                              {mediation.receivedCommission.toLocaleString("he-IL")} ₪ · יתרה:{" "}
+                              {mediation.remainingCommission.toLocaleString("he-IL")} ₪
+                            </p>
+                          </div>
                         )}
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
@@ -411,7 +433,8 @@ export default function SalesClient() {
                             <PencilIcon className="size-3.5 ml-1" />ערוך
                           </Button>
                           <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
-                            <BanknoteIcon className="size-3.5 ml-1" />תשלום
+                            <BanknoteIcon className="size-3.5 ml-1" />
+                            {isMediation ? "רשום קבלת עמלה" : "תשלום"}
                           </Button>
                           {/* שלח לאישור — WA */}
                           <a
@@ -458,12 +481,15 @@ export default function SalesClient() {
                         <TableHead className="font-semibold">יתרת חוב</TableHead>
                         <TableHead className="font-semibold">רווח על הנייר</TableHead>
                         <TableHead className="font-semibold">רווח מוכר (החזר עלות)</TableHead>
+                        <TableHead className="font-semibold">סטטוס עמלה (תיווך)</TableHead>
                         <TableHead className="font-semibold w-28">פעולות</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sales.map((s, i) => {
                         const { totalDeal, paid, balance } = computeSaleRowDisplay(s);
+                        const isMediation = s.sale_type === "תיווך";
+                        const mediation = isMediation ? computeMediationCommissionDisplay(s) : null;
                         return (
                           <TableRow key={s.id} className={`table-row-animate stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
                             <TableCell>
@@ -487,13 +513,28 @@ export default function SalesClient() {
                                 ? `${s.realized_recovery_profit.toLocaleString("he-IL")} ₪`
                                 : "—"}
                             </TableCell>
+                            <TableCell className="text-xs">
+                              {mediation ? (
+                                <div className="space-y-1">
+                                  <p className="font-semibold">{mediation.status}</p>
+                                  <p>
+                                    צפוי {mediation.expectedCommission.toLocaleString("he-IL")} ₪ · התקבל{" "}
+                                    {mediation.receivedCommission.toLocaleString("he-IL")} ₪ · יתרה{" "}
+                                    {mediation.remainingCommission.toLocaleString("he-IL")} ₪
+                                  </p>
+                                </div>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
                                 <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
                                   <PencilIcon className="size-3.5 ml-1" />ערוך
                                 </Button>
                                 <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
-                                  <BanknoteIcon className="size-3.5 ml-1" />תשלום
+                                  <BanknoteIcon className="size-3.5 ml-1" />
+                                  {isMediation ? "רשום קבלת עמלה" : "תשלום"}
                                 </Button>
                                 <a
                                   href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
@@ -953,7 +994,11 @@ export default function SalesClient() {
         onOpenChange={(o) => !o && setPaymentSaleId(null)}
         entityId={paymentSaleId}
         entityType="sale"
-        title="רישום תשלום — מכירה"
+        title={
+          paymentSale?.sale_type === "תיווך"
+            ? `רשום קבלת עמלה${paymentSale.buyer_name ? ` · משלם: ${paymentSale.buyer_name}` : ""}`
+            : "רישום תשלום — מכירה"
+        }
         onSuccess={loadData}
       />
 
