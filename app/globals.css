@@ -168,7 +168,7 @@
   --color-navy-light:              var(--navy-light);
 
   /* Typography */
-  --font-sans:    var(--font-heebo), system-ui, sans-serif;
+  --font-sans:    Assistant, Heebo, "Noto Sans Hebrew", Arial, sans-serif;
   --font-mono:    var(--font-geist-mono);
   /* Serif display — Frank Ruhl Libre. Reserved for Display / H1 / H2 via <Display>/<H1>/<H2>. */
   --font-display: var(--font-display), "Frank Ruhl Libre", "David Libre", serif;
@@ -474,7 +474,7 @@ body {
     radial-gradient(ellipse 80% 50% at 0% 100%, oklch(0.26 0.068 265 / 4%), transparent 50%),
     var(--background);
   color: var(--foreground);
-  font-family: var(--font-heebo), system-ui, sans-serif;
+  font-family: Assistant, Heebo, "Noto Sans Hebrew", Arial, sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════════

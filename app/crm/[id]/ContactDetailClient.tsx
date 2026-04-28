@@ -324,12 +324,32 @@ function ledgerEntityTypeHe(t: string): string {
   return t;
 }
 
-function roleBadges(type: string) {
+function uniqueLabels(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const label of labels) {
+    const trimmed = label.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function isDefaultOtherLabel(label: string): boolean {
+  const normalized = label.trim().toLowerCase();
+  return normalized === "אחר" || normalized === "other";
+}
+
+function roleBadges(type: string, tags: string[]) {
+  const meaningfulTags = tags.map((t) => t.trim()).filter((t) => t && !isDefaultOtherLabel(t));
   const badges: { key: string; label: string; className: string }[] = [];
   if (type === "End_Customer") badges.push({ key: "c", label: "לקוח", className: "bg-emerald-100 text-emerald-900" });
   if (type === "Scribe") badges.push({ key: "s", label: "סופר", className: "bg-violet-100 text-violet-900" });
   if (type === "Merchant") badges.push({ key: "m", label: "סוחר", className: "bg-amber-100 text-amber-900" });
-  if (badges.length === 0) badges.push({ key: "o", label: "אחר", className: "bg-slate-100 text-slate-700" });
+  if (badges.length === 0 && meaningfulTags.length === 0) {
+    badges.push({ key: "o", label: "אחר", className: "bg-slate-100 text-slate-700" });
+  }
   return badges;
 }
 
@@ -451,7 +471,17 @@ export default function ContactDetailClient({
     });
   }, [mergeOpen, contact.id]);
 
-  const badges = roleBadges(contact.type);
+  const badges = roleBadges(contact.type, contact.tags);
+  const badgeLabels = new Set(badges.map((b) => b.label));
+  const visibleTags = uniqueLabels(contact.tags).filter((tag) => {
+    if (badgeLabels.has(tag)) return false;
+    if (isDefaultOtherLabel(tag) && (badges.length > 0 || contact.tags.some((t) => !isDefaultOtherLabel(t)))) return false;
+    return true;
+  });
+  const visibleTypeLabel =
+    !badgeLabels.has(typeLabel) && !(isDefaultOtherLabel(typeLabel) && visibleTags.length > 0)
+      ? typeLabel
+      : null;
 
   type TimelineItem =
     | { kind: "history"; at: string; data: CrmContactHistoryEntry }
@@ -669,9 +699,11 @@ export default function ContactDetailClient({
                   {b.label}
                 </span>
               ))}
-              <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-800 border border-teal-100">
-                {typeLabel}
-              </span>
+              {visibleTypeLabel && (
+                <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-800 border border-teal-100">
+                  {visibleTypeLabel}
+                </span>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               מועדף: {contactPreferredLabel(contact)} · מזהה:{" "}
@@ -767,9 +799,9 @@ export default function ContactDetailClient({
         </CardHeader>
         {!editMode && (
           <CardContent className="border-t pt-4 space-y-2">
-            {contact.tags.length > 0 && (
+            {visibleTags.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {contact.tags.map((t) => (
+                {visibleTags.map((t) => (
                   <span key={t} className="rounded-full bg-teal-100 px-2 py-0.5 text-xs">
                     {t}
                   </span>
