@@ -50,9 +50,11 @@ export function buildInventorySaleLabel(input: {
 export function buildInventorySaleLabelSkuPrecise(input: {
   id: string;
   sku: string | null;
+  barcode?: string | null;
   product_category: string | null;
   category_meta: Record<string, unknown> | null;
   quantity: number;
+  scribe_name?: string | null;
   size?: string | null;
 }): string {
   const sku = input.sku ?? input.id.slice(0, 8);
@@ -62,5 +64,9 @@ export function buildInventorySaleLabelSkuPrecise(input: {
     input.product_category,
     input.size ?? null
   );
-  return `[${sku}] ${cat} - ${det} (זמין: ${input.quantity})`;
+  const supplier = input.scribe_name?.trim() || "ללא ספק";
+  const barcode = input.barcode?.trim();
+  const refs = [`מק״ט: ${sku}`];
+  if (barcode) refs.push(`ברקוד: ${barcode}`);
+  return `${cat} (${supplier}) · ${det} · ${refs.join(" · ")} · זמין: ${input.quantity}`;
 }

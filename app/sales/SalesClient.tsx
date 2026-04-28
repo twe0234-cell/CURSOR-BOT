@@ -142,7 +142,10 @@ export default function SalesClient() {
         return (
           i.display_label.toLowerCase().includes(q) ||
           (i.product_category ?? "").toLowerCase().includes(q) ||
-          (i.sku ?? "").toLowerCase().includes(q)
+          (i.sku ?? "").toLowerCase().includes(q) ||
+          (i.barcode ?? "").toLowerCase().includes(q) ||
+          (i.scribe_name ?? "").toLowerCase().includes(q) ||
+          (i.size ?? "").toLowerCase().includes(q)
         );
       })
     : inventoryItems;
@@ -676,7 +679,7 @@ export default function SalesClient() {
                     <Input
                       value={inventorySearch}
                       onChange={(e) => setInventorySearch(e.target.value)}
-                      placeholder="חפש לפי קטגוריה..."
+                      placeholder="סרוק ברקוד / הקלד מק״ט, קטגוריה או סופר..."
                       className="rounded-xl pr-10 mb-2"
                     />
                   </div>
