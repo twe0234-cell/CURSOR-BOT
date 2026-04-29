@@ -11,14 +11,14 @@ export default async function SalesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/50" dir="rtl">
-      <div className="w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="mx-auto w-full max-w-[1680px] px-3 py-4 sm:px-4 sm:py-5 lg:px-6">
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">מכירות ותזרים</h1>
-            <p className="mt-1 text-muted-foreground">ניהול מכירות והוצאות</p>
+            <h1 className="text-2xl font-bold text-slate-800 lg:text-3xl">מכירות ותזרים</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">ניהול מכירות והוצאות</p>
           </div>
           <Link href="/">
-            <Button variant="outline" className="rounded-xl">חזרה לדשבורד</Button>
+            <Button variant="outline" className="h-8 rounded-lg px-3 text-xs sm:h-9 sm:text-sm">חזרה לדשבורד</Button>
           </Link>
         </div>
         <SalesClient />
