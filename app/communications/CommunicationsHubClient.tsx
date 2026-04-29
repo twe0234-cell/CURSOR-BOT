@@ -30,6 +30,7 @@ type Props = {
   waGroups: WaGroup[];
   waGroupOptions: { wa_chat_id: string; name: string | null }[];
   prefilledWaMessage: string;
+  prefilledWaImageUrl: string;
 };
 
 export default function CommunicationsHubClient({
@@ -41,6 +42,7 @@ export default function CommunicationsHubClient({
   waGroups,
   waGroupOptions,
   prefilledWaMessage,
+  prefilledWaImageUrl,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -140,10 +142,11 @@ export default function CommunicationsHubClient({
               </TabsList>
               <TabsContent value="broadcast" className="mt-0">
                 <BroadcastTab
-                  key={prefilledWaMessage}
+                  key={`${prefilledWaMessage}|${prefilledWaImageUrl}`}
                   allTags={waAllTags}
                   allowedTags={waAllowedTags}
                   prefilledMessage={prefilledWaMessage}
+                  prefilledImageUrl={prefilledWaImageUrl}
                   groups={waGroupOptions}
                 />
               </TabsContent>
