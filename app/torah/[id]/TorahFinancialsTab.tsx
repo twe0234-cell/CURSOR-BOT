@@ -15,10 +15,12 @@ import {
 } from "@/components/ui/dialog";
 import type { TorahProjectDetailView, TorahSheetGridRow } from "@/src/lib/types/torah";
 import {
-  estimateTorahProjectProfitability,
+  computeTorahPlannedProfitSnapshot,
   summarizeTorahLedger,
   computeTorahProjectNetCashflowFromLedger,
   sumTorahLedgerPayments,
+  extractPlannedOperationalBudgetFromSnapshot,
+  resolveTorahPlannedParchmentBudget,
 } from "@/src/services/crm.logic";
 import { estimateTorahScrollWritingCompletionDate } from "@/src/services/torahCompletionForecast";
 import {
@@ -178,20 +180,44 @@ export function TorahFinancialsTab({ projectId, project, sheets }: Props) {
     [ledgerLines]
   );
 
-  const profitability = useMemo(
-    () =>
-      estimateTorahProjectProfitability({
-        amountPaidByClient: project.amount_paid_by_client,
-        amountPaidToScribe: project.amount_paid_to_scribe,
-        ledgerLines,
-      }),
-    [project.amount_paid_by_client, project.amount_paid_to_scribe, ledgerLines]
-  );
-
   const netCashflow = useMemo(
     () => computeTorahProjectNetCashflowFromLedger(ledgerLines),
     [ledgerLines]
   );
+
+  const plannedProfit = useMemo(() => {
+    const ops = extractPlannedOperationalBudgetFromSnapshot(project.calculator_snapshot);
+    const plannedParchment = resolveTorahPlannedParchmentBudget({
+      plannedParchmentBudgetColumn: project.planned_parchment_budget,
+      calculatorSnapshot: project.calculator_snapshot,
+    });
+    return computeTorahPlannedProfitSnapshot({
+      contractTotal: project.total_agreed_price,
+      plannedScribeCost:
+        Number.isFinite(Number(project.planned_scribe_budget)) ? Number(project.planned_scribe_budget) : ops.scribe,
+      plannedParchmentCost: plannedParchment,
+      plannedProofreadingCost:
+        Number.isFinite(Number(project.planned_proofreading_budget))
+          ? Number(project.planned_proofreading_budget)
+          : ops.proofreading,
+      plannedMiscCost:
+        Number.isFinite(Number(project.estimated_expenses_total))
+          ? Number(project.estimated_expenses_total)
+          : ops.misc,
+      approvedBudgetDeviations: 0,
+      actualCashIn: netCashflow.totalCashIn,
+      actualCashOut: netCashflow.totalCashOut,
+    });
+  }, [
+    project.calculator_snapshot,
+    project.estimated_expenses_total,
+    project.planned_parchment_budget,
+    project.planned_proofreading_budget,
+    project.planned_scribe_budget,
+    project.total_agreed_price,
+    netCashflow.totalCashIn,
+    netCashflow.totalCashOut,
+  ]);
 
   const eventByTxId = useMemo(() => {
     const m = new Map<string, TorahSysEventView>();
@@ -356,6 +382,9 @@ export function TorahFinancialsTab({ projectId, project, sheets }: Props) {
         return;
       }
       toast.success("נרשמה תנועה והמועד סומן כשולם");
+      if (project.amount_paid_to_scribe > 0 && sheets.every((s) => s.status !== "approved" && s.status !== "received" && s.status !== "sewn")) {
+        toast.warning("שולם לפני אישור/קבלה — ודא שזה מכוון");
+      }
       await load();
       router.refresh();
     } finally {
@@ -413,11 +442,11 @@ export function TorahFinancialsTab({ projectId, project, sheets }: Props) {
         </Card>
         <Card className="rounded-xl border-violet-100 bg-violet-50/40 sm:col-span-2 lg:col-span-2">
           <CardContent className="p-4 text-sm">
-            <p className="text-xs text-violet-900/80 mb-1">הערכת רווחיות נוכחית</p>
-            <p className="text-xl font-bold tabular-nums text-violet-900">{formatShekels(profitability)}</p>
+            <p className="text-xs text-violet-900/80 mb-1">רווח צפוי לפי תוכנית</p>
+            <p className="text-xl font-bold tabular-nums text-violet-900">{formatShekels(plannedProfit.expectedProfitByPlan)}</p>
             <p className="text-[10px] text-muted-foreground mt-1">
-              לקוח פחות סופר (אחרי ניכוי תיקונים) פחות הגהה ({formatShekels(totalQaExpense)}), קלף (
-              {formatShekels(totalParchmentExpense)}) ואחרות ({formatShekels(totalOtherExpense)})
+              תזרים בפועל עד עכשיו: {formatShekels(plannedProfit.actualCashflowNow)} · חריגות תקציב מאושרות:{" "}
+              {formatShekels(plannedProfit.approvedBudgetDeviations)}
             </p>
           </CardContent>
         </Card>

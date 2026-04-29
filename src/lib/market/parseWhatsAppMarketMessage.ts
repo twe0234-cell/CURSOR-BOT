@@ -1,5 +1,9 @@
 import { STAM_SCRIPT_TYPES } from "@/src/lib/stam/catalog";
 
+// TODO(stabilization): text + image sent separately in WhatsApp are currently parsed as
+// separate events. Future solution should group messages/media by same chat/contact within
+// a configurable time window and then emit one business interaction event.
+
 /**
  * פענוח הודעת WhatsApp למאגר ס״ת — פורמט קבוע, ירידת שורה כמפריד.
  *

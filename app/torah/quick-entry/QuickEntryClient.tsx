@@ -130,7 +130,7 @@ export default function QuickEntryClient({ initialProjects }: Props) {
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0"
+                  placeholder="לדוגמה: 1800"
                 />
               </div>
               <div className="space-y-2">

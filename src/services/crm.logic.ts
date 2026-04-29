@@ -920,6 +920,52 @@ export function computeTorahProjectNetCashflowFromLedger(transactions: TorahLedg
   };
 }
 
+/**
+ * Planned profitability model for Torah projects.
+ * Expected profit is plan-based (contract - planned costs +/- approved deviations),
+ * and is intentionally separated from current cashflow.
+ */
+export function computeTorahPlannedProfitSnapshot(input: {
+  contractTotal: number;
+  plannedScribeCost?: number | null;
+  plannedParchmentCost?: number | null;
+  plannedProofreadingCost?: number | null;
+  plannedMiscCost?: number | null;
+  approvedBudgetDeviations?: number | null;
+  actualCashIn: number;
+  actualCashOut: number;
+}): {
+  expectedProfitByPlan: number;
+  actualCashflowNow: number;
+  approvedBudgetDeviations: number;
+} {
+  const safe = (v: number | null | undefined): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const contractTotal = safe(input.contractTotal);
+  const plannedScribeCost = safe(input.plannedScribeCost);
+  const plannedParchmentCost = safe(input.plannedParchmentCost);
+  const plannedProofreadingCost = safe(input.plannedProofreadingCost);
+  const plannedMiscCost = safe(input.plannedMiscCost);
+  const approvedBudgetDeviations = safe(input.approvedBudgetDeviations);
+  const actualCashIn = safe(input.actualCashIn);
+  const actualCashOut = safe(input.actualCashOut);
+
+  return {
+    expectedProfitByPlan:
+      contractTotal
+      - plannedScribeCost
+      - plannedParchmentCost
+      - plannedProofreadingCost
+      - plannedMiscCost
+      + approvedBudgetDeviations,
+    actualCashflowNow: actualCashIn - actualCashOut,
+    approvedBudgetDeviations,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Torah scribe pace (קליטת יריעות / מעקב קצב)
 // ─────────────────────────────────────────────────────────────────────────────

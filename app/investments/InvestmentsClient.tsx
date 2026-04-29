@@ -52,7 +52,7 @@ export default function InvestmentsClient() {
   const [loading, setLoading] = useState(false);
   const [newScribeId, setNewScribeId] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
-  const [newQuantity, setNewQuantity] = useState("1");
+  const [newQuantity, setNewQuantity] = useState("");
   const [newCostPerUnit, setNewCostPerUnit] = useState("");
   const [newTargetDate, setNewTargetDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
@@ -67,7 +67,7 @@ export default function InvestmentsClient() {
   const [editOpen, setEditOpen] = useState<string | null>(null);
   const [editScribeId, setEditScribeId] = useState("");
   const [editItemDetails, setEditItemDetails] = useState("");
-  const [editQuantity, setEditQuantity] = useState("1");
+  const [editQuantity, setEditQuantity] = useState("");
   const [editCostPerUnit, setEditCostPerUnit] = useState("");
   const [editTargetDate, setEditTargetDate] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -109,7 +109,7 @@ export default function InvestmentsClient() {
       setCreateOpen(false);
       setNewScribeId("");
       setNewItemDetails("");
-      setNewQuantity("1");
+      setNewQuantity("");
       setNewCostPerUnit("");
       setNewTargetDate("");
       setNewNotes("");
@@ -528,7 +528,7 @@ export default function InvestmentsClient() {
                   step={0.01}
                   value={newQuantity}
                   onChange={handleNumericChange(setNewQuantity)}
-                  placeholder="1"
+                  placeholder="לדוגמה: 1"
                   className="rounded-xl"
                 />
               </div>
@@ -539,7 +539,7 @@ export default function InvestmentsClient() {
                   min={0}
                   value={newCostPerUnit}
                   onChange={handleNumericChange(setNewCostPerUnit)}
-                  placeholder="0"
+                  placeholder="לדוגמה: 4200"
                   className="rounded-xl"
                 />
               </div>
@@ -573,7 +573,7 @@ export default function InvestmentsClient() {
                 <Input
                   type="number"
                   min={1}
-                  placeholder="120"
+                  placeholder="לדוגמה: 120"
                   value={newWorkDaysNeeded}
                   onChange={(e) => {
                     setNewWorkDaysNeeded(e.target.value);
@@ -647,7 +647,7 @@ export default function InvestmentsClient() {
                   step={0.01}
                   value={editQuantity}
                   onChange={handleNumericChange(setEditQuantity)}
-                  placeholder="1"
+                  placeholder="לדוגמה: 1"
                   className="rounded-xl"
                 />
               </div>
@@ -658,7 +658,7 @@ export default function InvestmentsClient() {
                   min={0}
                   value={editCostPerUnit}
                   onChange={handleNumericChange(setEditCostPerUnit)}
-                  placeholder="0"
+                  placeholder="לדוגמה: 4200"
                   className="rounded-xl"
                 />
               </div>
@@ -738,7 +738,7 @@ export default function InvestmentsClient() {
                       min={0}
                       value={detailDeductions}
                       onChange={handleNumericChange(setDetailDeductions)}
-                      placeholder="0"
+                      placeholder="השאר ריק אם אין ניכויים"
                       className="rounded-xl"
                     />
                     <Button onClick={handleSaveDeductions} disabled={loading} className="rounded-xl">

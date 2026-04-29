@@ -254,7 +254,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
         status: data.status || null,
         quantity: data.quantity ?? 1,
         cost_price: data.cost_price ?? null,
-        amount_paid: data.amount_paid ?? 0,
+        amount_paid: data.amount_paid ?? undefined,
         target_price: data.target_price ?? null,
         scribe_id: data.scribe_id ?? null,
         scribe_code: data.scribe_code ?? null,

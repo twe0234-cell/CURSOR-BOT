@@ -77,6 +77,8 @@ import { applyNumericTransform } from "@/lib/numericInput";
 import {
   createQaBatch,
   returnQaBatch,
+  updateQaBatchMetadata,
+  voidQaBatch,
   fetchQaBatches,
   fetchQaBatchSheetRows,
   resolveTorahSheetQa,
@@ -223,11 +225,20 @@ export default function TorahDetailClient({
   const [batchCheckerId, setBatchCheckerId] = useState("");
   const [batchQaKind, setBatchQaKind] = useState<"" | "gavra" | "computer" | "repair" | "other">("");
   const [batchCost, setBatchCost] = useState("");
+  const [batchContactSearch, setBatchContactSearch] = useState("");
   const [batchReportUrl, setBatchReportUrl] = useState<string | null>(null);
   const [batchReportUploading, setBatchReportUploading] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [returningId, setReturningId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+  const [editBatchTarget, setEditBatchTarget] = useState<QaBatchRow | null>(null);
+  const [editBatchCost, setEditBatchCost] = useState("");
+  const [editBatchNotes, setEditBatchNotes] = useState("");
+  const [editBatchSaving, setEditBatchSaving] = useState(false);
+  const [voidBatchTarget, setVoidBatchTarget] = useState<QaBatchRow | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidEmergency, setVoidEmergency] = useState(false);
+  const [voidSaving, setVoidSaving] = useState(false);
 
   const [fixTasks, setFixTasks] = useState<TorahFixTaskRow[]>([]);
   const [fixTasksLoaded, setFixTasksLoaded] = useState(false);
@@ -260,7 +271,7 @@ export default function TorahDetailClient({
   const [editComputerQa, setEditComputerQa] = useState(String(project.computer_qa_count));
   const [editRequiresTagging, setEditRequiresTagging] = useState(project.requires_tagging);
   const [editPricePerColumn, setEditPricePerColumn] = useState(
-    String(project.price_per_column ?? 0)
+    project.price_per_column != null ? String(project.price_per_column) : ""
   );
   const [editParchmentType, setEditParchmentType] = useState(project.parchment_type ?? "");
   const [editClientContractUrl, setEditClientContractUrl] = useState(
@@ -303,7 +314,7 @@ export default function TorahDetailClient({
     setEditGavraQa(String(project.gavra_qa_count));
     setEditComputerQa(String(project.computer_qa_count));
     setEditRequiresTagging(project.requires_tagging);
-    setEditPricePerColumn(String(project.price_per_column ?? 0));
+    setEditPricePerColumn(project.price_per_column != null ? String(project.price_per_column) : "");
     setEditParchmentType(project.parchment_type ?? "");
     setEditClientContractUrl(project.client_contract_url ?? "");
     setEditScribeContractUrl(project.scribe_contract_url ?? "");
@@ -451,6 +462,12 @@ export default function TorahDetailClient({
   const canSubmitQaBatch =
     batchSheetIds.size > 0 &&
     (Boolean(batchMagiahId) || Boolean(batchCheckerId) || batchQaKind === "computer");
+
+  const filteredContacts = useMemo(() => {
+    const q = batchContactSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter((c) => c.name.toLowerCase().includes(q));
+  }, [contacts, batchContactSearch]);
 
   const openFixTasks = useMemo(
     () => fixTasks.filter((t) => t.status === "open"),
@@ -880,6 +897,62 @@ export default function TorahDetailClient({
     }
   }
 
+  function openEditBatch(batch: QaBatchRow) {
+    setEditBatchTarget(batch);
+    const cost = Number(batch.cost_amount ?? 0);
+    setEditBatchCost(cost > 0 ? String(cost) : "");
+    setEditBatchNotes(batch.notes ?? "");
+  }
+
+  async function handleSaveBatchMeta() {
+    if (!editBatchTarget) return;
+    setEditBatchSaving(true);
+    try {
+      const parsedCost = editBatchCost.trim() === "" ? null : Number(editBatchCost.replace(",", "."));
+      const res = await updateQaBatchMetadata({
+        batchId: editBatchTarget.id,
+        projectId,
+        costAmount: Number.isFinite(parsedCost ?? NaN) && (parsedCost ?? 0) >= 0 ? parsedCost : null,
+        notes: editBatchNotes || null,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("פרטי השקית עודכנו");
+      setEditBatchTarget(null);
+      await loadBatches();
+      router.refresh();
+    } finally {
+      setEditBatchSaving(false);
+    }
+  }
+
+  async function handleVoidBatch() {
+    if (!voidBatchTarget) return;
+    setVoidSaving(true);
+    try {
+      const res = await voidQaBatch({
+        batchId: voidBatchTarget.id,
+        projectId,
+        reason: voidReason,
+        emergencyOverride: voidEmergency,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("השקית בוטלה");
+      setVoidBatchTarget(null);
+      setVoidReason("");
+      setVoidEmergency(false);
+      await loadBatches();
+      router.refresh();
+    } finally {
+      setVoidSaving(false);
+    }
+  }
+
   const toggleBatchSheet = (id: string) => {
     setBatchSheetIds((prev) => {
       const next = new Set(prev);
@@ -1171,10 +1244,15 @@ export default function TorahDetailClient({
           {/* ── TAB 2: QA Batches ────────────────────────── */}
           <TabsContent value="qa">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <PackageCheck className="size-5 text-amber-600" />
-                שקיות הגהה
-              </h2>
+              <div>
+                <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                  <PackageCheck className="size-5 text-amber-600" />
+                  שקיות הגהה
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  תוכנית QA לפרויקט: {project.gavra_qa_count} גברא + {project.computer_qa_count} מחשב
+                </p>
+              </div>
               <Button
                 size="sm"
                 className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
@@ -1339,6 +1417,15 @@ export default function TorahDetailClient({
                               <Button
                                 type="button"
                                 size="sm"
+                                variant="ghost"
+                                className="rounded-lg"
+                                onClick={() => openEditBatch(b)}
+                              >
+                                ערוך שקית
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
                                 variant="outline"
                                 className="rounded-lg border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                                 disabled={returningId === b.id}
@@ -1366,6 +1453,15 @@ export default function TorahDetailClient({
                                 onClick={() => void handleBulkOpenBatch(b.id, "needs_fixing")}
                               >
                                 {openBatchResolving === b.id ? "מעדכן..." : "כל השקית לתיקון"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-lg text-red-600"
+                                onClick={() => setVoidBatchTarget(b)}
+                              >
+                                בטל שקית
                               </Button>
                             </>
                           )}
@@ -1605,6 +1701,7 @@ export default function TorahDetailClient({
                   step={0.01}
                   value={editTotalAgreed}
                   onChange={(e) => setEditTotalAgreed(applyNumericTransform(e.target.value))}
+                  placeholder="לדוגמה: 250000"
                 />
               </div>
               <div>
@@ -1615,6 +1712,7 @@ export default function TorahDetailClient({
                   step={0.01}
                   value={editPricePerColumn}
                   onChange={(e) => setEditPricePerColumn(applyNumericTransform(e.target.value))}
+                  placeholder="לדוגמה: 1020"
                 />
               </div>
               <div>
@@ -1982,6 +2080,12 @@ export default function TorahDetailClient({
             </p>
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">מגיה</p>
+              <Input
+                value={batchContactSearch}
+                onChange={(e) => setBatchContactSearch(e.target.value)}
+                placeholder="חיפוש איש קשר..."
+                className="mb-2"
+              />
               <div className="flex gap-2 items-end">
                 <select
                   value={batchMagiahId}
@@ -1989,7 +2093,7 @@ export default function TorahDetailClient({
                   className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="">— בחר מגיה —</option>
-                  {contacts.map((c) => (
+                  {filteredContacts.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -2013,7 +2117,7 @@ export default function TorahDetailClient({
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">— בחר בודק —</option>
-                {contacts.map((c) => (
+                {filteredContacts.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -2044,7 +2148,7 @@ export default function TorahDetailClient({
               </p>
               <Input
                 inputMode="decimal"
-                placeholder="0"
+                placeholder="לדוגמה: 450"
                 value={batchCost}
                 onChange={(e) => setBatchCost(e.target.value)}
               />
@@ -2213,7 +2317,7 @@ export default function TorahDetailClient({
                 inputMode="decimal"
                 value={completeActualCost}
                 onChange={(e) => setCompleteActualCost(e.target.value)}
-                placeholder="0"
+                placeholder="השאר ריק אם בפועל זהה למשוער"
               />
             </div>
             <div>
@@ -2240,6 +2344,78 @@ export default function TorahDetailClient({
                 onClick={() => void handleSubmitCompleteFix()}
               >
                 {completeSaving ? "סוגר..." : "סגור והחל"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editBatchTarget} onOpenChange={(o) => !o && setEditBatchTarget(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת שקית הגהה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              inputMode="decimal"
+              value={editBatchCost}
+              onChange={(e) => setEditBatchCost(applyNumericTransform(e.target.value))}
+              placeholder="עלות סבב (₪)"
+            />
+            <textarea
+              value={editBatchNotes}
+              onChange={(e) => setEditBatchNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              placeholder="הערות"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setEditBatchTarget(null)}>
+                ביטול
+              </Button>
+              <Button type="button" disabled={editBatchSaving} onClick={() => void handleSaveBatchMeta()}>
+                {editBatchSaving ? "שומר..." : "שמור"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!voidBatchTarget} onOpenChange={(o) => !o && setVoidBatchTarget(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">ביטול שקית הגהה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              ביטול בטוח זמין רק כאשר כל היריעות עדיין במצב «בהגהה». אחרת יש לבחור Emergency override.
+            </p>
+            <textarea
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              placeholder="נימוק לביטול / Override"
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={voidEmergency}
+                onChange={(e) => setVoidEmergency(e.target.checked)}
+              />
+              Emergency override (נרשם ביומן מערכת)
+            </label>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setVoidBatchTarget(null)}>
+                חזרה
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={voidSaving || !voidReason.trim()}
+                onClick={() => void handleVoidBatch()}
+              >
+                {voidSaving ? "מבטל..." : "אשר ביטול"}
               </Button>
             </div>
           </div>

@@ -74,7 +74,7 @@ export default function SalesClient() {
   const [newSaleSellerId, setNewSaleSellerId] = useState("");
   const [newSaleInvestmentId, setNewSaleInvestmentId] = useState("");
   const [newSaleItemDescription, setNewSaleItemDescription] = useState("");
-  const [newSaleQuantity, setNewSaleQuantity] = useState("1");
+  const [newSaleQuantity, setNewSaleQuantity] = useState("");
   const [newSalePrice, setNewSalePrice] = useState("");
   const [newSaleAmountPaid, setNewSaleAmountPaid] = useState("");
   const [newSaleCommission, setNewSaleCommission] = useState("");
@@ -87,7 +87,7 @@ export default function SalesClient() {
   const [editSale, setEditSale] = useState<SaleRecord | null>(null);
   const [editSaleDate, setEditSaleDate] = useState("");
   const [editSalePrice, setEditSalePrice] = useState("");
-  const [editQuantity, setEditQuantity] = useState("1");
+  const [editQuantity, setEditQuantity] = useState("");
   const [editNotes, setEditNotes] = useState("");
 
   const loadData = () => {
@@ -228,7 +228,7 @@ export default function SalesClient() {
     setNewSaleSellerId("");
     setNewSaleInvestmentId("");
     setNewSaleItemDescription("");
-    setNewSaleQuantity("1");
+    setNewSaleQuantity("");
     setNewSalePrice("");
     setNewSaleAmountPaid("");
     setNewSaleCommission("");
@@ -628,7 +628,7 @@ export default function SalesClient() {
                     value={newSaleItemId}
                     onChange={(e) => {
                       setNewSaleItemId(e.target.value);
-                      setNewSaleQuantity("1");
+                      setNewSaleQuantity("");
                     }}
                     className="w-full rounded-xl border px-3 py-2 text-sm"
                   >
@@ -647,7 +647,7 @@ export default function SalesClient() {
                       max={maxQtyToSell}
                       value={newSaleQuantity}
                       onChange={handleNumericChange(setNewSaleQuantity)}
-                      placeholder="1"
+                      placeholder="לדוגמה: 1"
                       className="rounded-xl"
                     />
                   </div>
@@ -658,7 +658,7 @@ export default function SalesClient() {
                       min={0}
                       value={newSalePrice}
                       onChange={handleNumericChange(setNewSalePrice)}
-                      placeholder="0"
+                      placeholder="לדוגמה: 1800"
                       className="rounded-xl"
                     />
                   </div>
@@ -669,7 +669,7 @@ export default function SalesClient() {
                       min={0}
                       value={newSaleAmountPaid}
                       onChange={handleNumericChange(setNewSaleAmountPaid)}
-                      placeholder="0"
+                      placeholder="השאר ריק אם טרם שולם"
                       className="rounded-xl"
                     />
                   </div>
@@ -725,7 +725,7 @@ export default function SalesClient() {
                     step={0.01}
                     value={newSaleCommission}
                     onChange={handleNumericChange(setNewSaleCommission)}
-                    placeholder="0"
+                    placeholder="לדוגמה: 2500"
                     className="rounded-xl"
                   />
                 </div>
@@ -754,7 +754,7 @@ export default function SalesClient() {
                     min={0}
                     value={newSalePrice}
                     onChange={handleNumericChange(setNewSalePrice)}
-                    placeholder="0"
+                    placeholder="לדוגמה: 13000"
                     className="rounded-xl"
                   />
                 </div>
@@ -765,7 +765,7 @@ export default function SalesClient() {
                     min={0}
                     value={newSaleAmountPaid}
                     onChange={handleNumericChange(setNewSaleAmountPaid)}
-                    placeholder="0"
+                    placeholder="השאר ריק אם טרם שולם"
                     className="rounded-xl"
                   />
                 </div>

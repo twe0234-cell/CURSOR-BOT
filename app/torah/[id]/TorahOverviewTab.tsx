@@ -17,6 +17,7 @@ import type { TorahProjectDetailView, TorahSheetGridRow, TorahSheetStatus } from
 import { TORAH_SHEET_STATUS_LABELS } from "@/src/lib/types/torah";
 import {
   calculateTorahProjectFinancials,
+  computeTorahPlannedProfitSnapshot,
   computeTorahProjectNetCashflowFromLedger,
   computeTorahTheoreticalContractMargin,
   estimateTorahProjectProfitability,
@@ -303,6 +304,41 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
 
   const alertNegativeExpectedProfit = netProfitEstimate < 0;
 
+  const plannedProfit = useMemo(() => {
+    const ops = extractPlannedOperationalBudgetFromSnapshot(project.calculator_snapshot);
+    const plannedScribe =
+      Number.isFinite(Number(project.planned_scribe_budget)) && Number(project.planned_scribe_budget) >= 0
+        ? Number(project.planned_scribe_budget)
+        : ops.scribe;
+    const plannedProofreading =
+      Number.isFinite(Number(project.planned_proofreading_budget)) && Number(project.planned_proofreading_budget) >= 0
+        ? Number(project.planned_proofreading_budget)
+        : ops.proofreading;
+    const plannedMisc = Math.max(
+      Number.isFinite(Number(project.estimated_expenses_total)) ? Number(project.estimated_expenses_total) : 0,
+      ops.misc
+    );
+    return computeTorahPlannedProfitSnapshot({
+      contractTotal: project.total_agreed_price,
+      plannedScribeCost: plannedScribe,
+      plannedParchmentCost: plannedParchment,
+      plannedProofreadingCost: plannedProofreading,
+      plannedMiscCost: plannedMisc,
+      approvedBudgetDeviations: 0,
+      actualCashIn: cashflow.totalCashIn,
+      actualCashOut: cashflow.totalCashOut,
+    });
+  }, [
+    project.calculator_snapshot,
+    project.estimated_expenses_total,
+    project.planned_proofreading_budget,
+    project.planned_scribe_budget,
+    project.total_agreed_price,
+    plannedParchment,
+    cashflow.totalCashIn,
+    cashflow.totalCashOut,
+  ]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -369,12 +405,12 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
             <div
               className={cn(
                 "flex gap-2 rounded-xl border px-3 py-2.5 text-sm",
-                "border-red-200 bg-red-50 text-red-900"
+                "border-amber-200 bg-amber-50 text-amber-950"
               )}
             >
               <AlertTriangle className="size-4 shrink-0 mt-0.5" />
               <span>
-                שולם לסופר בעוד שאין עמודות בסטטוס מאושר/תפור — ודא שהתשלום תואם להתקדמות.
+                שולם לפני אישור/קבלה — ודא שזה מכוון
               </span>
             </div>
           )}
@@ -483,18 +519,18 @@ export function TorahOverviewTab({ projectId, project, sheets }: Props) {
         </Card>
         <Card className="rounded-xl border-sky-100 bg-sky-50/30">
           <CardContent className="p-4">
-            <p className="text-xs text-sky-900 mb-1">רווח נטו לפי תשלומים ויומן</p>
+            <p className="text-xs text-sky-900 mb-1">רווח צפוי לפי תוכנית</p>
             <p
               className={cn(
                 "text-xl font-bold tabular-nums",
-                netProfitEstimate >= 0 ? "text-sky-950" : "text-red-700"
+                plannedProfit.expectedProfitByPlan >= 0 ? "text-sky-950" : "text-red-700"
               )}
             >
-              {formatShekels(netProfitEstimate)}
+              {formatShekels(plannedProfit.expectedProfitByPlan)}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-              שדות «שולם מלקוח/לסופר» ותנועות היומן (כולל ניכוי תיקון, QA, קלף) — לא זהה לתזרים
-              מזומנים גולמי.
+              תזרים בפועל עד עכשיו: {formatShekels(plannedProfit.actualCashflowNow)} · חריגות תקציב מאושרות:{" "}
+              {formatShekels(plannedProfit.approvedBudgetDeviations)}
             </p>
           </CardContent>
         </Card>

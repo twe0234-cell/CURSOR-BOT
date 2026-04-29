@@ -44,6 +44,15 @@ export type TorahFixTaskRow = {
 
 type ActionResult = { success: true } | { success: false; error: string };
 
+const optionalMoney = z
+  .union([z.string(), z.number(), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === "" || v === undefined || v === null) return null;
+    const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
+  });
+
 // ─────────────────────────────────────────────────────────────
 // createQaBatch
 // ─────────────────────────────────────────────────────────────
@@ -123,6 +132,171 @@ export async function returnQaBatch(
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה" };
+  }
+}
+
+const updateQaBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  magiahId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  checkerId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  qaKind: z.enum(["gavra", "computer", "repair", "other"]).nullable().optional(),
+  costAmount: optionalMoney.optional(),
+  notes: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  reportUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+});
+
+export async function updateQaBatchMetadata(
+  input: z.infer<typeof updateQaBatchSchema>
+): Promise<ActionResult> {
+  const parsed = updateQaBatchSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+  }
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    const v = parsed.data;
+    const { data: batch, error: bErr } = await supabase
+      .from("torah_qa_batches")
+      .select("id, status")
+      .eq("id", v.batchId)
+      .eq("project_id", v.projectId)
+      .maybeSingle();
+    if (bErr || !batch) return { success: false, error: "השקית לא נמצאה" };
+    if (batch.status !== "sent") {
+      return { success: false, error: "ניתן לערוך שקית רק לפני סגירה" };
+    }
+
+    const { data: proj } = await supabase
+      .from("torah_projects")
+      .select("id")
+      .eq("id", v.projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!proj) return { success: false, error: "אין הרשאה" };
+
+    const patch: Record<string, unknown> = {};
+    if (v.magiahId !== undefined) patch.magiah_id = v.magiahId || null;
+    if (v.checkerId !== undefined) patch.checker_id = v.checkerId || null;
+    if (v.qaKind !== undefined) patch.qa_kind = v.qaKind ?? null;
+    if (v.costAmount !== undefined) patch.cost_amount = v.costAmount ?? 0;
+    if (v.notes !== undefined) patch.notes = v.notes?.trim() || null;
+    if (v.reportUrl !== undefined) patch.report_url = v.reportUrl?.trim() || null;
+    if (Object.keys(patch).length === 0) return { success: false, error: "אין שדות לעדכון" };
+
+    const { error } = await supabase
+      .from("torah_qa_batches")
+      .update(patch)
+      .eq("id", v.batchId)
+      .eq("project_id", v.projectId);
+    if (error) return { success: false, error: error.message };
+
+    const ev = await appendTorahSysEvent({
+      projectId: v.projectId,
+      entityType: "torah_qa_batch",
+      entityId: v.batchId,
+      action: "qa_batch_metadata_updated",
+      metadata: { fields: Object.keys(patch) },
+    });
+    if (!ev.success) return { success: false, error: ev.error };
+
+    revalidatePath(`/torah/${v.projectId}`);
+    revalidatePath("/torah");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+const voidQaBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  reason: z.string().trim().min(3, "נדרש נימוק לביטול"),
+  emergencyOverride: z.boolean().optional(),
+});
+
+export async function voidQaBatch(input: z.infer<typeof voidQaBatchSchema>): Promise<ActionResult> {
+  const parsed = voidQaBatchSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "קלט לא תקין" };
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "יש להתחבר" };
+    const v = parsed.data;
+
+    const { data: proj } = await supabase
+      .from("torah_projects")
+      .select("id")
+      .eq("id", v.projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!proj) return { success: false, error: "אין הרשאה" };
+
+    const { data: batch, error: batchErr } = await supabase
+      .from("torah_qa_batches")
+      .select("id, status, notes")
+      .eq("id", v.batchId)
+      .eq("project_id", v.projectId)
+      .maybeSingle();
+    if (batchErr || !batch) return { success: false, error: "השקית לא נמצאה" };
+    if (batch.status !== "sent") return { success: false, error: "ניתן לבטל רק שקית פתוחה" };
+
+    const { data: links, error: linksErr } = await supabase
+      .from("torah_batch_sheets")
+      .select("sheet_id")
+      .eq("batch_id", v.batchId);
+    if (linksErr) return { success: false, error: linksErr.message };
+    const sheetIds = (links ?? []).map((x) => x.sheet_id as string).filter(Boolean);
+    if (sheetIds.length === 0) return { success: false, error: "אין יריעות בשקית" };
+
+    const { data: sheets } = await supabase
+      .from("torah_sheets")
+      .select("id, status")
+      .eq("project_id", v.projectId)
+      .in("id", sheetIds);
+    const unsafe = (sheets ?? []).some((s) => String(s.status) !== "in_qa");
+    if (unsafe && !v.emergencyOverride) {
+      return { success: false, error: "נדרש Emergency Override: יש יריעות שלא במצב בהגהה" };
+    }
+
+    const { error: unassignErr } = await supabase
+      .from("torah_sheets")
+      .update({ status: "reported_written" })
+      .eq("project_id", v.projectId)
+      .in("id", sheetIds);
+    if (unassignErr) return { success: false, error: unassignErr.message };
+
+    const nextNotes = `[VOID] ${new Date().toISOString()} · ${v.reason}\n${batch.notes ?? ""}`.trim();
+    const { error: bUpErr } = await supabase
+      .from("torah_qa_batches")
+      .update({ notes: nextNotes, returned_date: new Date().toISOString() })
+      .eq("id", v.batchId)
+      .eq("project_id", v.projectId);
+    if (bUpErr) return { success: false, error: bUpErr.message };
+
+    const ev = await appendTorahSysEvent({
+      projectId: v.projectId,
+      entityType: "torah_qa_batch",
+      entityId: v.batchId,
+      action: v.emergencyOverride ? "qa_batch_voided_override" : "qa_batch_voided",
+      fromState: "sent",
+      toState: "voided",
+      metadata: { reason: v.reason, emergency_override: Boolean(v.emergencyOverride), sheet_count: sheetIds.length },
+    });
+    if (!ev.success) return { success: false, error: ev.error };
+
+    revalidatePath(`/torah/${v.projectId}`);
+    revalidatePath("/torah");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
 }
 
