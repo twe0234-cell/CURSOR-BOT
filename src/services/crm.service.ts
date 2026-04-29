@@ -1111,51 +1111,97 @@ async function fetchErpData(
   contactId: string,
   userId: string
 ) {
-  const [invRes, investActiveRes, salesBuyerRes, salesSellerRes, investAllRes] =
-    await Promise.all([
-      supabase
-        .from("inventory")
-        .select("quantity, cost_price, total_cost, amount_paid")
-        .eq("scribe_id", contactId)
-        .in("status", [...INVENTORY_ACTIVE_STATUSES]),
-      supabase
-        .from("erp_investments")
-        .select("id, total_agreed_price, amount_paid, status")
-        .eq("scribe_id", contactId)
-        .neq("status", "cancelled")
-        .eq("user_id", userId),
-      supabase
-        .from("erp_sales")
-        .select(
-          "id, sale_price, quantity, total_price, amount_paid, sale_type, sale_date, item_description, item_id, investment_id, buyer_id, seller_id"
-        )
-        .eq("buyer_id", contactId)
-        .eq("user_id", userId)
-        .order("sale_date", { ascending: false }),
-      supabase
-        .from("erp_sales")
-        .select(
-          "id, sale_price, quantity, total_price, amount_paid, sale_type, sale_date, item_description, item_id, investment_id, buyer_id, seller_id"
-        )
-        .eq("seller_id", contactId)
-        .eq("user_id", userId)
-        .order("sale_date", { ascending: false }),
-      supabase
-        .from("erp_investments")
-        .select(
-          "id, item_details, status, total_agreed_price, amount_paid, target_date"
-        )
-        .eq("scribe_id", contactId)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-    ]);
+  const saleSelect =
+    "id, sale_price, quantity, total_price, amount_paid, sale_type, sale_date, item_description, item_id, investment_id, buyer_id, seller_id";
+  const inventorySelect =
+    "id, sku, product_category, description, status, quantity, cost_price, total_cost, amount_paid, purchase_date, created_at";
+
+  const [
+    invRes,
+    inventorySourceRes,
+    investActiveRes,
+    salesBuyerRes,
+    salesSellerRes,
+    investAllRes,
+    torahProjectsRes,
+  ] = await Promise.all([
+    supabase
+      .from("inventory")
+      .select("quantity, cost_price, total_cost, amount_paid")
+      .eq("user_id", userId)
+      .eq("scribe_id", contactId)
+      .in("status", [...INVENTORY_ACTIVE_STATUSES]),
+    supabase
+      .from("inventory")
+      .select(inventorySelect)
+      .eq("user_id", userId)
+      .eq("scribe_id", contactId)
+      .order("purchase_date", { ascending: false }),
+    supabase
+      .from("erp_investments")
+      .select("id, total_agreed_price, amount_paid, status")
+      .eq("scribe_id", contactId)
+      .neq("status", "cancelled")
+      .eq("user_id", userId),
+    supabase
+      .from("erp_sales")
+      .select(saleSelect)
+      .eq("buyer_id", contactId)
+      .eq("user_id", userId)
+      .order("sale_date", { ascending: false }),
+    supabase
+      .from("erp_sales")
+      .select(saleSelect)
+      .eq("seller_id", contactId)
+      .eq("user_id", userId)
+      .order("sale_date", { ascending: false }),
+    supabase
+      .from("erp_investments")
+      .select(
+        "id, item_details, status, total_agreed_price, amount_paid, target_date"
+      )
+      .eq("scribe_id", contactId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("torah_projects")
+      .select(
+        "id, title, status, commercial_status, production_status, total_agreed_price, start_date, target_date, client_id, scribe_id, current_holder_id, tagger_contact_id"
+      )
+      .eq("user_id", userId)
+      .or(
+        `client_id.eq.${contactId},scribe_id.eq.${contactId},current_holder_id.eq.${contactId},tagger_contact_id.eq.${contactId}`
+      )
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const inventorySourceRows = inventorySourceRes.data ?? [];
+  const inventoryIds = [
+    ...new Set(
+      inventorySourceRows
+        .map((row) => (row as { id?: string | null }).id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const sourcedInventorySalesRes =
+    inventoryIds.length > 0
+      ? await supabase
+          .from("erp_sales")
+          .select(saleSelect)
+          .eq("user_id", userId)
+          .in("item_id", inventoryIds)
+          .order("sale_date", { ascending: false })
+      : { data: [] };
 
   return {
     inventoryRows: invRes.data ?? [],
+    inventorySourceRows,
+    sourcedInventorySaleRows: sourcedInventorySalesRes.data ?? [],
     investmentRowsForBalance: investActiveRes.data ?? [],
     buyerRows: salesBuyerRes.data ?? [],
     sellerRows: salesSellerRes.data ?? [],
     allInvestmentRows: investAllRes.data ?? [],
+    torahProjectRows: torahProjectsRes.data ?? [],
   };
 }
 
@@ -1233,13 +1279,13 @@ async function fetchPaymentLedger(
  */
 async function fetchSaleItemMetadata(
   supabase: SupabaseClient,
-  buyerRows: Array<{ item_id: string | null; investment_id: string | null }>
+  saleRows: Array<{ item_id: string | null; investment_id: string | null }>
 ) {
   const itemIds = [
-    ...new Set(buyerRows.map((r) => r.item_id).filter(Boolean)),
+    ...new Set(saleRows.map((r) => r.item_id).filter(Boolean)),
   ] as string[];
   const invIds = [
-    ...new Set(buyerRows.map((r) => r.investment_id).filter(Boolean)),
+    ...new Set(saleRows.map((r) => r.investment_id).filter(Boolean)),
   ] as string[];
 
   const [invMetaRes, investMetaRes] = await Promise.all([
@@ -1417,14 +1463,7 @@ function buildLedgerForUi(
     method: string | null;
     notes: string | null;
   }>,
-  buyerRows: Array<{
-    id: string;
-    sale_type: string | null;
-    item_description: string | null;
-    item_id: string | null;
-    investment_id: string | null;
-  }>,
-  sellerRows: Array<{
+  relatedSaleRows: Array<{
     id: string;
     sale_type: string | null;
     item_description: string | null;
@@ -1439,9 +1478,7 @@ function buildLedgerForUi(
     let summary = "";
 
     if (p.entity_type === "sale") {
-      const saleRow = [...buyerRows, ...sellerRows].find(
-        (s) => s.id === p.entity_id
-      );
+      const saleRow = relatedSaleRows.find((s) => s.id === p.entity_id);
       summary = saleRow
         ? `מכירה: ${resolveSaleLabel(saleRow, invCat, investDet)}`
         : "מכירה";
@@ -1527,6 +1564,36 @@ export type ContactDetailPageData = {
     total_price: number;
     total_paid: number;
     label: string;
+  }>;
+  inventorySourced: Array<{
+    id: string;
+    sku: string | null;
+    product_category: string | null;
+    description: string | null;
+    status: string;
+    quantity: number;
+    total_cost: number;
+    amount_paid: number;
+    purchase_date: string | null;
+  }>;
+  sourcedInventorySales: Array<{
+    id: string;
+    sale_type: string;
+    sale_date: string;
+    total_price: number;
+    total_paid: number;
+    label: string;
+  }>;
+  torahProjects: Array<{
+    id: string;
+    title: string;
+    status: string;
+    production_status: string | null;
+    commercial_status: string | null;
+    total_agreed_price: number;
+    start_date: string | null;
+    target_date: string | null;
+    roles: string[];
   }>;
   investments: Array<{
     id: string;
@@ -1638,13 +1705,23 @@ export async function loadContactDetailPage(
   const soferProfile = soferRes.data ?? null;
 
   const { txRows, docRows, logRows, contactHistoryRows } = crmActivity;
-  const { inventoryRows, investmentRowsForBalance, buyerRows, sellerRows, allInvestmentRows } = erpData;
+  const {
+    inventoryRows,
+    inventorySourceRows,
+    sourcedInventorySaleRows,
+    investmentRowsForBalance,
+    buyerRows,
+    sellerRows,
+    allInvestmentRows,
+    torahProjectRows,
+  } = erpData;
 
   // 3. Collect all entity IDs needed for payment lookups.
   const allEntityIds = [
     ...new Set([
       ...buyerRows.map((s) => s.id),
       ...sellerRows.map((s) => s.id),
+      ...sourcedInventorySaleRows.map((s) => s.id),
       ...allInvestmentRows.map((i) => i.id),
     ]),
   ];
@@ -1654,7 +1731,11 @@ export async function loadContactDetailPage(
   const [{ paymentExtraBySale, ledgerRows }, { invCat, investDet }] =
     await Promise.all([
       fetchPaymentLedger(supabase, user.id, allEntityIds),
-      fetchSaleItemMetadata(supabase, buyerRows),
+      fetchSaleItemMetadata(supabase, [
+        ...buyerRows,
+        ...sellerRows,
+        ...sourcedInventorySaleRows,
+      ]),
     ]);
 
   // 5. Compute financial balances (pure — no I/O).
@@ -1668,10 +1749,15 @@ export async function loadContactDetailPage(
   // 6. Shape the raw rows into UI-ready lists (pure — no I/O).
   const buyerSales = buildSalesList(buyerRows, invCat, investDet, paymentExtraBySale);
   const sellerSales = buildSalesList(sellerRows, invCat, investDet, paymentExtraBySale);
+  const sourcedInventorySales = buildSalesList(
+    sourcedInventorySaleRows,
+    invCat,
+    investDet,
+    paymentExtraBySale
+  );
   const ledgerPayments = buildLedgerForUi(
     ledgerRows,
-    buyerRows,
-    sellerRows,
+    [...buyerRows, ...sellerRows, ...sourcedInventorySaleRows],
     allInvestmentRows,
     invCat,
     investDet
@@ -1767,6 +1853,57 @@ export async function loadContactDetailPage(
       ledgerPayments,
       buyerSales,
       sellerSales,
+      inventorySourced: inventorySourceRows.map((i) => {
+        const quantity = Number(i.quantity ?? 1);
+        const totalCost =
+          i.total_cost != null
+            ? Number(i.total_cost)
+            : quantity * Number(i.cost_price ?? 0);
+        return {
+          id: i.id as string,
+          sku: (i.sku as string | null) ?? null,
+          product_category: (i.product_category as string | null) ?? null,
+          description: (i.description as string | null) ?? null,
+          status: (i.status as string | null) ?? "",
+          quantity,
+          total_cost: totalCost,
+          amount_paid: Number(i.amount_paid ?? 0),
+          purchase_date: (i.purchase_date as string | null) ?? null,
+        };
+      }),
+      sourcedInventorySales,
+      torahProjects: torahProjectRows.map((p) => {
+        const row = p as {
+          id: string;
+          title: string | null;
+          status: string | null;
+          production_status?: string | null;
+          commercial_status?: string | null;
+          total_agreed_price?: number | null;
+          start_date?: string | null;
+          target_date?: string | null;
+          client_id?: string | null;
+          scribe_id?: string | null;
+          current_holder_id?: string | null;
+          tagger_contact_id?: string | null;
+        };
+        const roles: string[] = [];
+        if (row.client_id === id) roles.push("לקוח");
+        if (row.scribe_id === id) roles.push("סופר");
+        if (row.current_holder_id === id) roles.push("מחזיק נוכחי");
+        if (row.tagger_contact_id === id) roles.push("תיוג");
+        return {
+          id: row.id,
+          title: row.title ?? "פרויקט תורה",
+          status: row.status ?? "",
+          production_status: row.production_status ?? null,
+          commercial_status: row.commercial_status ?? null,
+          total_agreed_price: Number(row.total_agreed_price ?? 0),
+          start_date: row.start_date ?? null,
+          target_date: row.target_date ?? null,
+          roles,
+        };
+      }),
       investments: allInvestmentRows.map((i) => ({
         id: i.id,
         item_details: i.item_details ?? null,

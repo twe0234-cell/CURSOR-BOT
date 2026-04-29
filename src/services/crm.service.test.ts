@@ -479,7 +479,8 @@ describe("loadContactDetailPage", () => {
     // ── All array fields are present and are arrays ────────────────────────
     for (const key of [
       "contactHistory", "sysEvents", "transactions", "documents", "logs",
-      "buyerSales", "sellerSales", "investments", "ledgerPayments",
+      "buyerSales", "sellerSales", "inventorySourced", "sourcedInventorySales",
+      "torahProjects", "investments", "ledgerPayments",
     ] as const) {
       expect(data[key], `expected data.${key} to be an array`).toBeInstanceOf(Array);
     }

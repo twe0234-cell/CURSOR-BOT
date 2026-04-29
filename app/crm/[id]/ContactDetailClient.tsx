@@ -176,6 +176,36 @@ type Props = {
     total_paid: number;
     label: string;
   }>;
+  inventorySourced: Array<{
+    id: string;
+    sku: string | null;
+    product_category: string | null;
+    description: string | null;
+    status: string;
+    quantity: number;
+    total_cost: number;
+    amount_paid: number;
+    purchase_date: string | null;
+  }>;
+  sourcedInventorySales: Array<{
+    id: string;
+    sale_type: string;
+    sale_date: string;
+    total_price: number;
+    total_paid: number;
+    label: string;
+  }>;
+  torahProjects: Array<{
+    id: string;
+    title: string;
+    status: string;
+    production_status: string | null;
+    commercial_status: string | null;
+    total_agreed_price: number;
+    start_date: string | null;
+    target_date: string | null;
+    roles: string[];
+  }>;
   investments: Array<{
     id: string;
     item_details: string | null;
@@ -368,6 +398,9 @@ export default function ContactDetailClient({
   ledgerPayments,
   buyerSales,
   sellerSales,
+  inventorySourced,
+  sourcedInventorySales,
+  torahProjects,
   investments,
   sysEvents,
 }: Props) {
@@ -503,6 +536,14 @@ export default function ContactDetailClient({
     items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
     return items;
   }, [history, logs]);
+
+  const businessActivityCount =
+    buyerSales.length +
+    sellerSales.length +
+    inventorySourced.length +
+    sourcedInventorySales.length +
+    torahProjects.length +
+    ledgerPayments.length;
 
   const mergeFiltered = useMemo(() => {
     const q = mergeSearch.trim().toLowerCase();
@@ -1042,6 +1083,43 @@ export default function ContactDetailClient({
         </TabsContent>
 
         <TabsContent value="transactions" className="space-y-6">
+          <Card className="border-teal-100 bg-teal-50/30">
+            <CardHeader>
+              <h3 className="font-semibold">פעילות עסקית</h3>
+              <p className="text-sm text-muted-foreground">
+                קשרים אמינים בלבד: קונה/מוכר במכירות, מקור מלאי, מכירת מלאי שמקורו באיש קשר זה,
+                פרויקטי תורה עם שדה קשר מפורש, ותשלומים שמחוברים לעסקאות אלו.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {businessActivityCount === 0 ? (
+                <div className="rounded-lg border border-dashed bg-white p-4 text-sm text-muted-foreground">
+                  אין פעילות עסקית מקושרת ישירות לאיש קשר זה. אם קיימות עסקאות היסטוריות לפי שם בלבד,
+                  צריך לקשר אותן בעת יצירה/עריכה דרך שדה contact_id / buyer_id / seller_id / scribe_id.
+                </div>
+              ) : (
+                <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg bg-white p-3 border">
+                    <p className="text-xs text-muted-foreground">מכירות אליו</p>
+                    <p className="text-xl font-bold">{buyerSales.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 border">
+                    <p className="text-xs text-muted-foreground">מלאי ממנו</p>
+                    <p className="text-xl font-bold">{inventorySourced.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 border">
+                    <p className="text-xs text-muted-foreground">מכירות ממלאי שלו</p>
+                    <p className="text-xl font-bold">{sourcedInventorySales.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 border">
+                    <p className="text-xs text-muted-foreground">פרויקטי תורה</p>
+                    <p className="text-xl font-bold">{torahProjects.length}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="border-teal-100">
             <CardHeader>
               <h3 className="font-semibold">מכירות כקונה</h3>
@@ -1107,6 +1185,139 @@ export default function ContactDetailClient({
                           <TableCell className="max-w-[200px] truncate">{s.label}</TableCell>
                           <TableCell>₪{s.total_price.toLocaleString("he-IL")}</TableCell>
                           <TableCell>₪{s.total_paid.toLocaleString("he-IL")}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">מלאי שמקורו באיש קשר זה</h3>
+            </CardHeader>
+            <CardContent>
+              {inventorySourced.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  אין פריטי מלאי עם scribe_id/contact_id שמצביע לאיש קשר זה.
+                </p>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>פריט</TableHead>
+                        <TableHead>סטטוס</TableHead>
+                        <TableHead>כמות</TableHead>
+                        <TableHead>עלות</TableHead>
+                        <TableHead>שולם</TableHead>
+                        <TableHead>תאריך קניה</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {inventorySourced.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="max-w-[220px]">
+                            <span className="font-medium block truncate">
+                              {item.description || item.product_category || item.sku || "פריט מלאי"}
+                            </span>
+                            {item.sku && (
+                              <span className="text-xs text-muted-foreground">{item.sku}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{item.status || "—"}</TableCell>
+                          <TableCell>{item.quantity.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>₪{item.total_cost.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>₪{item.amount_paid.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>
+                            {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString("he-IL") : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">מכירות של מלאי שמקורו בו</h3>
+            </CardHeader>
+            <CardContent>
+              {sourcedInventorySales.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  אין מכירות שמקושרות לפריטי מלאי שמקורם באיש קשר זה.
+                </p>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>תאריך</TableHead>
+                        <TableHead>סוג</TableHead>
+                        <TableHead>פריט</TableHead>
+                        <TableHead>סה"כ</TableHead>
+                        <TableHead>שולם</TableHead>
+                        <TableHead>יתרה</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sourcedInventorySales.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.sale_date ? new Date(s.sale_date).toLocaleDateString("he-IL") : "—"}</TableCell>
+                          <TableCell>{s.sale_type}</TableCell>
+                          <TableCell className="max-w-[220px] truncate">{s.label}</TableCell>
+                          <TableCell>₪{s.total_price.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>₪{s.total_paid.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>₪{Math.max(0, s.total_price - s.total_paid).toLocaleString("he-IL")}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-teal-100">
+            <CardHeader>
+              <h3 className="font-semibold">פרויקטי תורה קשורים</h3>
+            </CardHeader>
+            <CardContent>
+              {torahProjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  אין פרויקטי תורה עם client_id / scribe_id / current_holder_id / tagger_contact_id לאיש קשר זה.
+                </p>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>פרויקט</TableHead>
+                        <TableHead>תפקיד</TableHead>
+                        <TableHead>סטטוס</TableHead>
+                        <TableHead>הסכם</TableHead>
+                        <TableHead>יעד</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {torahProjects.map((project) => (
+                        <TableRow key={project.id}>
+                          <TableCell>
+                            <Link href={`/torah/${project.id}`} className="font-medium text-teal-700 hover:underline">
+                              {project.title}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{project.roles.join(", ") || "מקושר"}</TableCell>
+                          <TableCell>{project.production_status || project.commercial_status || project.status}</TableCell>
+                          <TableCell>₪{project.total_agreed_price.toLocaleString("he-IL")}</TableCell>
+                          <TableCell>
+                            {project.target_date ? new Date(project.target_date).toLocaleDateString("he-IL") : "—"}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
