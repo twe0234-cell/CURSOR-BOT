@@ -87,6 +87,26 @@ function normalizeNetWorth(value: unknown): NetWorthSnapshot | null {
   };
 }
 
+function cashflowStatus(contractAmount: number, receivedAmount: number): string {
+  if (contractAmount <= 0) return "no_contract";
+  if (receivedAmount >= contractAmount) return "collected";
+  if (receivedAmount > 0) return "partial_collection";
+  return "uncollected";
+}
+
+function contactName(value: unknown): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const first = value[0] as Record<string, unknown> | undefined;
+    return typeof first?.name === "string" ? first.name : null;
+  }
+  if (typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return typeof row.name === "string" ? row.name : null;
+  }
+  return null;
+}
+
 export async function fetchReadOnlyErpDashboard(): Promise<
   { success: true; dashboard: ReadOnlyErpDashboard } | { success: false; error: string }
 > {
@@ -127,17 +147,28 @@ export async function fetchReadOnlyErpDashboard(): Promise<
     .limit(12);
   if (ledgerError) errors.push(`ledger_entries: ${ledgerError.message}`);
 
-  const { data: torahSnapshotRows, error: torahSnapshotError } = await supabase
-    .from("torah_financial_dashboard_snapshot")
-    .select(
-      "user_id, project_id, project_label, customer_label, commercial_status, production_status, contract_amount, received_amount, actual_cost, expected_profit, realized_profit, cashflow_status",
-    )
+  const { data: torahProjects, error: torahProjectsError } = await supabase
+    .from("torah_projects")
+    .select("id, user_id, title, commercial_status, production_status, client:crm_contacts(name)")
     .eq("user_id", user.id)
-    .order("project_label", { ascending: true })
+    .order("title", { ascending: true })
     .limit(12);
-  if (torahSnapshotError) {
-    errors.push(`torah_financial_dashboard_snapshot: ${torahSnapshotError.message}`);
+  if (torahProjectsError) {
+    errors.push(`torah_projects: ${torahProjectsError.message}`);
   }
+
+  const projectIds = (torahProjects ?? []).map((row) => String(row.id)).filter(Boolean);
+  const { data: torahBudgetRows, error: torahBudgetError } = projectIds.length > 0
+    ? await supabase
+        .from("torah_project_budget_vs_actual")
+        .select("id, contract_price, actual_income, actual_refunds, actual_total_cost, projected_profit, realized_profit")
+        .in("id", projectIds)
+    : { data: [], error: null };
+  if (torahBudgetError) errors.push(`torah_project_budget_vs_actual: ${torahBudgetError.message}`);
+
+  const budgetByProjectId = new Map(
+    (torahBudgetRows ?? []).map((row) => [String(row.id), row])
+  );
 
   return {
     success: true,
@@ -173,20 +204,29 @@ export async function fetchReadOnlyErpDashboard(): Promise<
         investment_id: row.investment_id ?? null,
         notes: row.notes ?? null,
       })),
-      torahFinancialSnapshot: (torahSnapshotRows ?? []).map((row) => ({
-        user_id: String(row.user_id),
-        project_id: String(row.project_id),
-        project_label: row.project_label ?? null,
-        customer_label: row.customer_label ?? null,
-        commercial_status: row.commercial_status ?? null,
-        production_status: row.production_status ?? null,
-        contract_amount: toNumber(row.contract_amount),
-        received_amount: toNumber(row.received_amount),
-        actual_cost: toNumber(row.actual_cost),
-        expected_profit: toNumber(row.expected_profit),
-        realized_profit: toNumber(row.realized_profit),
-        cashflow_status: row.cashflow_status ?? null,
-      })),
+      torahFinancialSnapshot: (torahProjects ?? []).map((project) => {
+        const budget = budgetByProjectId.get(String(project.id));
+        const contractAmount = toNumber(budget?.contract_price);
+        const receivedAmount = Math.max(
+          toNumber(budget?.actual_income) - toNumber(budget?.actual_refunds),
+          0
+        );
+
+        return {
+          user_id: String(project.user_id),
+          project_id: String(project.id),
+          project_label: project.title ?? null,
+          customer_label: contactName(project.client),
+          commercial_status: project.commercial_status ?? null,
+          production_status: project.production_status ?? null,
+          contract_amount: contractAmount,
+          received_amount: receivedAmount,
+          actual_cost: toNumber(budget?.actual_total_cost),
+          expected_profit: toNumber(budget?.projected_profit),
+          realized_profit: toNumber(budget?.realized_profit),
+          cashflow_status: cashflowStatus(contractAmount, receivedAmount),
+        };
+      }),
       errors,
       loadedAt,
     },
