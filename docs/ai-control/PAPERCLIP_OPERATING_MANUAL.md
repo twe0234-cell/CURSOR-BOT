@@ -96,6 +96,16 @@ Do not expose PaperclipAI publicly without authentication.
 
 If the PC is off, local agents cannot run. Future PC-off options include Codespaces, VPS/cloud runner, or a self-hosted GitHub runner.
 
+## Instruction Entrypoints
+
+Persistent standing instructions should live in:
+
+- [PAPERCLIP_CEO.md](PAPERCLIP_CEO.md)
+- [PAPERCLIP_CODEX.md](PAPERCLIP_CODEX.md)
+- [PAPERCLIP_GEMINI.md](PAPERCLIP_GEMINI.md)
+
+Task-specific instructions should live in the Paperclip issue title and description, with links back to the relevant docs in `docs/ai-control/`.
+
 ## Requires User Approval
 
 - Production DB mutation.
