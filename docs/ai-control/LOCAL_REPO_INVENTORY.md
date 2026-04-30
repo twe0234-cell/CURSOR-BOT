@@ -1,315 +1,133 @@
-﻿# Local Repo Inventory
+# Local Repo Inventory
 
-Scope: allowed paths only. Discovery only; no cleanup, reset, stash-pop, merge, or code edit was performed during inventory.
+Scope: only the user-approved paths were scanned.
 
-| Classification | Clean | CURSOR-BOT | Branch | HEAD | Path | Origin |
-|---|---:|---:|---|---|---|---|
-| DIRTY_UNCOMMITTED | False | True | codex/niimbot-printing-feasibility | 719d069 | `C:\Users\T590\Documents\Codex\2026-04-26\post-merge-main-verification` | `https://github.com/twe0234-cell/CURSOR-BOT.git` |
-| DIRTY_UNCOMMITTED | False |  | crm-service-refactor |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor` | `` |
-| DIRTY_UNCOMMITTED | False | False | main | 0326cac | `C:\Users\T590\פיתוחי AI ועוד- כללי\.supabase\Projects\bt-contacts-bridge` | `https://github.com/twe0234-cell/bt-contacts-bridge.git` |
-| DIRTY_UNCOMMITTED | False | True | main | 9cc294f | `C:\Users\T590\פיתוחי AI ועוד- כללי\broadcast-buddy` | `https://github.com/twe0234-cell/CURSOR-BOT.git` |
-| DIRTY_UNCOMMITTED | False | True | main | 011a2c3 | `C:\Users\T590\פיתוחי AI ועוד- כללי\CURSOR-BOT` | `https://github.com/twe0234-cell/CURSOR-BOT.git` |
-| STALE_COPY | True |  | master |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\New project` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\Documents\Codex\2026-04-24-erp-crm-next-js-16-supabase` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\Documents\Codex\cursor-bot-finalize-claude-erp-waves` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\Documents\Codex\cursor-contact-business-activity-panel` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\barcode-inventory-lookup-go-live` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\go-live-operational-ux-fixes` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\inventory-product-share-ai-image` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\mediation-commission-receipt-flow` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\niimbot-b1-web-bluetooth-poc` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\sales-ui-density-go-live` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\trader-gallery-checkout-spec` | `` |
-| UNKNOWN_REVIEW_REQUIRED | True |  |  |  | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\verify-broadcast-cron-setup` | `` |
-| UNRELATED | True | False | main | 84cc3c1 | `C:\Users\T590\פיתוחי AI ועוד- כללי\.claude\plugins\marketplaces\caveman` | `https://github.com/JuliusBrussee/caveman.git` |
-| UNRELATED | True | False | main | 7a71d56 | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\.tmp\plugins` | `https://github.com/openai/plugins.git` |
-| UNRELATED | True | False | main | 84cc3c1 | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\plugins\caveman-repo` | `https://github.com/JuliusBrussee/caveman.git` |
-| UNRELATED | True | False | main | fb7b56d | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\vendor_imports\skills` | `https://github.com/openai/skills.git` |
+- `C:\Users\T590\פיתוחי AI ועוד- כללי`
+- `C:\Users\T590\Documents\Codex`
+- `C:\Dev`
+
+No cleanup, reset, delete, merge, stash-pop, or app feature edit was performed during inventory.
+
+## Findings Summary
+
+- Canonical local anchor: `C:\Dev\CURSOR-BOT`
+- GitHub source-of-truth repo: `https://github.com/twe0234-cell/CURSOR-BOT.git`
+- Same GitHub repo appears in three major local working copies:
+  - `C:\Dev\CURSOR-BOT`
+  - `C:\Users\T590\פיתוחי AI ועוד- כללי\CURSOR-BOT`
+  - `C:\Users\T590\פיתוחי AI ועוד- כללי\broadcast-buddy`
+- One active dirty Codex worktree exists:
+  - `C:\Users\T590\Documents\Codex\2026-04-26\post-merge-main-verification`
+- Multiple copied or broken worktree directories exist and should not be used as task bases.
+- Tool/plugin repos also exist under `.claude`, `.codex`, `.cursor`, and `.supabase`; most are unrelated to CURSOR-BOT feature development.
+
+## Repo / Worktree Table
+
+| Classification | Clean | CURSOR-BOT | Branch | HEAD | Upstream | Path | Origin | Notes |
+|---|---:|---:|---|---|---|---|---|---|
+| `SOURCE_OF_TRUTH_CANDIDATE` | No | Yes | `codex/paperclip-governance-bootstrap` | `011a2c3` | `(none)` | `C:\Dev\CURSOR-BOT` | `https://github.com/twe0234-cell/CURSOR-BOT.git` | Canonical local anchor in preferred location. |
+| `DIRTY_UNCOMMITTED` | No | Yes | `main` | `011a2c3` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CURSOR-BOT` | `https://github.com/twe0234-cell/CURSOR-BOT.git` | Duplicate local copy with untracked agent files and prunable worktree registry. |
+| `DIRTY_UNCOMMITTED` | No | Yes | `main` | `9cc294f` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\broadcast-buddy` | `https://github.com/twe0234-cell/CURSOR-BOT.git` | Dirty duplicate local copy with many app and migration changes. |
+| `DIRTY_UNCOMMITTED` | No | Yes | `codex/niimbot-printing-feasibility` | `719d069` | `(none)` | `C:\Users\T590\Documents\Codex\2026-04-26\post-merge-main-verification` | `https://github.com/twe0234-cell/CURSOR-BOT.git` | Active dirty Codex worktree. |
+| `STALE_COPY` | Yes | Yes | `claude/analyze-business-structure-RZImz` | `ad082a8` | `(unavailable)` | `C:\Users\T590\Documents\Codex\2026-04-24-erp-crm-next-js-16-supabase` | `indirect via broadcast-buddy worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`. |
+| `STALE_COPY` | Yes | Yes | `codex/finalize-claude-erp-waves` | `9b69a29` | `(unavailable)` | `C:\Users\T590\Documents\Codex\cursor-bot-finalize-claude-erp-waves` | `indirect via broadcast-buddy worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`. |
+| `STALE_COPY` | Yes | Yes | `cursor/contact-business-activity-panel` | `325db1b` | `(unavailable)` | `C:\Users\T590\Documents\Codex\cursor-contact-business-activity-panel` | `indirect via broadcast-buddy worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`. |
+| `STALE_COPY` | Yes | Yes | `cursor/barcode-inventory-lookup-go-live` | `03bfbbc` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\barcode-inventory-lookup-go-live` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `cursor/go-live-operational-ux-fixes` | `27d4687` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\go-live-operational-ux-fixes` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `cursor/inventory-product-share-ai-image` | `9724fc9` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\inventory-product-share-ai-image` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `cursor/mediation-commission-receipt-flow` | `122ebe9` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\mediation-commission-receipt-flow` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `cursor/niimbot-b1-web-bluetooth-poc` | `58a580f` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\niimbot-b1-web-bluetooth-poc` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `cursor/sales-ui-density-go-live` | `55eb525` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\sales-ui-density-go-live` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `codex/trader-gallery-checkout-spec` | `63e05f2` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\trader-gallery-checkout-spec` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `STALE_COPY` | Yes | Yes | `codex/verify-broadcast-cron-setup` | `d38a297` | `(unavailable)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\verify-broadcast-cron-setup` | `indirect via CURSOR-BOT worktree registry` | Copied worktree dir; local `.git` points to missing `C:\Users\T590\CURSOR-BOT`. |
+| `DRAFT_DOCS` | No | No | `crm-service-refactor` | `(invalid)` | `(none)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor` | `(none)` | Local Cursor metadata repo with untracked plans/plugins/projects. |
+| `UNRELATED` | No | No | `(detached)` | `3d9d9cd` | `(none)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor\plugins\cache\cursor-public\vercel\3d9d9cd0fe5d1bdaedb891135a5c45f19190b83f` | `https://github.com/vercel/vercel-plugin` | Cached Cursor plugin repo. |
+| `UNRELATED` | No | No | `main` | `0326cac` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.supabase\Projects\bt-contacts-bridge` | `https://github.com/twe0234-cell/bt-contacts-bridge.git` | Separate project; dirty due local docs/logs. |
+| `UNRELATED` | Yes | No | `main` | `84cc3c1` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.claude\plugins\marketplaces\caveman` | `https://github.com/JuliusBrussee/caveman.git` | Claude plugin marketplace repo. |
+| `UNRELATED` | Yes | No | `main` | `7a71d56` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\.tmp\plugins` | `https://github.com/openai/plugins.git` | Codex temporary plugin repo. |
+| `UNRELATED` | Yes | No | `main` | `84cc3c1` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\plugins\caveman-repo` | `https://github.com/JuliusBrussee/caveman.git` | Codex plugin vendor repo. |
+| `UNRELATED` | Yes | No | `main` | `fb7b56d` | `origin/main` | `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\vendor_imports\skills` | `https://github.com/openai/skills.git` | Vendor-imported skill library. |
+| `STALE_COPY` | Yes | No | `master` | `(invalid)` | `(none)` | `C:\Users\T590\פיתוחי AI ועוד- כללי\New project` | `(none)` | Placeholder repo-like folder with invalid HEAD. |
 
 ## Details
 
-### C:\Users\T590\Documents\Codex\2026-04-24-erp-crm-next-js-16-supabase
+### C:\Dev\CURSOR-BOT
 
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
+- Classification: `SOURCE_OF_TRUTH_CANDIDATE`
+- Origin remote URL: `https://github.com/twe0234-cell/CURSOR-BOT.git`
+- Current branch: `codex/paperclip-governance-bootstrap`
+- HEAD SHA: `011a2c31df35104f8e60bb4eb9a0bf1fdd90b07f`
+- Upstream branch: `(none configured)`
+- `git status --short`:
 
-Status:
 ```text
-(clean)
+?? docs/ai-control/
 ```
 
-Diff stat:
+- `git diff --stat`:
+
 ```text
-(none)
+(none; current changes are untracked docs)
 ```
 
-Worktrees:
+- `git worktree list`:
+
 ```text
-(none)
+C:/DEV/CURSOR-BOT 011a2c3 [codex/paperclip-governance-bootstrap]
 ```
 
-### C:\Users\T590\Documents\Codex\2026-04-26\post-merge-main-verification
+- Points to `twe0234-cell/CURSOR-BOT`: `yes`
+- Appears old/duplicate/unrelated: `no`
+- Clean or dirty: `dirty because bootstrap docs are untracked`
+
+### C:\Users\T590\פיתוחי AI ועוד- כללי\CURSOR-BOT
 
 - Classification: `DIRTY_UNCOMMITTED`
-- Origin: `https://github.com/twe0234-cell/CURSOR-BOT.git`
-- Current branch: `codex/niimbot-printing-feasibility`
-- HEAD: `719d069`
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: `True`
-- Clean: `False`
-- Old/duplicate/unrelated: `no`
-
-Status:
-```text
- M app/torah/[id]/print-batch/[batchId]/PrintBatchClient.tsx
- M app/torah/[id]/print-labels/PrintTorahRollClient.tsx
- M components/inventory/BarcodePrint.tsx
-?? docs/NIIMBOT_PRINTING_FEASIBILITY.md
-```
-
-Diff stat:
-```text
- app/torah/[id]/print-batch/[batchId]/PrintBatchClient.tsx | 3 +++
- app/torah/[id]/print-labels/PrintTorahRollClient.tsx      | 3 +++
- components/inventory/BarcodePrint.tsx                     | 3 +++
- 3 files changed, 9 insertions(+)
-```
-
-Worktrees:
-```text
-C:/Users/T590/Documents/Codex/2026-04-26/post-merge-main-verification 719d069 [codex/niimbot-printing-feasibility]
-```
-
-### C:\Users\T590\Documents\Codex\cursor-bot-finalize-claude-erp-waves
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\Documents\Codex\cursor-contact-business-activity-panel
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.claude\plugins\marketplaces\caveman
-
-- Classification: `UNRELATED`
-- Origin: `https://github.com/JuliusBrussee/caveman.git`
+- Origin remote URL: `https://github.com/twe0234-cell/CURSOR-BOT.git`
 - Current branch: `main`
-- HEAD: `84cc3c1`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `False`
-- Clean: `True`
-- Old/duplicate/unrelated: `yes`
+- HEAD SHA: `011a2c31df35104f8e60bb4eb9a0bf1fdd90b07f`
+- Upstream branch: `origin/main`
+- `git status --short`:
 
-Status:
 ```text
-(clean)
+?? .agents/
+?? skills-lock.json
 ```
 
-Diff stat:
-```text
-(none)
-```
+- `git diff --stat`:
 
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.claude/plugins/marketplaces/caveman" 84cc3c1 [main]
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\.tmp\plugins
-
-- Classification: `UNRELATED`
-- Origin: `https://github.com/openai/plugins.git`
-- Current branch: `main`
-- HEAD: `7a71d56`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `False`
-- Clean: `True`
-- Old/duplicate/unrelated: `yes`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
 ```text
 (none)
 ```
 
-Worktrees:
+- `git worktree list`:
+
 ```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.codex/.tmp/plugins" 7a71d56 [main]
+C:/Users/T590/פיתוחי AI ועוד- כללי/CURSOR-BOT 011a2c3 [main]
+C:/Users/T590/AppData/Local/Temp/intake-feature 59af564 [claude/torah-intake-landing] prunable
+C:/Users/T590/Documents/CursorWorktrees/barcode-inventory-lookup-go-live 03bfbbc [cursor/barcode-inventory-lookup-go-live] prunable
+C:/Users/T590/Documents/CursorWorktrees/go-live-operational-ux-fixes 27d4687 [cursor/go-live-operational-ux-fixes] prunable
+C:/Users/T590/Documents/CursorWorktrees/inventory-product-share-ai-image 9724fc9 [cursor/inventory-product-share-ai-image] prunable
+C:/Users/T590/Documents/CursorWorktrees/mediation-commission-receipt-flow 122ebe9 [cursor/mediation-commission-receipt-flow] prunable
+C:/Users/T590/Documents/CursorWorktrees/niimbot-b1-web-bluetooth-poc 58a580f [cursor/niimbot-b1-web-bluetooth-poc] prunable
+C:/Users/T590/Documents/CursorWorktrees/sales-ui-density-go-live 55eb525 [cursor/sales-ui-density-go-live] prunable
+C:/Users/T590/Documents/CursorWorktrees/trader-gallery-checkout-spec 63e05f2 [codex/trader-gallery-checkout-spec] prunable
+C:/Users/T590/Documents/CursorWorktrees/verify-broadcast-cron-setup d38a297 [codex/verify-broadcast-cron-setup] prunable
 ```
 
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\plugins\caveman-repo
-
-- Classification: `UNRELATED`
-- Origin: `https://github.com/JuliusBrussee/caveman.git`
-- Current branch: `main`
-- HEAD: `84cc3c1`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `False`
-- Clean: `True`
-- Old/duplicate/unrelated: `yes`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.codex/plugins/caveman-repo" 84cc3c1 [main]
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\vendor_imports\skills
-
-- Classification: `UNRELATED`
-- Origin: `https://github.com/openai/skills.git`
-- Current branch: `main`
-- HEAD: `fb7b56d`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `False`
-- Clean: `True`
-- Old/duplicate/unrelated: `yes`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.codex/vendor_imports/skills" fb7b56d [main]
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor
-
-- Classification: `DIRTY_UNCOMMITTED`
-- Origin: ``
-- Current branch: `crm-service-refactor`
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `False`
-- Old/duplicate/unrelated: `no`
-
-Status:
-```text
-?? plans/
-?? plugins/
-?? projects/
-?? skills-cursor/
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.cursor" 0000000 [crm-service-refactor]
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\.supabase\Projects\bt-contacts-bridge
-
-- Classification: `DIRTY_UNCOMMITTED`
-- Origin: `https://github.com/twe0234-cell/bt-contacts-bridge.git`
-- Current branch: `main`
-- HEAD: `0326cac`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `False`
-- Clean: `False`
-- Old/duplicate/unrelated: `no`
-
-Status:
-```text
-?? START_HERE.md
-?? dev-logs/
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/.supabase/Projects/bt-contacts-bridge" 0326cac [main]
-```
+- Points to `twe0234-cell/CURSOR-BOT`: `yes`
+- Appears old/duplicate/unrelated: `duplicate local copy, not the preferred anchor`
+- Clean or dirty: `dirty`
 
 ### C:\Users\T590\פיתוחי AI ועוד- כללי\broadcast-buddy
 
 - Classification: `DIRTY_UNCOMMITTED`
-- Origin: `https://github.com/twe0234-cell/CURSOR-BOT.git`
+- Origin remote URL: `https://github.com/twe0234-cell/CURSOR-BOT.git`
 - Current branch: `main`
-- HEAD: `9cc294f`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `True`
-- Clean: `False`
-- Old/duplicate/unrelated: `no`
+- HEAD SHA: `9cc294f16690ba1ebaee613e8a74be4fe3bc8487`
+- Upstream branch: `origin/main`
+- `git status --short`:
 
-Status:
 ```text
  M app/actions/scribe.ts
  M app/api/cron/process-broadcasts/route.ts
@@ -339,285 +157,154 @@ Status:
 ?? supabase/migrations/074_torah_qa_finalize_atomic.sql
 ```
 
-Diff stat:
+- `git diff --stat`:
+
 ```text
-(none)
+(none captured from unstaged diff; many modified files exist per status)
 ```
 
-Worktrees:
+- `git worktree list`:
+
 ```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/broadcast-buddy" 9cc294f [main]
-C:/Users/T590/Documents/Codex/2026-04-24-erp-crm-next-js-16-supabase                                                                                   ad082a8 [claude/analyze-business-structure-RZImz]
-C:/Users/T590/Documents/Codex/cursor-bot-finalize-claude-erp-waves                                                                                     9b69a29 [codex/finalize-claude-erp-waves]
-C:/Users/T590/Documents/Codex/cursor-contact-business-activity-panel                                                                                   325db1b [cursor/contact-business-activity-panel]
+C:/Users/T590/פיתוחי AI ועוד- כללי/broadcast-buddy 9cc294f [main]
+C:/Users/T590/Documents/Codex/2026-04-24-erp-crm-next-js-16-supabase ad082a8 [claude/analyze-business-structure-RZImz]
+C:/Users/T590/Documents/Codex/cursor-bot-finalize-claude-erp-waves 9b69a29 [codex/finalize-claude-erp-waves]
+C:/Users/T590/Documents/Codex/cursor-contact-business-activity-panel 325db1b [cursor/contact-business-activity-panel]
 ```
 
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CURSOR-BOT
+- Points to `twe0234-cell/CURSOR-BOT`: `yes`
+- Appears old/duplicate/unrelated: `duplicate local copy with substantial uncommitted work`
+- Clean or dirty: `dirty`
+
+### C:\Users\T590\Documents\Codex\2026-04-26\post-merge-main-verification
 
 - Classification: `DIRTY_UNCOMMITTED`
-- Origin: `https://github.com/twe0234-cell/CURSOR-BOT.git`
-- Current branch: `main`
-- HEAD: `011a2c3`
-- Upstream: `origin/main`
-- Points to twe0234-cell/CURSOR-BOT: `True`
-- Clean: `False`
-- Old/duplicate/unrelated: `no`
+- Origin remote URL: `https://github.com/twe0234-cell/CURSOR-BOT.git`
+- Current branch: `codex/niimbot-printing-feasibility`
+- HEAD SHA: `719d0693aa0f5cfe56f3ed8f2e4bd3b74115a824`
+- Upstream branch: `(none configured)`
+- `git status --short`:
 
-Status:
 ```text
-?? .agents/
-?? skills-lock.json
+ M app/torah/[id]/print-batch/[batchId]/PrintBatchClient.tsx
+ M app/torah/[id]/print-labels/PrintTorahRollClient.tsx
+ M components/inventory/BarcodePrint.tsx
+?? docs/NIIMBOT_PRINTING_FEASIBILITY.md
 ```
 
-Diff stat:
+- `git diff --stat`:
+
 ```text
-(none)
+ app/torah/[id]/print-batch/[batchId]/PrintBatchClient.tsx | 3 +++
+ app/torah/[id]/print-labels/PrintTorahRollClient.tsx      | 3 +++
+ components/inventory/BarcodePrint.tsx                     | 3 +++
+ 3 files changed, 9 insertions(+)
 ```
 
-Worktrees:
+- `git worktree list`:
+
 ```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/CURSOR-BOT" 011a2c3 [main]
-C:/Users/T590/AppData/Local/Temp/intake-feature                                                                                                   59af564 [claude/torah-intake-landing] prunable
-C:/Users/T590/Documents/CursorWorktrees/barcode-inventory-lookup-go-live                                                                          03bfbbc [cursor/barcode-inventory-lookup-go-live] prunable
-C:/Users/T590/Documents/CursorWorktrees/go-live-operational-ux-fixes                                                                              27d4687 [cursor/go-live-operational-ux-fixes] prunable
-C:/Users/T590/Documents/CursorWorktrees/inventory-product-share-ai-image                                                                          9724fc9 [cursor/inventory-product-share-ai-image] prunable
-C:/Users/T590/Documents/CursorWorktrees/mediation-commission-receipt-flow                                                                         122ebe9 [cursor/mediation-commission-receipt-flow] prunable
-C:/Users/T590/Documents/CursorWorktrees/niimbot-b1-web-bluetooth-poc                                                                              58a580f [cursor/niimbot-b1-web-bluetooth-poc] prunable
-C:/Users/T590/Documents/CursorWorktrees/sales-ui-density-go-live                                                                                  55eb525 [cursor/sales-ui-density-go-live] prunable
-C:/Users/T590/Documents/CursorWorktrees/trader-gallery-checkout-spec                                                                              63e05f2 [codex/trader-gallery-checkout-spec] prunable
-C:/Users/T590/Documents/CursorWorktrees/verify-broadcast-cron-setup                                                                               d38a297 [codex/verify-broadcast-cron-setup] prunable
+C:/Users/T590/Documents/Codex/2026-04-26/post-merge-main-verification 719d069 [codex/niimbot-printing-feasibility]
 ```
 
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\barcode-inventory-lookup-go-live
+- Points to `twe0234-cell/CURSOR-BOT`: `yes`
+- Appears old/duplicate/unrelated: `active worktree, not canonical`
+- Clean or dirty: `dirty`
 
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
+### Broken or copied worktree directories
 
-Status:
-```text
-(clean)
-```
+The following directories have `.git` pointer files but do not behave like healthy standalone working copies. They should be treated as `STALE_COPY` until rebuilt from a clean canonical worktree:
 
-Diff stat:
-```text
-(none)
-```
+- `C:\Users\T590\Documents\Codex\2026-04-24-erp-crm-next-js-16-supabase`
+  - Registered branch/SHA from parent repo: `claude/analyze-business-structure-RZImz` / `ad082a8`
+  - Local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`
+- `C:\Users\T590\Documents\Codex\cursor-bot-finalize-claude-erp-waves`
+  - Registered branch/SHA from parent repo: `codex/finalize-claude-erp-waves` / `9b69a29`
+  - Local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`
+- `C:\Users\T590\Documents\Codex\cursor-contact-business-activity-panel`
+  - Registered branch/SHA from parent repo: `cursor/contact-business-activity-panel` / `325db1b`
+  - Local `.git` points to missing `C:\Users\T590\Documents\broadcast-buddy`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\barcode-inventory-lookup-go-live`
+  - Registered branch/SHA from parent repo: `cursor/barcode-inventory-lookup-go-live` / `03bfbbc`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\go-live-operational-ux-fixes`
+  - Registered branch/SHA from parent repo: `cursor/go-live-operational-ux-fixes` / `27d4687`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\inventory-product-share-ai-image`
+  - Registered branch/SHA from parent repo: `cursor/inventory-product-share-ai-image` / `9724fc9`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\mediation-commission-receipt-flow`
+  - Registered branch/SHA from parent repo: `cursor/mediation-commission-receipt-flow` / `122ebe9`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\niimbot-b1-web-bluetooth-poc`
+  - Registered branch/SHA from parent repo: `cursor/niimbot-b1-web-bluetooth-poc` / `58a580f`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\sales-ui-density-go-live`
+  - Registered branch/SHA from parent repo: `cursor/sales-ui-density-go-live` / `55eb525`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\trader-gallery-checkout-spec`
+  - Registered branch/SHA from parent repo: `codex/trader-gallery-checkout-spec` / `63e05f2`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\verify-broadcast-cron-setup`
+  - Registered branch/SHA from parent repo: `codex/verify-broadcast-cron-setup` / `d38a297`
+  - Local `.git` points to missing `C:\Users\T590\CURSOR-BOT`
 
-Worktrees:
-```text
-(none)
-```
+For all broken copies above:
 
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\go-live-operational-ux-fixes
+- Origin remote URL: `indirect CURSOR-BOT or broadcast-buddy parent registry`
+- Upstream branch: `(unavailable from copied dir)`
+- `git status --short`: `(unavailable; copied dir does not resolve as healthy worktree)`
+- `git diff --stat`: `(unavailable)`
+- `git worktree list`: `(unavailable from copied dir; use parent registry instead)`
+- Clean or dirty: `unknown in practice; do not use`
 
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
+### Other local Git roots
 
-Status:
-```text
-(clean)
-```
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor`
+  - Classification: `DRAFT_DOCS`
+  - Branch: `crm-service-refactor`
+  - Status: dirty with untracked `plans/`, `plugins/`, `projects/`, `skills-cursor/`
+  - Notes: local Cursor metadata repo, not an app workspace
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.cursor\plugins\cache\cursor-public\vercel\3d9d9cd0fe5d1bdaedb891135a5c45f19190b83f`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/vercel/vercel-plugin`
+  - Branch: detached HEAD at `3d9d9cd`
+  - Status: `?? .cache-complete`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.supabase\Projects\bt-contacts-bridge`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/twe0234-cell/bt-contacts-bridge.git`
+  - Branch: `main`
+  - HEAD: `0326cac`
+  - Status: dirty with untracked `START_HERE.md` and `dev-logs/`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.claude\plugins\marketplaces\caveman`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/JuliusBrussee/caveman.git`
+  - Branch: `main`
+  - HEAD: `84cc3c1`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\.tmp\plugins`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/openai/plugins.git`
+  - Branch: `main`
+  - HEAD: `7a71d56`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\plugins\caveman-repo`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/JuliusBrussee/caveman.git`
+  - Branch: `main`
+  - HEAD: `84cc3c1`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\.codex\vendor_imports\skills`
+  - Classification: `UNRELATED`
+  - Origin: `https://github.com/openai/skills.git`
+  - Branch: `main`
+  - HEAD: `fb7b56d`
+- `C:\Users\T590\פיתוחי AI ועוד- כללי\New project`
+  - Classification: `STALE_COPY`
+  - Branch: `master`
+  - HEAD: `(invalid)`
+  - Notes: repo-like placeholder, not a usable workspace
 
-Diff stat:
-```text
-(none)
-```
+## Recommended Interpretation
 
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\inventory-product-share-ai-image
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\mediation-commission-receipt-flow
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\niimbot-b1-web-bluetooth-poc
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\sales-ui-density-go-live
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\trader-gallery-checkout-spec
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\CursorWorktrees\verify-broadcast-cron-setup
-
-- Classification: `UNKNOWN_REVIEW_REQUIRED`
-- Origin: ``
-- Current branch: ``
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `review`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-(none)
-```
-
-### C:\Users\T590\פיתוחי AI ועוד- כללי\New project
-
-- Classification: `STALE_COPY`
-- Origin: ``
-- Current branch: `master`
-- HEAD: ``
-- Upstream: ``
-- Points to twe0234-cell/CURSOR-BOT: ``
-- Clean: `True`
-- Old/duplicate/unrelated: `yes`
-
-Status:
-```text
-(clean)
-```
-
-Diff stat:
-```text
-(none)
-```
-
-Worktrees:
-```text
-"C:/Users/T590/\327\244\327\231\327\252\327\225\327\227\327\231 AI \327\225\327\242\327\225\327\223- \327\233\327\234\327\234\327\231/New project" 0000000 [master]
-```
+- Use `C:\Dev\CURSOR-BOT` as the canonical local anchor.
+- Use `C:\Dev\worktrees` for new controlled worktrees.
+- Do not start tasks from `broadcast-buddy`, `פיתוחי AI ועוד- כללי\CURSOR-BOT`, or any copied worktree folder.
+- Treat copied worktree directories and prunable entries as historical evidence, not execution bases.
