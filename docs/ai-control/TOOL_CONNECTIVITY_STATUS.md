@@ -63,4 +63,11 @@ Local Paperclip instance currently observed at:
 - Tailscale URL: `http://desktop-03omr6r.tailf7400c.ts.net:3100`
 - Deployment mode: authenticated/private
 
-No Paperclip application code was changed in this bootstrap. Only governance docs were prepared.
+Current agent runtime status:
+
+- `CEO`: operational through `codex_local`; Claude runtime is temporarily unavailable.
+- `Codex Builder`: operational through `codex_local`.
+- `Gemini Researcher`: configured through `gemini_local` with `gemini-2.5-flash`; requires `GEMINI_API_KEY` in the Paperclip process environment and is subject to Google quota limits.
+- `Cursor`: installed locally, but not connected as a Paperclip agent adapter.
+
+No Paperclip application code was changed in this bootstrap. Only governance docs and local Paperclip configuration were prepared.

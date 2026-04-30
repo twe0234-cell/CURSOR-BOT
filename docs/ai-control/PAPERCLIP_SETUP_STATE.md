@@ -38,6 +38,16 @@ Task-specific instructions:
 
 Do not multiply agents unless there is a clear ownership split.
 
+## Current Agent Runtime Status
+
+- `CEO`: currently runs through `codex_local` with [PAPERCLIP_CEO.md](PAPERCLIP_CEO.md). This keeps the board operational while Claude CLI is repaired.
+- `Codex Builder`: runs through `codex_local` with [PAPERCLIP_CODEX.md](PAPERCLIP_CODEX.md).
+- `Gemini Researcher`: configured through `gemini_local` with model `gemini-2.5-flash`.
+- `Claude`: not currently active because the local Claude CLI executable is not valid on this machine.
+- `Cursor`: installed as a desktop IDE/CLI, but not configured as a Paperclip agent adapter. Use it as an external coding IDE unless a supported Paperclip adapter is added later.
+
+Gemini requires a valid key in the environment that starts Paperclip, for example `GEMINI_API_KEY`. If the key exists only in one already-open PowerShell session, Paperclip will not see it until Paperclip is restarted from an environment that has the key.
+
 ## Practical Workflow
 
 1. Create or select a task in Paperclip.
