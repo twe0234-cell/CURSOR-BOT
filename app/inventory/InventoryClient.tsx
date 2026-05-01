@@ -43,18 +43,24 @@ import { ImageGallery } from "@/components/inventory/ImageGallery";
 import { DependentCategories } from "@/components/inventory/DependentCategories";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { BarcodePrint } from "@/components/inventory/BarcodePrint";
+import { formatInventoryDetails } from "@/lib/sales/inventoryDisplay";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { PlusIcon, PencilIcon, TrashIcon, SendIcon, Package, Wallet, Image as ImageIcon, Check, ChevronDown, ChevronUp, MailIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/lib/hooks/useViewMode";
 import { ViewToggle } from "@/app/components/ViewToggle";
 import type { InventoryItemInput } from "@/lib/validations/inventory";
 import { INVENTORY_CATEGORY_OPTIONS } from "@/lib/validations/inventory";
 import { isInventorySoldStatus, inventoryStatusLabelHe } from "@/lib/inventory/status";
+import {
+  buildInventoryShareFallback,
+  type InventoryShareChannel,
+  type InventoryShareDraftInput,
+} from "@/src/lib/inventory/shareDraft";
 
 const STATUSES = ["available", "proofreading", "reserved", "sold"] as const;
 
@@ -81,6 +87,7 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [viewMode, setViewMode] = useViewMode("inventory");
+  const [sharingItemId, setSharingItemId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<
     | "scribe_name"
     | "product_category"
@@ -307,11 +314,92 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
     }
   };
 
-  const getBroadcastMessage = (item: InventoryItem): string => {
-    const type = item.product_category ?? "פריט";
-    const script = item.script_type ?? "";
-    const price = item.target_price != null ? `מחיר: ${item.target_price} ₪` : "";
-    return `פריט חדש! ${type}${script ? `, כתב ${script}` : ""} זמין. ${price}`.trim();
+  const toInventoryShareInput = (item: InventoryItem): InventoryShareDraftInput => {
+    const details = formatInventoryDetails(
+      item.category_meta ?? null,
+      item.product_category ?? null,
+      item.size ?? null
+    );
+    const script = item.script_type?.trim();
+    const detailsWithScript = script ? `${details}${details && details !== "—" ? " · " : ""}כתב ${script}` : details;
+    return {
+      productType: item.product_category ?? "פריט סת\"ם",
+      supplierName: item.scribe_name?.trim() || null,
+      details: detailsWithScript && detailsWithScript !== "—" ? detailsWithScript : null,
+      priceText:
+        item.target_price != null ? `${item.target_price.toLocaleString("he-IL")} ₪` : null,
+      statusText: inventoryStatusLabelHe(item.status),
+      shortDescription: item.description?.trim() || null,
+      imageUrl: item.images?.[0] ?? null,
+    };
+  };
+
+  const getAiShareDraft = async (
+    item: InventoryItem,
+    channel: InventoryShareChannel
+  ): Promise<{ message: string; subject: string; usedFallback: boolean }> => {
+    const input = toInventoryShareInput(item);
+    const fallback = buildInventoryShareFallback(input, channel);
+    const fallbackSubject = `הצעה: ${input.productType}`;
+    try {
+      const res = await fetch("/api/inventory/share-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel, input }),
+      });
+      if (!res.ok) {
+        return { message: fallback, subject: fallbackSubject, usedFallback: true };
+      }
+      const data = (await res.json()) as {
+        message?: string;
+        subject?: string;
+        usedFallback?: boolean;
+      };
+      const msg = data.message?.trim();
+      if (!msg) {
+        return { message: fallback, subject: fallbackSubject, usedFallback: true };
+      }
+      return {
+        message: msg,
+        subject: data.subject?.trim() || fallbackSubject,
+        usedFallback: Boolean(data.usedFallback),
+      };
+    } catch {
+      return { message: fallback, subject: fallbackSubject, usedFallback: true };
+    }
+  };
+
+  const handleShare = async (item: InventoryItem, channel: InventoryShareChannel) => {
+    setSharingItemId(item.id);
+    try {
+      const draft = await getAiShareDraft(item, channel);
+      if (draft.usedFallback) {
+        toast.info("שיתוף נוצר במבנה קצר ברירת מחדל");
+      }
+      const imageUrl = item.images?.[0]?.trim() || "";
+      if (channel === "whatsapp") {
+        const qp = new URLSearchParams({
+          ch: "wa",
+          message: draft.message,
+        });
+        if (imageUrl) qp.set("image", imageUrl);
+        window.location.href = `/communications?${qp.toString()}`;
+        return;
+      }
+
+      const emailBody = imageUrl
+        ? `${draft.message}\n\n• תמונה: ${imageUrl}`
+        : draft.message;
+      const qp = new URLSearchParams({
+        ch: "email",
+        emailTab: "compose",
+        prefillSubject: draft.subject,
+        prefillBody: emailBody,
+      });
+      window.location.href = `/communications?${qp.toString()}`;
+    } finally {
+      setSharingItemId(null);
+    }
   };
 
   return (
@@ -391,11 +479,26 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                         <p className="text-sm font-bold text-primary">{item.target_price.toLocaleString("he-IL")} ₪</p>
                       )}
                       <div className="flex gap-1 pt-1">
-                        <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`} className="flex-1">
-                          <Button size="sm" variant="outline" className="w-full h-7 text-xs">
-                            <SendIcon className="size-3 ml-1" />שידור
-                          </Button>
-                        </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 flex-1 text-xs"
+                          onClick={() => void handleShare(item, "whatsapp")}
+                          disabled={sharingItemId === item.id}
+                        >
+                          <SendIcon className="size-3 ml-1" />
+                          {sharingItemId === item.id ? "מכין..." : "שיתוף WA"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2"
+                          onClick={() => void handleShare(item, "email")}
+                          disabled={sharingItemId === item.id}
+                          title="טיוטת אימייל"
+                        >
+                          <MailIcon className="size-3.5" />
+                        </Button>
                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)}>
                           <PencilIcon className="size-3.5" />
                         </Button>
@@ -481,12 +584,26 @@ export default function InventoryClient({ initialItems, loadError }: Props) {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Link href={`/whatsapp?message=${encodeURIComponent(getBroadcastMessage(item))}`}>
-                            <Button size="sm" variant="outline" className="rounded-lg">
-                              <SendIcon className="size-4 ml-1" />
-                              שידור
-                            </Button>
-                          </Link>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg"
+                            onClick={() => void handleShare(item, "whatsapp")}
+                            disabled={sharingItemId === item.id}
+                          >
+                            <SendIcon className="size-4 ml-1" />
+                            {sharingItemId === item.id ? "מכין..." : "שיתוף WA"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg px-2"
+                            onClick={() => void handleShare(item, "email")}
+                            disabled={sharingItemId === item.id}
+                            title="טיוטת אימייל"
+                          >
+                            <MailIcon className="size-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
                             <PencilIcon className="size-4" />
                           </Button>

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase/server";
 import CommunicationsHubClient from "./CommunicationsHubClient";
 
-type Search = { ch?: string; emailTab?: string; message?: string };
+type Search = { ch?: string; emailTab?: string; message?: string; image?: string };
 
 export default async function CommunicationsPage({
   searchParams,
@@ -72,6 +72,7 @@ export default async function CommunicationsPage({
   const groupOptions = groups.map((g) => ({ wa_chat_id: g.wa_chat_id, name: g.name }));
 
   const prefilledWaMessage = typeof params.message === "string" ? params.message : "";
+  const prefilledWaImageUrl = typeof params.image === "string" ? params.image : "";
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-background animate-pulse" />}>
@@ -88,6 +89,7 @@ export default async function CommunicationsPage({
         waGroups={groups}
         waGroupOptions={groupOptions}
         prefilledWaMessage={prefilledWaMessage}
+        prefilledWaImageUrl={prefilledWaImageUrl}
       />
     </Suspense>
   );

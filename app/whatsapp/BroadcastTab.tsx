@@ -59,6 +59,7 @@ type Props = {
   /** תגיות מוצעות מ־user_settings — אותו מקור כמו בהגדרות Green API */
   allowedTags: string[];
   prefilledMessage?: string;
+  prefilledImageUrl?: string;
   groups?: GroupOption[];
 };
 
@@ -66,12 +67,13 @@ export default function BroadcastTab({
   allTags,
   allowedTags,
   prefilledMessage = "",
+  prefilledImageUrl = "",
   groups = [],
 }: Props) {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [messageText, setMessageText] = useState(prefilledMessage);
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState(prefilledImageUrl);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
