@@ -14,6 +14,8 @@ import {
   findDuplicateCrmContacts,
   mergeCrmContacts,
   bulkDeleteCrmContacts,
+  bulkAddTagsToCrmContacts,
+  bulkRemoveTagFromCrmContacts,
   type CrmContact,
   type DuplicateGroup,
 } from "./actions";
@@ -35,6 +37,7 @@ import {
   GitMergeIcon,
   Trash2Icon,
   CheckSquareIcon,
+  TagIcon,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -146,6 +149,11 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkTagAddOpen, setBulkTagAddOpen] = useState(false);
+  const [bulkTagRemoveOpen, setBulkTagRemoveOpen] = useState(false);
+  const [bulkTagInput, setBulkTagInput] = useState("");
+  const [bulkTagRemoveInput, setBulkTagRemoveInput] = useState("");
+  const [bulkTagLoading, setBulkTagLoading] = useState(false);
 
   // ── Derived: all unique tags that exist across all contacts ────────────────
   const allFilterTags = [
@@ -336,6 +344,59 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const handleBulkAddTags = async () => {
+    const ids = [...selectedIds];
+    const tags = bulkTagInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    if (ids.length === 0) return;
+    if (tags.length === 0) {
+      toast.error("הזן תגית אחת לפחות");
+      return;
+    }
+
+    setBulkTagLoading(true);
+    const res = await bulkAddTagsToCrmContacts(ids, tags);
+    setBulkTagLoading(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+
+    toast.success(`נוספו תגיות ל-${ids.length} אנשי קשר`);
+    setBulkTagInput("");
+    setBulkTagAddOpen(false);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    await refreshContacts();
+  };
+
+  const handleBulkRemoveTag = async () => {
+    const ids = [...selectedIds];
+    const tag = bulkTagRemoveInput.trim();
+    if (ids.length === 0) return;
+    if (!tag) {
+      toast.error("הזן תגית להסרה");
+      return;
+    }
+
+    setBulkTagLoading(true);
+    const res = await bulkRemoveTagFromCrmContacts(ids, tag);
+    setBulkTagLoading(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+
+    toast.success(`התגית הוסרה מ-${ids.length} אנשי קשר`);
+    setBulkTagRemoveInput("");
+    setBulkTagRemoveOpen(false);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    await refreshContacts();
+  };
+
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-6 sm:py-8 min-w-0 overflow-hidden">
       {/* Page header */}
@@ -403,6 +464,26 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
             <CheckSquareIcon className="size-4 ml-2" />
             {selectMode ? "בטל בחירה" : "בחירה מרובית"}
           </Button>
+          {selectMode && selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setBulkTagAddOpen(true)}
+            >
+              <TagIcon className="size-4 ml-2" />
+              הוסף תגיות ({selectedIds.size})
+            </Button>
+          )}
+          {selectMode && selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setBulkTagRemoveOpen(true)}
+            >
+              <TagIcon className="size-4 ml-2" />
+              הסר תגית ({selectedIds.size})
+            </Button>
+          )}
           {selectMode && selectedIds.size > 0 && (
             <Button
               variant="destructive"
@@ -914,6 +995,62 @@ export default function CrmClient({ initialContacts, gmailConnected }: Props) {
             </Button>
             <Button variant="destructive" disabled={bulkDeleteLoading} onClick={() => void handleBulkDelete()}>
               {bulkDeleteLoading ? "מוחק…" : "מחק"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkTagAddOpen} onOpenChange={setBulkTagAddOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הוספת תגיות לבחירה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              הוסף תגיות ל-{selectedIds.size} אנשי קשר. אפשר להפריד כמה תגיות בפסיקים.
+            </p>
+            <Input
+              value={bulkTagInput}
+              onChange={(e) => setBulkTagInput(e.target.value)}
+              placeholder="לדוגמה: VIP, סוחרים, דיוור"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBulkTagAddOpen(false)}>
+              ביטול
+            </Button>
+            <Button disabled={bulkTagLoading} onClick={() => void handleBulkAddTags()}>
+              {bulkTagLoading ? "מוסיף..." : "הוסף תגיות"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkTagRemoveOpen} onOpenChange={setBulkTagRemoveOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הסרת תגית מהבחירה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              הסר תגית אחת מ-{selectedIds.size} אנשי קשר. פעולה זו לא מוחקת את אנשי הקשר.
+            </p>
+            <Input
+              value={bulkTagRemoveInput}
+              onChange={(e) => setBulkTagRemoveInput(e.target.value)}
+              placeholder="שם תגית להסרה"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBulkTagRemoveOpen(false)}>
+              ביטול
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkTagLoading}
+              onClick={() => void handleBulkRemoveTag()}
+            >
+              {bulkTagLoading ? "מסיר..." : "הסר תגית"}
             </Button>
           </DialogFooter>
         </DialogContent>

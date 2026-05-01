@@ -569,7 +569,7 @@ export async function createCrmContact(
       phone: "Phone",
     };
     let preferredContact = input.preferred_contact ?? "WhatsApp";
-    let preferredMethod = input.preferred_contact_method ?? null;
+    const preferredMethod = input.preferred_contact_method ?? null;
     if (input.preferred_contact_method) {
       preferredContact =
         legacyMap[input.preferred_contact_method] ?? preferredContact;
@@ -617,6 +617,92 @@ export async function updateContactTags(
 ): Promise<ActionResult> {
   const cleaned = tags.map((t) => t.trim()).filter(Boolean);
   return updateCrmContact(contactId, { tags: cleaned });
+}
+
+const CRM_TAG_BULK_CHUNK = 80;
+
+function cleanUniqueTags(tags: string[]): string[] {
+  return [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+}
+
+export async function bulkAddTagsToCrmContacts(
+  ids: string[],
+  tagsToAdd: string[]
+): Promise<ActionResult> {
+  const cleanedIds = cleanUniqueTags(ids);
+  const add = cleanUniqueTags(tagsToAdd);
+  if (cleanedIds.length === 0) return { success: false, error: "בחר אנשי קשר" };
+  if (add.length === 0) return { success: false, error: "הזן תגית אחת לפחות" };
+
+  try {
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < cleanedIds.length; i += CRM_TAG_BULK_CHUNK) {
+      const chunk = cleanedIds.slice(i, i + CRM_TAG_BULK_CHUNK);
+      const { data: rows, error: selectError } = await supabase
+        .from("crm_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selectError) return { success: false, error: handleSupabaseError(selectError) };
+
+      for (const row of rows ?? []) {
+        const current = Array.isArray(row.tags) ? (row.tags as string[]) : [];
+        const tags = cleanUniqueTags([...current, ...add]);
+        const { error: updateError } = await supabase
+          .from("crm_contacts")
+          .update({ tags, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (updateError) return { success: false, error: handleSupabaseError(updateError) };
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
+}
+
+export async function bulkRemoveTagFromCrmContacts(
+  ids: string[],
+  tagToRemove: string
+): Promise<ActionResult> {
+  const cleanedIds = cleanUniqueTags(ids);
+  const remove = tagToRemove.trim();
+  if (cleanedIds.length === 0) return { success: false, error: "בחר אנשי קשר" };
+  if (!remove) return { success: false, error: "הזן תגית להסרה" };
+
+  try {
+    const { supabase, user } = await getAuthClient();
+    if (!user) return { success: false, error: "יש להתחבר" };
+
+    for (let i = 0; i < cleanedIds.length; i += CRM_TAG_BULK_CHUNK) {
+      const chunk = cleanedIds.slice(i, i + CRM_TAG_BULK_CHUNK);
+      const { data: rows, error: selectError } = await supabase
+        .from("crm_contacts")
+        .select("id, tags")
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (selectError) return { success: false, error: handleSupabaseError(selectError) };
+
+      for (const row of rows ?? []) {
+        const current = Array.isArray(row.tags) ? (row.tags as string[]) : [];
+        const tags = current.filter((tag) => tag !== remove);
+        const { error: updateError } = await supabase
+          .from("crm_contacts")
+          .update({ tags, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("user_id", user.id);
+        if (updateError) return { success: false, error: handleSupabaseError(updateError) };
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err) };
+  }
 }
 
 /**

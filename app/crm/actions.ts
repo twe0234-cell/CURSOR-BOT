@@ -118,6 +118,18 @@ export async function updateContactTags(contactId: string, tags: string[]) {
   return result;
 }
 
+export async function bulkAddTagsToCrmContacts(ids: string[], tagsToAdd: string[]) {
+  const result = await crm.bulkAddTagsToCrmContacts(ids, tagsToAdd);
+  if (result.success) revalidatePath("/crm");
+  return result;
+}
+
+export async function bulkRemoveTagFromCrmContacts(ids: string[], tagToRemove: string) {
+  const result = await crm.bulkRemoveTagFromCrmContacts(ids, tagToRemove);
+  if (result.success) revalidatePath("/crm");
+  return result;
+}
+
 export async function addContactHistoryNote(contactId: string, body: string, follow_up_date?: string | null) {
   const result = await crm.addContactHistoryNote(contactId, body, follow_up_date);
   if (result.success) {
