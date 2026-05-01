@@ -46,7 +46,33 @@ import { fetchCrmContacts } from "@/app/crm/actions";
 import { CsvActions } from "@/components/shared/CsvActions";
 import { AddClientModal } from "@/components/shared/AddClientModal";
 import { PaymentModal } from "@/components/payments/PaymentModal";
-import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon } from "lucide-react";
+import { PlusIcon, ShoppingCartIcon, ReceiptIcon, SearchIcon, BanknoteIcon, PencilIcon, MessageCircleIcon, CalendarIcon, MailIcon, ScanLineIcon } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const BarcodeScanner = dynamic(
+  () => import("@/components/scanner/BarcodeScanner").then((m) => m.BarcodeScanner),
+  { ssr: false }
+);
+
+/**
+ * Extract a usable inventory search token from a raw scanner payload.
+ * Supports both raw SKUs (`HD-XXXXXXXX`) and the shared label QR payload
+ * (`BB|inventory|sku=HD-XXXXXXXX`). Falls back to the raw value.
+ */
+function extractScannedToken(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (t.startsWith("BB|")) {
+    for (const part of t.split("|")) {
+      const eq = part.indexOf("=");
+      if (eq < 0) continue;
+      const key = part.slice(0, eq);
+      const val = part.slice(eq + 1);
+      if (key === "sku" && val) return val;
+    }
+  }
+  return t;
+}
 import { buildPaymentRequestText, buildCalendarEventUrl, mailtoPaymentHref } from "@/lib/sales/paymentRequest";
 import {
   computeMediationCommissionDisplay,
@@ -72,6 +98,7 @@ export default function SalesClient() {
   const [investments, setInvestments] = useState<{ id: string; item_details: string | null; status: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [newSaleItemId, setNewSaleItemId] = useState("");
   const [newSaleBuyerId, setNewSaleBuyerId] = useState("");
   const [newSaleSellerId, setNewSaleSellerId] = useState("");
@@ -674,15 +701,41 @@ export default function SalesClient() {
               <>
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold">פריט ממלאי</label>
-                  <div className="relative">
-                    <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      value={inventorySearch}
-                      onChange={(e) => setInventorySearch(e.target.value)}
-                      placeholder="סרוק ברקוד / הקלד מק״ט, קטגוריה או סופר..."
-                      className="rounded-xl pr-10 mb-2"
-                    />
+                  <div className="relative mb-2 flex gap-2">
+                    <div className="relative grow">
+                      <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <Input
+                        value={inventorySearch}
+                        onChange={(e) => setInventorySearch(e.target.value)}
+                        placeholder="סרוק ברקוד / הקלד מק״ט, קטגוריה או סופר..."
+                        className="rounded-xl pr-10"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setScannerOpen(true)}
+                      className="shrink-0 rounded-xl"
+                      title="סרוק ברקוד"
+                    >
+                      <ScanLineIcon className="size-4 ml-1" />
+                      סרוק
+                    </Button>
                   </div>
+                  {scannerOpen ? (
+                    <BarcodeScanner
+                      onClose={() => setScannerOpen(false)}
+                      onDecoded={(raw) => {
+                        const token = extractScannedToken(raw);
+                        if (token) {
+                          setInventorySearch(token);
+                          toast.success(`נסרק: ${token}`);
+                        }
+                        setScannerOpen(false);
+                      }}
+                    />
+                  ) : null}
                   <select
                     value={newSaleItemId}
                     onChange={(e) => {

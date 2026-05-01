@@ -320,7 +320,7 @@ export default async function ErpDashboardPage() {
             Snapshot פיננסי — פרויקטי ס״ת
           </CardTitle>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            מקור: `public.torah_financial_dashboard_snapshot` עם סינון מפורש לפי `user_id`.
+            מקור: `public.torah_projects` עם סינון מפורש לפי `user_id`, ולאחריו `public.torah_project_budget_vs_actual` רק לפרויקטים שאומתו כשייכים למשתמש.
           </p>
         </CardHeader>
         <CardContent>
