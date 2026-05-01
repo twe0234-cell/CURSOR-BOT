@@ -343,27 +343,27 @@ export default function SalesClient() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Tabs defaultValue="sales" className="w-full">
-        <TabsList className="mb-6 rounded-xl bg-muted p-1">
-          <TabsTrigger value="sales" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+        <TabsList className="mb-4 h-9 rounded-lg bg-muted px-1 py-0.5">
+          <TabsTrigger value="sales" className="h-8 rounded-md px-2.5 text-xs sm:text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
             <ShoppingCartIcon className="size-4 ml-1" />
             ניהול מכירות
           </TabsTrigger>
-          <TabsTrigger value="expenses" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+          <TabsTrigger value="expenses" className="h-8 rounded-md px-2.5 text-xs sm:text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
             <ReceiptIcon className="size-4 ml-1" />
             הוצאות ותזרים
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="mt-0">
-          <Card className="shadow-sm rounded-xl border-border">
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="rounded-lg border-border shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
               <div>
-                <CardTitle className="text-base font-semibold">מכירות</CardTitle>
-                <CardDescription>היסטוריית מכירות – ממלאי, תיווך, פרויקטים</CardDescription>
+                <CardTitle className="text-sm font-semibold sm:text-base">מכירות</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">היסטוריית מכירות – ממלאי, תיווך, פרויקטים</CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <ViewToggle mode={viewMode} onChange={setViewMode} />
                 <CsvActions
                   data={sales.map((s) => ({
@@ -388,15 +388,15 @@ export default function SalesClient() {
                   exportLabel="ייצוא CSV"
                   importLabel="ייבוא CSV"
                 />
-                <Button onClick={() => setSaleOpen(true)} className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
+                <Button onClick={() => setSaleOpen(true)} className="h-8 rounded-lg bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90 sm:h-9 sm:text-sm">
                   <PlusIcon className="size-4 ml-1" />
                   מכירה חדשה
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 pb-3 pt-0 sm:px-4">
               {viewMode === "grid" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {sales.map((s, i) => {
                     const { totalDeal, paid, balance, paidPct: pct } = computeSaleRowDisplay(s);
                     const isMediation = s.sale_type === "תיווך";
@@ -405,24 +405,24 @@ export default function SalesClient() {
                       <div
                         key={s.id}
                         className={cn(
-                          "card-interactive rounded-xl border border-border bg-card p-4 space-y-3",
+                          "card-interactive rounded-lg border border-border bg-card p-3 space-y-2",
                           `animate-scale-in stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-medium">
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
                             {s.sale_type ?? "ממלאי"}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {new Date(s.sale_date).toLocaleDateString("he-IL")}
                           </span>
                         </div>
-                        <p className="font-semibold text-sm leading-snug">{getSaleDisplay(s)}</p>
+                        <p className="text-sm font-semibold leading-tight">{getSaleDisplay(s)}</p>
                         {s.buyer_name && (
                           <p className="text-xs text-muted-foreground">קונה: {s.buyer_name}</p>
                         )}
                         {isMediation && mediation && (
-                          <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-2 text-[11px] leading-5">
+                          <div className="rounded-md border border-sky-100 bg-sky-50/50 p-1.5 text-[11px] leading-[1.1rem]">
                             <p className="font-semibold text-sky-900">
                               סטטוס עמלה: {mediation.status}
                             </p>
@@ -433,7 +433,7 @@ export default function SalesClient() {
                             </p>
                           </div>
                         )}
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">שולם</span>
                             <span className="font-medium">{paid.toLocaleString("he-IL")} / {totalDeal.toLocaleString("he-IL")} ₪</span>
@@ -455,11 +455,11 @@ export default function SalesClient() {
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-1 pt-1 flex-wrap">
-                          <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          <Button type="button" variant="outline" size="sm" className="h-7 flex-1 rounded-md text-[11px]" onClick={() => setEditSale(s)}>
                             <PencilIcon className="size-3.5 ml-1" />ערוך
                           </Button>
-                          <Button type="button" variant="outline" size="sm" className="flex-1 rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
+                          <Button type="button" variant="outline" size="sm" className="h-7 flex-1 rounded-md text-[11px]" onClick={() => setPaymentSaleId(s.id)}>
                             <BanknoteIcon className="size-3.5 ml-1" />
                             {isMediation ? "רשום קבלת עמלה" : "תשלום"}
                           </Button>
@@ -467,7 +467,7 @@ export default function SalesClient() {
                           <a
                             href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
                             title="שלח בקשת תשלום בוואטסאפ"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 text-xs transition-colors"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-emerald-600 transition-colors hover:bg-emerald-50 text-xs"
                           >
                             <MessageCircleIcon className="size-3.5" />
                           </a>
@@ -475,7 +475,7 @@ export default function SalesClient() {
                           <a
                             href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
                             title="שלח בקשת תשלום במייל"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 text-xs transition-colors"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-blue-600 transition-colors hover:bg-blue-50 text-xs"
                           >
                             <MailIcon className="size-3.5" />
                           </a>
@@ -485,7 +485,7 @@ export default function SalesClient() {
                             target="_blank"
                             rel="noopener noreferrer"
                             title="הוסף תזכורת ליומן Google"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 text-xs transition-colors"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-indigo-600 transition-colors hover:bg-indigo-50 text-xs"
                           >
                             <CalendarIcon className="size-3.5" />
                           </a>
@@ -495,21 +495,21 @@ export default function SalesClient() {
                   })}
                 </div>
               ) : (
-                <div className="rounded-xl border overflow-x-auto">
-                  <Table>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table className="text-xs lg:text-sm">
                     <TableHeader>
                       <TableRow className="bg-muted/40">
-                        <TableHead className="font-semibold">סוג</TableHead>
-                        <TableHead className="font-semibold">תאריך</TableHead>
-                        <TableHead className="font-semibold">פריט</TableHead>
-                        <TableHead className="font-semibold">קונה</TableHead>
-                        <TableHead className="font-semibold">סה״כ עסקה</TableHead>
-                        <TableHead className="font-semibold">סה״כ שולם</TableHead>
-                        <TableHead className="font-semibold">יתרת חוב</TableHead>
-                        <TableHead className="font-semibold">רווח על הנייר</TableHead>
-                        <TableHead className="font-semibold">רווח מוכר (החזר עלות)</TableHead>
-                        <TableHead className="font-semibold">סטטוס עמלה (תיווך)</TableHead>
-                        <TableHead className="font-semibold w-28">פעולות</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">סוג</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">תאריך</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">פריט</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">קונה</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">סה״כ עסקה</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">סה״כ שולם</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">יתרת חוב</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">רווח על הנייר</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">רווח מוכר</TableHead>
+                        <TableHead className="h-9 whitespace-nowrap px-2 py-1.5 font-semibold">סטטוס עמלה</TableHead>
+                        <TableHead className="h-9 w-28 whitespace-nowrap px-2 py-1.5 font-semibold">פעולות</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -518,29 +518,29 @@ export default function SalesClient() {
                         const isMediation = s.sale_type === "תיווך";
                         const mediation = isMediation ? computeMediationCommissionDisplay(s) : null;
                         return (
-                          <TableRow key={s.id} className={`table-row-animate stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
-                            <TableCell>
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
+                          <TableRow key={s.id} className={`table-row-animate h-10 align-middle stagger-${Math.min(i + 1, 8) as 1|2|3|4|5|6|7|8}`}>
+                            <TableCell className="whitespace-nowrap px-2 py-1.5">
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
                                 {s.sale_type ?? "ממלאי"}
                               </span>
                             </TableCell>
-                            <TableCell>{new Date(s.sale_date).toLocaleDateString("he-IL")}</TableCell>
-                            <TableCell>{getSaleDisplay(s)}</TableCell>
-                            <TableCell>{s.buyer_name ?? "—"}</TableCell>
-                            <TableCell>{totalDeal.toLocaleString("he-IL")} ₪</TableCell>
-                            <TableCell>{paid.toLocaleString("he-IL")} ₪</TableCell>
-                            <TableCell className={balance > 0 ? "text-amber-700 font-medium" : ""}>
+                            <TableCell className="whitespace-nowrap px-2 py-1.5">{new Date(s.sale_date).toLocaleDateString("he-IL")}</TableCell>
+                            <TableCell className="max-w-[200px] truncate px-2 py-1.5">{getSaleDisplay(s)}</TableCell>
+                            <TableCell className="max-w-[160px] truncate px-2 py-1.5">{s.buyer_name ?? "—"}</TableCell>
+                            <TableCell className="whitespace-nowrap px-2 py-1.5">{totalDeal.toLocaleString("he-IL")} ₪</TableCell>
+                            <TableCell className="whitespace-nowrap px-2 py-1.5">{paid.toLocaleString("he-IL")} ₪</TableCell>
+                            <TableCell className={cn("whitespace-nowrap px-2 py-1.5", balance > 0 ? "font-medium text-amber-700" : "")}>
                               {balance.toLocaleString("he-IL")} ₪
                             </TableCell>
-                            <TableCell className={s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600"}>
+                            <TableCell className={cn("whitespace-nowrap px-2 py-1.5", s.profit != null && s.profit >= 0 ? "text-emerald-600" : "text-red-600")}>
                               {s.profit != null ? `${s.profit.toLocaleString("he-IL")} ₪` : "—"}
                             </TableCell>
-                            <TableCell className="text-sm">
+                            <TableCell className="whitespace-nowrap px-2 py-1.5 text-xs lg:text-sm">
                               {s.realized_recovery_profit != null
                                 ? `${s.realized_recovery_profit.toLocaleString("he-IL")} ₪`
                                 : "—"}
                             </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="px-2 py-1.5 text-[11px] lg:text-xs">
                               {mediation ? (
                                 <div className="space-y-1">
                                   <p className="font-semibold">{mediation.status}</p>
@@ -554,30 +554,30 @@ export default function SalesClient() {
                                 "—"
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-2 py-1.5">
                               <div className="flex flex-wrap gap-1">
-                                <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setEditSale(s)}>
+                                <Button type="button" variant="outline" size="sm" className="h-7 rounded-md text-[11px]" onClick={() => setEditSale(s)}>
                                   <PencilIcon className="size-3.5 ml-1" />ערוך
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" className="rounded-lg h-8 text-xs" onClick={() => setPaymentSaleId(s.id)}>
+                                <Button type="button" variant="outline" size="sm" className="h-7 rounded-md text-[11px]" onClick={() => setPaymentSaleId(s.id)}>
                                   <BanknoteIcon className="size-3.5 ml-1" />
                                   {isMediation ? "רשום קבלת עמלה" : "תשלום"}
                                 </Button>
                                 <a
                                   href={`/whatsapp?message=${encodeURIComponent(buildPaymentRequestText({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes }))}`}
                                   title="שלח בקשת תשלום בוואטסאפ"
-                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-emerald-600 transition-colors hover:bg-emerald-50"
                                 ><MessageCircleIcon className="size-3.5" /></a>
                                 <a
                                   href={mailtoPaymentHref({ buyerName: s.buyer_name ?? null, itemDescription: getSaleDisplay(s), totalPrice: s.total_price ?? s.sale_price, totalPaid: s.total_paid ?? 0, remainingBalance: s.remaining_balance ?? 0, saleDate: s.sale_date, notes: s.notes })}
                                   title="שלח בקשת תשלום במייל"
-                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-blue-600 hover:bg-blue-50 transition-colors"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-blue-600 transition-colors hover:bg-blue-50"
                                 ><MailIcon className="size-3.5" /></a>
                                 <a
                                   href={buildCalendarEventUrl({ title: `תשלום: ${getSaleDisplay(s)}`, date: s.sale_date, details: `קונה: ${s.buyer_name ?? "—"}\nסכום: ${(s.total_price ?? s.sale_price).toLocaleString("he-IL")} ₪` })}
                                   target="_blank" rel="noopener noreferrer"
                                   title="הוסף ליומן Google"
-                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-indigo-600 transition-colors hover:bg-indigo-50"
                                 ><CalendarIcon className="size-3.5" /></a>
                               </div>
                             </TableCell>
@@ -596,13 +596,13 @@ export default function SalesClient() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-0">
-          <Card className="shadow-sm rounded-xl border-border">
-            <CardHeader>
+          <Card className="rounded-lg border-border shadow-sm">
+            <CardHeader className="px-4 py-3">
               <CardTitle className="text-base font-semibold">הוצאות</CardTitle>
               <CardDescription>רישום הוצאות יומי</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/50 border border-border">
+            <CardContent className="space-y-3 px-3 pb-3 pt-0 sm:px-4">
+              <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/50 p-2.5">
                 <select
                   value={newExpCategory}
                   onChange={(e) => setNewExpCategory(e.target.value)}
@@ -629,7 +629,7 @@ export default function SalesClient() {
                   הוסף
                 </Button>
               </div>
-              <div className="rounded-xl border overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40">
