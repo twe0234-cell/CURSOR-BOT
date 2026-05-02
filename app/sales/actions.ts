@@ -88,6 +88,7 @@ export type SaleRecord = {
 export type InventorySaleOption = {
   id: string;
   sku: string | null;
+  barcode: string | null;
   product_category: string | null;
   category_meta: Record<string, unknown> | null;
   size: string | null;
@@ -101,6 +102,20 @@ export async function fetchInventoryForSales(): Promise<
   { success: true; items: InventorySaleOption[] } | { success: false; error: string }
 > {
   try {
+    const readBarcodeFromMeta = (meta: Record<string, unknown> | null): string | null => {
+      if (!meta) return null;
+      const candidates = [
+        meta.barcode,
+        meta.bar_code,
+        meta.barcode_value,
+        meta.qr,
+      ];
+      for (const raw of candidates) {
+        if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
+      }
+      return null;
+    };
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "יש להתחבר" };
@@ -115,19 +130,40 @@ export async function fetchInventoryForSales(): Promise<
     if (error) return { success: false, error: error.message };
 
     const rows = data ?? [];
+    const scribeIds = [
+      ...new Set(
+        rows
+          .map((r) => (r.scribe_id as string | null) ?? null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const scribeNameById = new Map<string, string>();
+    if (scribeIds.length > 0) {
+      const { data: contacts } = await supabase
+        .from("crm_contacts")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .in("id", scribeIds);
+      for (const c of contacts ?? []) {
+        scribeNameById.set(String(c.id), String((c as { name?: string }).name ?? ""));
+      }
+    }
 
     const items: InventorySaleOption[] = rows
       .map((r) => {
         const qty = Math.max(0, Math.floor(Number(r.quantity ?? 1)));
+        const scribeId = (r.scribe_id as string | null) ?? null;
+        const categoryMeta = (r.category_meta as Record<string, unknown> | null) ?? null;
         return {
           id: r.id as string,
           sku: (r.sku as string | null) ?? null,
+          barcode: readBarcodeFromMeta(categoryMeta),
           product_category: (r.product_category as string | null) ?? null,
-          category_meta: (r.category_meta as Record<string, unknown> | null) ?? null,
+          category_meta: categoryMeta,
           size: (r.size as string | null) ?? null,
           quantity: qty,
           status: (r.status as string | null) ?? null,
-          scribe_name: null as string | null,
+          scribe_name: scribeId ? scribeNameById.get(scribeId) ?? null : null,
           display_label: "",
         };
       })
