@@ -20,14 +20,14 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("monthly_realized_profit_view")
-    .select("month, total_profit, total_cost_recovery, total_cash_flow")
+    .select("profit_month, total_profit, total_cost_recovery, total_cash_flow")
     .eq("user_id", user.id)
-    .order("month", { ascending: false });
+    .order("profit_month", { ascending: false });
 
   if (year) {
     query = query
-      .gte("month", `${year}-01-01`)
-      .lte("month", `${year}-12-31`);
+      .gte("profit_month", `${year}-01-01`)
+      .lte("profit_month", `${year}-12-31`);
   }
 
   const { data, error } = await query;
@@ -38,19 +38,19 @@ export async function GET(req: NextRequest) {
   const rows = data ?? [];
 
   const meta = {
-    total_profit: rows.reduce((s, r) => s + (r.total_profit ?? 0), 0),
-    total_cost_recovery: rows.reduce((s, r) => s + (r.total_cost_recovery ?? 0), 0),
-    total_cash_flow: rows.reduce((s, r) => s + (r.total_cash_flow ?? 0), 0),
+    total_profit: rows.reduce((s, r) => s + Number(r.total_profit ?? 0), 0),
+    total_cost_recovery: rows.reduce((s, r) => s + Number(r.total_cost_recovery ?? 0), 0),
+    total_cash_flow: rows.reduce((s, r) => s + Number(r.total_cash_flow ?? 0), 0),
     rows_count: rows.length,
     year: year ?? "all",
     generated_at: new Date().toISOString(),
   };
 
   if (format === "csv") {
-    const header = "month,total_profit,total_cost_recovery,total_cash_flow";
+    const header = "profit_month,total_profit,total_cost_recovery,total_cash_flow";
     const lines = rows.map(
       (r) =>
-        `${r.month},${r.total_profit ?? 0},${r.total_cost_recovery ?? 0},${r.total_cash_flow ?? 0}`
+        `${r.profit_month},${r.total_profit ?? 0},${r.total_cost_recovery ?? 0},${r.total_cash_flow ?? 0}`
     );
     const csv = [header, ...lines].join("\n");
     return new NextResponse(csv, {
