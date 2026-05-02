@@ -21,6 +21,19 @@ export type EmailContact = {
   created_at: string;
 };
 
+function crmEmailTags(row: { type?: string | null; tags?: unknown }): string[] {
+  const tags = ["CRM"];
+  const add = (tag: unknown) => {
+    const value = typeof tag === "string" ? tag.trim() : "";
+    if (value && !tags.includes(value)) tags.push(value);
+  };
+
+  if (row.type && row.type !== "Other") add(row.type);
+  if (Array.isArray(row.tags)) row.tags.forEach(add);
+
+  return tags;
+}
+
 export async function fetchEmailContacts(): Promise<
   { success: true; contacts: EmailContact[] } | { success: false; error: string }
 > {
@@ -376,7 +389,7 @@ export async function importCrmContactsToEmail(): Promise<
 
     const { data: crmRows, error: fetchErr } = await supabase
       .from("crm_contacts")
-      .select("id, name, email, phone")
+      .select("id, name, email, phone, type, tags")
       .eq("user_id", user.id)
       .not("email", "is", null)
       .neq("email", "");
@@ -404,7 +417,7 @@ export async function importCrmContactsToEmail(): Promise<
       email: String(r.email).trim().toLowerCase(),
       name: (r.name ?? "").trim() || null,
       phone: (r.phone ?? "").trim() || null,
-      tags: ["CRM"],
+      tags: crmEmailTags(r),
       subscribed: true,
       source: "crm",
     }));
